@@ -127,13 +127,17 @@ static volatile uint8_t Nmax_master = 127;
 /* that a node must wait for a station to begin replying to a */
 /* confirmed request: 255 milliseconds. (Implementations may use */
 /* larger values for this timeout, not to exceed 300 milliseconds.) */
+#ifndef Treply_timeout
 #define Treply_timeout 260
+#endif
 
 /* The time without a DataAvailable or ReceiveError event that a node must */
 /* wait for a remote node to begin using a token or replying to a Poll For */
 /* Master frame: 20 milliseconds. (Implementations may use larger values for */
 /* this timeout, not to exceed 35 milliseconds.) */
+#ifndef Tusage_timeout
 #define Tusage_timeout 30
+#endif
 
 /* The minimum number of DataAvailable or ReceiveError events that must be */
 /* seen by a receiving node in order to declare the line "active": 4. */
@@ -145,12 +149,16 @@ static volatile uint8_t Nmax_master = 127;
 /* not to exceed 100 milliseconds.) */
 /* At 9600 baud, 60 bit times would be about 6.25 milliseconds */
 /* const uint16_t Tframe_abort = 1 + ((1000 * 60) / 9600); */
+#ifndef Tframe_abort
 #define Tframe_abort 30
+#endif
 
 /* The maximum time a node may wait after reception of a frame that expects */
 /* a reply before sending the first octet of a reply or Reply Postponed */
 /* frame: 250 milliseconds. */
+#ifndef Treply_delay
 #define Treply_delay (250 - 50)
+#endif
 
 /* An array of octets, used to store octets for transmitting */
 /* OutputBuffer is indexed from 0 to OutputBufferSize-1. */
@@ -174,6 +182,12 @@ static unsigned ReceivePDUCount;
 
 static volatile struct dlmstp_packet PDU_Buffer[MSTP_PDU_PACKET_COUNT];
 static RING_BUFFER PDU_Queue;
+
+/* Callback function to be called every time we receive a preamble */
+static dlmstp_hook_frame_rx_start_cb Preamble_Callback = NULL;
+
+/* Callback function to be called every time we receive a frame */
+static dlmstp_hook_frame_rx_complete_cb Frame_Rx_Callback = NULL;
 
 bool dlmstp_init(char *ifname)
 {
@@ -442,6 +456,11 @@ static void MSTP_Receive_Frame_FSM(void)
                     /* Preamble1 */
                     /* receive the remainder of the frame. */
                     Receive_State = MSTP_RECEIVE_STATE_PREAMBLE;
+
+                    /* if a frame-start callback was provided, call it */
+                    if (Preamble_Callback != NULL) {
+                        Preamble_Callback();
+                    }
                 }
             }
             break;
@@ -552,6 +571,13 @@ static void MSTP_Receive_Frame_FSM(void)
                                 /* NotForUs */
                                 MSTP_Flag.ReceivedValidFrameNotForUs = true;
                             }
+                            /* if a frame-receipt callback was provided, call */
+                            /* it for this frame */
+                            if (Frame_Rx_Callback != NULL) {
+                                Frame_Rx_Callback(SourceAddress,
+                                    DestinationAddress, FrameType, InputBuffer,
+                                    DataLength);
+                            }
                             /* wait for the start of the next frame. */
                             Receive_State = MSTP_RECEIVE_STATE_IDLE;
                         } else {
@@ -629,6 +655,12 @@ static void MSTP_Receive_Frame_FSM(void)
                         } else {
                             /* NotForUs */
                             MSTP_Flag.ReceivedValidFrameNotForUs = true;
+                        }
+                        /* if a frame-receipt callback was provided, call it */
+                        /* for this frame */
+                        if (Frame_Rx_Callback != NULL) {
+                            Frame_Rx_Callback(SourceAddress, DestinationAddress,
+                                FrameType, InputBuffer, DataLength);
                         }
 
                     } else {
@@ -1364,9 +1396,6 @@ uint16_t dlmstp_receive(
         MSTP_Flag.ReceivedValidFrameNotForUs = false;
         ReceiveFrameCount++;
     }
-    if (MSTP_Flag.ReceivedValidFrame) {
-        ReceiveFrameCount++;
-    }
     if (MSTP_Flag.ReceivedInvalidFrame) {
         ReceiveFrameCount++;
     }
@@ -1376,6 +1405,7 @@ uint16_t dlmstp_receive(
             MSTP_Flag.ReceivedValidFrameNotForUs = false;
         } else if (MSTP_Flag.ReceivedValidFrame) {
             if (rs485_turnaround_elapsed()) {
+                ReceiveFrameCount++;
                 if ((This_Station > 127) && (This_Station < 255)) {
                     MSTP_Slave_Node_FSM();
                 } else if (This_Station <= 127) {
@@ -1512,4 +1542,15 @@ uint8_t dlmstp_max_info_frames_limit(void)
 uint8_t dlmstp_max_master_limit(void)
 {
     return 127;
+}
+
+void dlmstp_set_frame_rx_complete_callback(
+    dlmstp_hook_frame_rx_complete_cb cb_func)
+{
+    Frame_Rx_Callback = cb_func;
+}
+
+void dlmstp_set_frame_rx_start_callback(dlmstp_hook_frame_rx_start_cb cb_func)
+{
+    Preamble_Callback = cb_func;
 }

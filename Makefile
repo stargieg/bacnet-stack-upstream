@@ -212,11 +212,12 @@ pretty-ports:
 	find ./ports -maxdepth 2 -type f -iname *.h -o -iname *.c -exec \
 	clang-format -i -style=file -fallback-style=none {} \;
 
+CLANG_TIDY_OPTIONS = -fix-errors -checks="readability-braces-around-statements"
+CLANG_TIDY_OPTIONS += -- -Isrc -Iports/linux
 .PHONY: tidy
 tidy:
-	find ./src -iname *.h -o -iname *.c -exec \
-	clang-tidy {} -fix-errors -checks="readability-braces-around-statements" \
-	-- -Isrc -Iports/linux \;
+	find ./src -iname *.h -o -iname *.c -exec clang-tidy {} $(CLANG_TIDY_OPTIONS) \;
+	find ./apps -iname *.c -exec clang-tidy {} $(CLANG_TIDY_OPTIONS) \;
 
 .PHONY: lint
 lint:
@@ -229,6 +230,18 @@ CPPCHECK_OPTIONS += --suppress=selfAssignment
 .PHONY: cppcheck
 cppcheck:
 	cppcheck $(CPPCHECK_OPTIONS) --quiet --force ./src/
+
+IGNORE_WORDS = ba
+CODESPELL_OPTIONS = --write-changes --interactive 3 --enable-colors
+CODESPELL_OPTIONS += --ignore-words-list $(IGNORE_WORDS)
+.PHONY: codespell
+codespell:
+	codespell $(CODESPELL_OPTIONS) ./src
+
+SPELL_OPTIONS = --enable-colors --ignore-words-list $(IGNORE_WORDS)
+.PHONY: spell
+spell:
+	codespell $(SPELL_OPTIONS) ./src
 
 .PHONY: clean
 clean: ports-clean
