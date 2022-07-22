@@ -45,15 +45,17 @@ apps:
 lib:
 	$(MAKE) -s -C apps $@
 
+CMAKE_BUILD_DIR=build
 .PHONY: cmake
 cmake:
-	CMAKE_BUILD_DIR=build
 	[ -d $(CMAKE_BUILD_DIR) ] || mkdir -p $(CMAKE_BUILD_DIR)
 	[ -d $(CMAKE_BUILD_DIR) ] && cd $(CMAKE_BUILD_DIR) && cmake .. -DBUILD_SHARED_LIBS=ON && cmake --build . --clean-first
 
-.PHONY: cmake-test
-cmake-test:
-	[ -d $(CMAKE_BUILD_DIR) ] && $(MAKE) -s -C build test
+.PHONY: cmake-win32
+cmake-win32:
+	mkdir -p $(CMAKE_BUILD_DIR)
+	cd $(CMAKE_BUILD_DIR) && cmake ../ -DBACNET_STACK_BUILD_APPS=ON && cmake --build ./ --clean-first
+	cp $(CMAKE_BUILD_DIR)/Debug/*.exe ./bin/.
 
 .PHONY: abort
 abort:
@@ -107,6 +109,14 @@ readfdt:
 writebdt:
 	$(MAKE) -s -C apps $@
 
+.PHONY: whatisnetnum
+whatisnetnum:
+	$(MAKE) -s -C apps $@
+
+.PHONY: netnumis
+netnumis:
+	$(MAKE) -s -C apps $@
+
 .PHONY: server
 server:
 	$(MAKE) -s -C apps $@
@@ -145,11 +155,11 @@ router-mstp:
 
 # Add "ports" to the build, if desired
 .PHONY: ports
-ports:	atmega168 bdk-atxx4-mstp at91sam7s stm32f10x
+ports:	atmega168 bdk-atxx4-mstp at91sam7s stm32f10x stm32f4xx
 	@echo "Built the ARM7 and AVR ports"
 
 .PHONY: ports-clean
-ports-clean: atmega168-clean bdk-atxx4-mstp-clean at91sam7s-clean stm32f10x-clean
+ports-clean: atmega168-clean bdk-atxx4-mstp-clean at91sam7s-clean stm32f10x-clean stm32f4xx-clean
 
 .PHONY: atmega168
 atmega168: ports/atmega168/Makefile
@@ -195,6 +205,10 @@ stm32f4xx-clean: ports/stm32f4xx/Makefile
 mstpsnap: ports/linux/mstpsnap.mak
 	$(MAKE) -s -C ports/linux -f mstpsnap.mak clean all
 
+.PHONY: lwip
+lwip: ports/lwip/Makefile
+	$(MAKE) -s -C ports/lwip clean all
+
 .PHONY: pretty
 pretty:
 	find ./src -iname *.h -o -iname *.c -exec \
@@ -212,6 +226,11 @@ pretty-ports:
 	find ./ports -maxdepth 2 -type f -iname *.h -o -iname *.c -exec \
 	clang-format -i -style=file -fallback-style=none {} \;
 
+.PHONY: pretty-test
+pretty-test:
+	find ./test/bacnet -maxdepth 2 -type f -iname *.h -o -iname *.c -exec \
+	clang-format -i -style=file -fallback-style=none {} \;
+
 CLANG_TIDY_OPTIONS = -fix-errors -checks="readability-braces-around-statements"
 CLANG_TIDY_OPTIONS += -- -Isrc -Iports/linux
 .PHONY: tidy
@@ -219,17 +238,36 @@ tidy:
 	find ./src -iname *.h -o -iname *.c -exec clang-tidy {} $(CLANG_TIDY_OPTIONS) \;
 	find ./apps -iname *.c -exec clang-tidy {} $(CLANG_TIDY_OPTIONS) \;
 
-.PHONY: lint
-lint:
-	scan-build --status-bugs -analyze-headers make -j2 clean server
+.PHONY: scan-build
+scan-build:
+	scan-build --status-bugs -analyze-headers make -j2 server
+
+SPLINT_OPTIONS := -weak +posixlib +quiet \
+	-D__signed__=signed -D__gnuc_va_list=va_list \
+	-Isrc -Iports/linux \
+	+matchanyintegral +ignoresigns -unrecog -preproc \
+	+error-stream-stderr +warning-stream-stderr -warnposix \
+	-bufferoverflowhigh
+
+SPLINT_FIND_OPTIONS := ./src -path ./src/bacnet/basic/ucix -prune -o -name "*.c"
+
+.PHONY: splint
+splint:
+	find $(SPLINT_FIND_OPTIONS) -exec splint $(SPLINT_OPTIONS) {} \;
 
 CPPCHECK_OPTIONS = --enable=warning,portability
 CPPCHECK_OPTIONS += --template=gcc
+CPPCHECK_OPTIONS += --inline-suppr
 CPPCHECK_OPTIONS += --suppress=selfAssignment
-
+CPPCHECK_OPTIONS += --suppress=integerOverflow
+CPPCHECK_OPTIONS += --error-exitcode=1
 .PHONY: cppcheck
 cppcheck:
 	cppcheck $(CPPCHECK_OPTIONS) --quiet --force ./src/
+
+.PHONY: flawfinder
+flawfinder:
+	flawfinder --minlevel 5 --error-level=5 ./src/
 
 IGNORE_WORDS = ba
 CODESPELL_OPTIONS = --write-changes --interactive 3 --enable-colors
@@ -251,12 +289,11 @@ clean: ports-clean
 	$(MAKE) -s -C apps/router-ipv6 clean
 	$(MAKE) -s -C apps/router-mstp clean
 	$(MAKE) -s -C apps/gateway clean
+	$(MAKE) -s -C ports/lwip clean
 	$(MAKE) -s -C test clean
 	rm -rf ./build
 
 .PHONY: test
 test:
 	$(MAKE) -s -C test clean
-	$(MAKE) -s -C test all
-	$(MAKE) -s -C test report
-
+	$(MAKE) -s -j -C test all

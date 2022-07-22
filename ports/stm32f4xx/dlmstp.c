@@ -167,11 +167,7 @@ static uint8_t OutputBuffer[DLMSTP_MPDU_MAX];
 /* Number of bytes pending transmit. 0=nothing pending transmit  */
 uint16_t OutputBufferLength;
 
-/* stats for tx and rx of packets */
-static unsigned TransmitFrameCount;
-static unsigned ReceiveFrameCount;
-static unsigned TransmitPDUCount;
-static unsigned ReceivePDUCount;
+static struct dlmstp_statistics Statistics = { 0 };
 
 /* we need to be able to increment without rolling over */
 #define INCREMENT_AND_LIMIT_UINT8(x) \
@@ -425,6 +421,13 @@ static void MSTP_Send_Frame(uint8_t frame_type,
     OutputBufferLength = MSTP_Create_Frame(OutputBuffer, sizeof(OutputBuffer),
         frame_type, destination, source, data, data_len);
     rs485_bytes_send(OutputBuffer, OutputBufferLength);
+
+    /* increment the transmitted frame count */
+    Statistics.transmit_frame_counter++;
+    /* if there was data, also increment transmitted pdu count */
+    if ((data != NULL) && (data_len > 0)) {
+        Statistics.transmit_pdu_counter++;
+    }
 }
 
 static void MSTP_Receive_Frame_FSM(void)
@@ -574,9 +577,13 @@ static void MSTP_Receive_Frame_FSM(void)
                             /* if a frame-receipt callback was provided, call */
                             /* it for this frame */
                             if (Frame_Rx_Callback != NULL) {
-                                Frame_Rx_Callback(SourceAddress,
-                                    DestinationAddress, FrameType, InputBuffer,
-                                    DataLength);
+                                /* convert from volatile in defined order */
+                                uint8_t source, destination, frame;
+                                source = SourceAddress;
+                                destination = DestinationAddress;
+                                frame = FrameType;
+                                Frame_Rx_Callback(source, destination, 
+                                    frame, InputBuffer, DataLength);
                             }
                             /* wait for the start of the next frame. */
                             Receive_State = MSTP_RECEIVE_STATE_IDLE;
@@ -584,7 +591,10 @@ static void MSTP_Receive_Frame_FSM(void)
                             /* receive the data portion of the frame. */
                             if ((Address == This_Station) ||
                                 (Address == MSTP_BROADCAST_ADDRESS)) {
-                                if (DataLength <= InputBufferSize) {
+                                /* convert from volatile in defined order */
+                                uint32_t length;
+                                length = DataLength;
+                                if (length <= InputBufferSize) {
                                     /* Data */
                                     Receive_State = MSTP_RECEIVE_STATE_DATA;
                                 } else {
@@ -659,8 +669,13 @@ static void MSTP_Receive_Frame_FSM(void)
                         /* if a frame-receipt callback was provided, call it */
                         /* for this frame */
                         if (Frame_Rx_Callback != NULL) {
-                            Frame_Rx_Callback(SourceAddress, DestinationAddress,
-                                FrameType, InputBuffer, DataLength);
+                            /* convert from volatile in defined order */
+                            uint8_t source, destination, frame;
+                            source = SourceAddress;
+                            destination = DestinationAddress;
+                            frame = FrameType;
+                            Frame_Rx_Callback(source, destination,
+                                frame, InputBuffer, DataLength);
                         }
 
                     } else {
@@ -723,7 +738,6 @@ static void MSTP_Slave_Node_FSM(void)
                     /* a proprietary frame that expects a reply is received. */
                     pkt = (struct dlmstp_packet *)Ringbuf_Peek(&PDU_Queue);
                     if (pkt != NULL) {
-                        TransmitPDUCount++;
                         MSTP_Send_Frame(pkt->frame_type, pkt->address.mac[0],
                             This_Station, (uint8_t *)&pkt->pdu[0],
                             pkt->pdu_len);
@@ -839,6 +853,7 @@ static bool MSTP_Master_Node_FSM(void)
                 MSTP_Flag.ReceivedValidFrame = false;
                 MSTP_Flag.ReceivedInvalidFrame = false;
                 MSTP_Flag.ReceivedValidFrameNotForUs = false;
+                Statistics.lost_token_counter++;
                 Master_State = MSTP_MASTER_STATE_NO_TOKEN;
                 transition_now = true;
             } else if (MSTP_Flag.ReceivedInvalidFrame == true) {
@@ -863,20 +878,30 @@ static bool MSTP_Master_Node_FSM(void)
                         /* ReceivedPFM */
                         destination = SourceAddress;
                         source = This_Station;
-                        if (DestinationAddress == This_Station) {
+                        if (DestinationAddress == source) {
                             MSTP_Send_Frame(FRAME_TYPE_REPLY_TO_POLL_FOR_MASTER,
                                 destination, source, NULL, 0);
                         }
                         break;
                     case FRAME_TYPE_BACNET_DATA_NOT_EXPECTING_REPLY:
-                        /* indicate successful reception to the higher layers */
-                        MSTP_Flag.ReceivePacketPending = true;
+                        if ((DestinationAddress == MSTP_BROADCAST_ADDRESS) &&
+                            (npdu_confirmed_service(InputBuffer, DataLength))) {
+                            /* BTL test: verifies that the IUT will quietly
+                               discard any Confirmed-Request-PDU, whose
+                               destination address is a multicast or
+                               broadcast address, received from the
+                               network layer. */
+                        } else {
+                            /* indicate successful reception to higher layer */
+                            MSTP_Flag.ReceivePacketPending = true;
+                        }
                         break;
                     case FRAME_TYPE_BACNET_DATA_EXPECTING_REPLY:
-                        /* indicate successful reception to higher layers */
-                        MSTP_Flag.ReceivePacketPending = true;
-                        /* broadcast DER just remains IDLE */
-                        if (DestinationAddress != MSTP_BROADCAST_ADDRESS) {
+                        if (DestinationAddress == MSTP_BROADCAST_ADDRESS) {
+                            /* broadcast DER just remains IDLE */
+                        } else {
+                            /* indicate successful reception to higher layers */
+                            MSTP_Flag.ReceivePacketPending = true;
                             Master_State =
                                 MSTP_MASTER_STATE_ANSWER_DATA_REQUEST;
                         }
@@ -915,7 +940,6 @@ static bool MSTP_Master_Node_FSM(void)
                 MSTP_Send_Frame(pkt->frame_type, pkt->address.mac[0],
                     This_Station, (uint8_t *)&pkt->pdu[0], pkt->pdu_len);
                 FrameCount++;
-                TransmitPDUCount++;
                 switch (pkt->frame_type) {
                     case FRAME_TYPE_BACNET_DATA_EXPECTING_REPLY:
                         /* SendAndWait */
@@ -1274,7 +1298,6 @@ static bool MSTP_Master_Node_FSM(void)
                 MSTP_Flag.ReceivedValidFrame = false;
                 /* clear the queue */
                 (void)Ringbuf_Pop(&PDU_Queue, NULL);
-                TransmitPDUCount++;
             } else if ((pkt != NULL) || timeout) {
                 /* DeferredReply */
                 /* If no reply will be available from the higher layers */
@@ -1348,7 +1371,6 @@ int dlmstp_send_pdu(BACNET_ADDRESS *dest, /* destination address */
         if (Ringbuf_Data_Put(&PDU_Queue, (volatile uint8_t *)pkt)) {
             bytes_sent = pdu_len;
         }
-        TransmitFrameCount++;
     }
 
     return bytes_sent;
@@ -1394,10 +1416,10 @@ uint16_t dlmstp_receive(
     }
     if (MSTP_Flag.ReceivedValidFrameNotForUs) {
         MSTP_Flag.ReceivedValidFrameNotForUs = false;
-        ReceiveFrameCount++;
+        Statistics.receive_valid_frame_counter++;
     }
     if (MSTP_Flag.ReceivedInvalidFrame) {
-        ReceiveFrameCount++;
+        Statistics.receive_invalid_frame_counter++;
     }
     /* only do master state machine while rx is idle */
     if ((Receive_State == MSTP_RECEIVE_STATE_IDLE) && (transmitting == false)) {
@@ -1405,7 +1427,7 @@ uint16_t dlmstp_receive(
             MSTP_Flag.ReceivedValidFrameNotForUs = false;
         } else if (MSTP_Flag.ReceivedValidFrame) {
             if (rs485_turnaround_elapsed()) {
-                ReceiveFrameCount++;
+                Statistics.receive_valid_frame_counter++;
                 if ((This_Station > 127) && (This_Station < 255)) {
                     MSTP_Slave_Node_FSM();
                 } else if (This_Station <= 127) {
@@ -1427,7 +1449,7 @@ uint16_t dlmstp_receive(
     /* if there is a packet that needs processed, do it now. */
     if (MSTP_Flag.ReceivePacketPending) {
         MSTP_Flag.ReceivePacketPending = false;
-        ReceivePDUCount++;
+        Statistics.receive_pdu_counter++;
         pdu_len = DataLength;
         src->mac_len = 1;
         src->mac[0] = SourceAddress;
@@ -1553,4 +1575,16 @@ void dlmstp_set_frame_rx_complete_callback(
 void dlmstp_set_frame_rx_start_callback(dlmstp_hook_frame_rx_start_cb cb_func)
 {
     Preamble_Callback = cb_func;
+}
+
+void dlmstp_reset_statistics(void)
+{
+    memset(&Statistics, 0, sizeof(Statistics));
+}
+
+void dlmstp_fill_statistics(struct dlmstp_statistics *statistics)
+{
+    if (statistics != NULL) {
+        memcpy(statistics, &Statistics, sizeof(Statistics));
+    }
 }
