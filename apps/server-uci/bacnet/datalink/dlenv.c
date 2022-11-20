@@ -532,7 +532,7 @@ int dlenv_init(void)
         apdu_timeout_set(option_int);
     } else {
 #if defined(BACDL_MSTP)
-        if (Datalink_Transport = DATALINK_MSTP) 
+        if (Datalink_Transport == DATALINK_MSTP)
             apdu_timeout_set(60000);
 #endif
     }

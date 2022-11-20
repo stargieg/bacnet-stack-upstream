@@ -223,7 +223,7 @@ void datalink_cleanup(void)
 #endif
 #if defined(BACDL_MSTP)
         case DATALINK_MSTP:
-            mstp_cleanup();
+            dlmstp_cleanup();
             break;
 #endif
         default:
