@@ -1658,10 +1658,10 @@ void Device_Init(object_functions_t *object_table)
     Object_Instance_Number = ucix_get_option_int(ctx, "bacnet_dev", "0", "Id", 4711);
     option = ucix_get_option(ctx, "bacnet_dev", "0", "Location");
     if (option != 0)
-        snprintf(Location,sizeof(option),"%s",option);
+        snprintf(Location,sizeof(Location),"%s",option);
     option = ucix_get_option(ctx, "bacnet_dev", "0", "Description");
     if (option != 0)
-        snprintf(Description,sizeof(option),"%s",option);
+        snprintf(Description,sizeof(Description),"%s",option);
 
     ucix_cleanup(ctx);
     datetime_init();

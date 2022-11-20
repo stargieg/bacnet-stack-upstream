@@ -456,7 +456,7 @@ int dlenv_init(void)
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "bacdl");
     if (option != 0) {
-        snprintf(option_chr,sizeof(option),"%s",option);
+        snprintf(option_chr,sizeof(option_chr),"%s",option);
     } else {
         printf(option_chr,"bip",NULL);
     }
@@ -545,7 +545,7 @@ int dlenv_init(void)
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "iface");
     if (option != 0) {
-        snprintf(ifname,sizeof(option),"%s",option);
+        snprintf(ifname,sizeof(ifname),"%s",option);
         /* === Initialize the Datalink Here === */
         if (!datalink_init(ifname)) {
             exit(1);
