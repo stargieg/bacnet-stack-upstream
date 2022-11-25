@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h> /* for memmove */
+#include <stdlib.h>
 #include "bacnet/bacdef.h"
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacenum.h"
@@ -91,6 +92,9 @@ static object_functions_t My_Object_Table[] = {
         NULL /* COV */, NULL /* COV Clear */,
         NULL /* Intrinsic Reporting */ }
 };
+
+static const char *sec = "bacnet_dev";
+//static const char *type = "dev";
 
 /** Glue function to let the Device object, when called by a handler,
  * lookup which Object type needs to be invoked.
@@ -1235,6 +1239,9 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_OBJECT_TYPE object_type = OBJECT_NONE;
     uint32_t object_instance = 0;
     int result = 0;
+    struct uci_context *ctxw = NULL;
+    const char *idx_c = "0";
+
 #if defined(BACNET_TIME_MASTER)
     uint32_t minutes = 0;
 #endif
@@ -1256,6 +1263,11 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     /* FIXME: len < application_data_len: more data? */
+
+    ctxw = ucix_init(sec);
+    if (!ctxw)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+
     switch (wp_data->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             status = write_property_type_valid(
@@ -1333,7 +1345,11 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         wp_data->error_code = ERROR_CODE_DUPLICATE_NAME;
                     }
                 } else {
-                    Device_Set_Object_Name(&value.type.Character_String);
+                    if (Device_Set_Object_Name(&value.type.Character_String)) {
+                        ucix_add_option(ctxw, sec, idx_c, "Name",
+                            strndup(value.type.Character_String.value,value.type.Character_String.length));
+                        ucix_commit(ctxw,sec);
+                    }
                 }
             }
             break;
@@ -1341,9 +1357,13 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_empty_string_valid(
                 wp_data, &value, MAX_DEV_LOC_LEN);
             if (status) {
-                Device_Set_Location(
+                if (Device_Set_Location(
                     characterstring_value(&value.type.Character_String),
-                    characterstring_length(&value.type.Character_String));
+                    characterstring_length(&value.type.Character_String))) {
+                    ucix_add_option(ctxw, sec, idx_c, "Location",
+                        Device_Location());
+                    ucix_commit(ctxw,sec);
+                }
             }
             break;
 
@@ -1351,9 +1371,13 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_empty_string_valid(
                 wp_data, &value, MAX_DEV_DESC_LEN);
             if (status) {
-                Device_Set_Description(
+                if (Device_Set_Description(
                     characterstring_value(&value.type.Character_String),
-                    characterstring_length(&value.type.Character_String));
+                    characterstring_length(&value.type.Character_String))) {
+                    ucix_add_option(ctxw, sec, idx_c, "Description",
+                        Device_Description());
+                    ucix_commit(ctxw,sec);
+                }
             }
             break;
         case PROP_MODEL_NAME:
@@ -1488,6 +1512,8 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
             wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             break;
     }
+
+    ucix_cleanup(ctxw);
 
     return status;
 }
@@ -1643,26 +1669,28 @@ bool Device_Value_List_Supported(BACNET_OBJECT_TYPE object_type)
 void Device_Init(object_functions_t *object_table)
 {
     struct object_functions *pObject = NULL;
-    //int option_int;
+    BACNET_CHARACTER_STRING option_str;
     const char *option = NULL;
+    const char *sec_idx = "0";
     struct uci_context *ctx;
-    ctx = ucix_init("bacnet_dev");
+    ctx = ucix_init(sec);
     if (!ctx)
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
-    option = ucix_get_option(ctx, "bacnet_dev", "0", "Name");
-    if (option != 0) {
+    option = ucix_get_option(ctx, sec, sec_idx, "Name");
+    if (option)
         characterstring_init_ansi(&My_Object_Name, option);
-    } else {
+    if (!My_Object_Name.length) {
         characterstring_init_ansi(&My_Object_Name, "SimpleServer");
     }
-    Object_Instance_Number = ucix_get_option_int(ctx, "bacnet_dev", "0", "Id", 4711);
-    option = ucix_get_option(ctx, "bacnet_dev", "0", "Location");
-    if (option != 0)
-        snprintf(Location,sizeof(Location),"%s",option);
-    option = ucix_get_option(ctx, "bacnet_dev", "0", "Description");
-    if (option != 0)
-        snprintf(Description,sizeof(Description),"%s",option);
-
+    Object_Instance_Number = ucix_get_option_int(ctx, sec, sec_idx, "Id", 4711);
+    option = ucix_get_option(ctx, sec, sec_idx, "Location");
+    if (option)
+        if (characterstring_init_ansi(&option_str, option))
+            characterstring_ansi_copy(Location,sizeof(Location),&option_str);
+    option = ucix_get_option(ctx, sec, sec_idx, "Description");
+    if (option)
+        if (characterstring_init_ansi(&option_str, option))
+            characterstring_ansi_copy(Description,sizeof(Description),&option_str);
     ucix_cleanup(ctx);
     datetime_init();
     if (object_table) {
@@ -1677,9 +1705,6 @@ void Device_Init(object_functions_t *object_table)
         }
         pObject++;
     }
-    /* create some dynamically created objects as examples */
-    Analog_Output_Create(0);
-    Analog_Output_Create(1);
 }
 
 bool DeviceGetRRInfo(BACNET_READ_RANGE_DATA *pRequest, /* Info on the request */

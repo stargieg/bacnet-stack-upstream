@@ -53,8 +53,12 @@
 #include "device.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
+#include "bacnet/basic/ucix/ucix.h"
 /* me! */
 #include "ao.h"
+
+static const char *sec = "bacnet_ao";
+static const char *type = "ao";
 
 struct object_data {
     bool Out_Of_Service : 1;
@@ -1162,6 +1166,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false; /* return value */
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value;
+    struct uci_context *ctxw = NULL;
+    char *idx_c = NULL;
+    int idx_c_len = 0;
 
     /* decode the some of the request */
     len = bacapp_decode_application_data(
@@ -1181,6 +1188,12 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
+    ctxw = ucix_init(sec);
+    if (!ctxw)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+    idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
+    idx_c = malloc(idx_c_len + 1);
+    snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(wp_data, &value,
@@ -1212,6 +1225,17 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         case PROP_OBJECT_IDENTIFIER:
         case PROP_OBJECT_TYPE:
         case PROP_OBJECT_NAME:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Analog_Output_Name_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "name",
+                        strndup(value.type.Character_String.value,value.type.Character_String.length));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
         case PROP_STATUS_FLAGS:
         case PROP_EVENT_STATE:
         case PROP_UNITS:
@@ -1221,6 +1245,17 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         case PROP_MAX_PRES_VALUE:
         case PROP_MIN_PRES_VALUE:
         case PROP_DESCRIPTION:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Analog_Output_Description_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "description",
+                        Analog_Output_Description(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
 #endif
@@ -1233,6 +1268,8 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
     }
 
+    ucix_cleanup(ctxw);
+    free(idx_c);
     return status;
 }
 
@@ -1330,10 +1367,113 @@ void Analog_Output_Cleanup(void)
     }
 }
 
+/* structure to hold tuple-list and uci context during iteration */
+struct itr_ctx {
+	struct uci_context *ctx;
+	const char *section;
+    struct object_data Object;
+};
+
+static void uci_list(const char *sec_idx,
+	struct itr_ctx *ictx)
+{
+	int disable,idx;
+	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+	"disable", 0);
+	if (strcmp(sec_idx,"default") == 0)
+		return;
+	if (disable)
+		return;
+    idx = atoi(sec_idx);
+    struct object_data *pObject = NULL;
+    int index = 0;
+    unsigned priority = 0;
+    pObject = calloc(1, sizeof(struct object_data));
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
+    if (option)
+        if (characterstring_init_ansi(&option_str, option))
+            pObject->Object_Name = strndup(option,option_str.length);
+
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
+    if (option)
+        if (characterstring_init_ansi(&option_str, option))
+            pObject->Description = strndup(option,option_str.length);
+
+    if ((pObject->Description == NULL) && (ictx->Object.Description))
+        pObject->Description = strdup(ictx->Object.Description);
+
+    pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
+    pObject->Overridden = false;
+    for (priority = 0; priority < BACNET_MAX_PRIORITY; priority++) {
+        pObject->Relinquished[priority] = true;
+        pObject->Priority_Array[priority] = 0.0;
+    }
+    pObject->Relinquish_Default = 0.0;
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "cov_increment");
+    if (option)
+        pObject->COV_Increment = strtof(option,(char **) NULL);
+    else
+        pObject->COV_Increment = ictx->Object.COV_Increment;
+    pObject->Prior_Value = 0.0;
+    pObject->Units = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "si_unit", ictx->Object.Units);
+    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
+    pObject->Changed = false;
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "min_value");
+    if (option)
+        pObject->Min_Pres_Value = strtof(option,(char **) NULL);
+    else
+        pObject->Min_Pres_Value = ictx->Object.Min_Pres_Value;
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "max_value");
+    if (option)
+        pObject->Max_Pres_Value = strtof(option,(char **) NULL);
+    else
+        pObject->Max_Pres_Value = ictx->Object.Max_Pres_Value;
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "value");
+    if (option)
+        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = strtof(option,(char **) NULL);
+
+    /* add to list */
+    index = Keylist_Data_Add(Object_List, idx, pObject);
+    if (index >= 0) {
+        Device_Inc_Database_Revision();
+    }
+    //Analog_Output_Name_Set(idx,
+    //    ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name"));
+    //Analog_Output_Description_Set(idx,
+    //    ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description"));
+    return;
+}
+
 /**
  * @brief Initializes the Analog Value object data
  */
 void Analog_Output_Init(void)
 {
     Object_List = Keylist_Create();
+    struct uci_context *ctx;
+    ctx = ucix_init(sec);
+    if (!ctx)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+    struct object_data tObject;
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+    option = ucix_get_option(ctx, sec, "default", "description");
+    if (option)
+        if (characterstring_init_ansi(&option_str, option))
+            tObject.Description = strndup(option,option_str.length);
+
+    tObject.COV_Increment = strtof(ucix_get_option(ctx, sec, "default", "cov_increment"),(char **) NULL);
+    tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
+    tObject.Min_Pres_Value = strtof(ucix_get_option(ctx, sec, "default", "min_value"),(char **) NULL);
+    tObject.Max_Pres_Value = strtof(ucix_get_option(ctx, sec, "default", "max_value"),(char **) NULL);
+    struct itr_ctx itr_m;
+	itr_m.section = sec;
+	itr_m.ctx = ctx;
+	itr_m.Object = tObject;
+    ucix_for_each_section_type(ctx, sec, type,
+        (void *)uci_list,&itr_m);
+    ucix_cleanup(ctx);
 }
