@@ -1206,9 +1206,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     value.type.Real, wp_data->priority,
                     &wp_data->error_class, &wp_data->error_code)) {
                     value_f = Analog_Output_Present_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
                     ucix_add_option(ctxw, sec, idx_c, "value", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -1221,9 +1221,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         wp_data->object_instance, wp_data->priority,
                         &wp_data->error_class, &wp_data->error_code)) {
                         value_f = Analog_Output_Present_Value(wp_data->object_instance);
-                        value_c_len = snprintf(NULL, 0, "%d", value_f);
+                        value_c_len = snprintf(NULL, 0, "%f", value_f);
                         value_c = malloc(value_c_len + 1);
-                        snprintf(value_c,value_c_len + 1,"%d",value_f);
+                        snprintf(value_c,value_c_len + 1,"%f",value_f);
                         ucix_add_option(ctxw, sec, idx_c, "value", value_c);
                         ucix_commit(ctxw,sec);
                         free(value_c);
@@ -1246,9 +1246,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 Analog_Output_COV_Increment_Set(wp_data->object_instance,
                 value.type.Real);
                 value_f = Analog_Output_COV_Increment(wp_data->object_instance);
-                value_c_len = snprintf(NULL, 0, "%d", value_f);
+                value_c_len = snprintf(NULL, 0, "%f", value_f);
                 value_c = malloc(value_c_len + 1);
-                snprintf(value_c,value_c_len + 1,"%d",value_f);
+                snprintf(value_c,value_c_len + 1,"%f",value_f);
                 ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
                 ucix_commit(ctxw,sec);
                 free(value_c);
@@ -1285,9 +1285,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Output_Max_Pres_Value_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Output_Max_Pres_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
                     ucix_add_option(ctxw, sec, idx_c, "max_value", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -1301,9 +1301,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Output_Min_Pres_Value_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Output_Min_Pres_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
                     ucix_add_option(ctxw, sec, idx_c, "min_value", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
