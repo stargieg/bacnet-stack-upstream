@@ -1278,6 +1278,9 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         value.type.Object_Id.instance))) {
                     /* FIXME: we could send an I-Am broadcast to let the world
                      * know */
+                    ucix_add_option_int(ctxw, sec, idx_c, "Id",
+                        value.type.Object_Id.instance);
+                    ucix_commit(ctxw,sec);
                 } else {
                     status = false;
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
