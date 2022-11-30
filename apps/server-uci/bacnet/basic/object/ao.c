@@ -1169,6 +1169,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
+    float value_f = 0.0;
+    char *value_c = NULL;
+    int value_c_len = 0;
 
     /* decode the some of the request */
     len = bacapp_decode_application_data(
@@ -1199,17 +1202,32 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_REAL);
             if (status) {
-                status =
-                    Analog_Output_Present_Value_Write(wp_data->object_instance,
-                        value.type.Real, wp_data->priority,
-                        &wp_data->error_class, &wp_data->error_code);
+                if (Analog_Output_Present_Value_Write(wp_data->object_instance,
+                    value.type.Real, wp_data->priority,
+                    &wp_data->error_class, &wp_data->error_code)) {
+                    value_f = Analog_Output_Present_Value(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "value", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
             } else {
                 status = write_property_type_valid(wp_data, &value,
                     BACNET_APPLICATION_TAG_NULL);
                 if (status) {
-                    status = Analog_Output_Present_Value_Relinquish_Write(
+                    if (Analog_Output_Present_Value_Relinquish_Write(
                         wp_data->object_instance, wp_data->priority,
-                        &wp_data->error_class, &wp_data->error_code);
+                        &wp_data->error_class, &wp_data->error_code)) {
+                        value_f = Analog_Output_Present_Value(wp_data->object_instance);
+                        value_c_len = snprintf(NULL, 0, "%d", value_f);
+                        value_c = malloc(value_c_len + 1);
+                        snprintf(value_c,value_c_len + 1,"%d",value_f);
+                        ucix_add_option(ctxw, sec, idx_c, "value", value_c);
+                        ucix_commit(ctxw,sec);
+                        free(value_c);
+                    }
                 }
             }
             break;
@@ -1222,8 +1240,20 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         case PROP_COV_INCREMENT:
-        case PROP_OBJECT_IDENTIFIER:
-        case PROP_OBJECT_TYPE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                Analog_Output_COV_Increment_Set(wp_data->object_instance,
+                value.type.Real);
+                value_f = Analog_Output_COV_Increment(wp_data->object_instance);
+                value_c_len = snprintf(NULL, 0, "%d", value_f);
+                value_c = malloc(value_c_len + 1);
+                snprintf(value_c,value_c_len + 1,"%d",value_f);
+                ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
+                ucix_commit(ctxw,sec);
+                free(value_c);
+            }
+            break;
         case PROP_OBJECT_NAME:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
@@ -1236,14 +1266,50 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             break;
-        case PROP_STATUS_FLAGS:
-        case PROP_EVENT_STATE:
         case PROP_UNITS:
-        case PROP_RELIABILITY:
-        case PROP_PRIORITY_ARRAY:
-        case PROP_RELINQUISH_DEFAULT:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_ENUMERATED);
+            if (status) {
+                if (Analog_Output_Units_Set(
+                    wp_data->object_instance, value.type.Enumerated)) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "units",
+                        Analog_Output_Units(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
         case PROP_MAX_PRES_VALUE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Output_Max_Pres_Value_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Output_Max_Pres_Value(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "max_value", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
         case PROP_MIN_PRES_VALUE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Output_Min_Pres_Value_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Output_Min_Pres_Value(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%d", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%d",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "min_value", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
         case PROP_DESCRIPTION:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
@@ -1256,6 +1322,13 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             break;
+        case PROP_OBJECT_IDENTIFIER:
+        case PROP_OBJECT_TYPE:
+        case PROP_STATUS_FLAGS:
+        case PROP_EVENT_STATE:
+        case PROP_RELIABILITY:
+        case PROP_PRIORITY_ARRAY:
+        case PROP_RELINQUISH_DEFAULT:
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
 #endif
