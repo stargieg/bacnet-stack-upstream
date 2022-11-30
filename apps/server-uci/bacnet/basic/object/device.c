@@ -45,11 +45,17 @@
 #include "bacnet/datalink/datalink.h"
 #include "bacnet/basic/binding/address.h"
 /* include the device object */
-#include "device.h"
-#include "ao.h"
+#include "bacnet/basic/object/device.h"
+#include "bacnet/basic/object/ao.h"
+#include "bacnet/basic/object/av.h"
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
+//#include "bacnet/basic/object/schedule.h"
+//#include "bacnet/basic/object/trendlog.h"
+#if defined(INTRINSIC_REPORTING)
+#include "bacnet/basic/object/nc.h"
+#endif /* defined(INTRINSIC_REPORTING) */
 #include "bacnet/basic/ucix/ucix.h"
 
 /* local forward (semi-private) and external prototypes */
@@ -84,6 +90,22 @@ static object_functions_t My_Object_Table[] = {
         Analog_Output_Write_Property, Analog_Output_Property_Lists,
         NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
         NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
+    { OBJECT_ANALOG_VALUE, Analog_Value_Init, Analog_Value_Count,
+        Analog_Value_Index_To_Instance, Analog_Value_Valid_Instance,
+        Analog_Value_Object_Name, Analog_Value_Read_Property,
+        Analog_Value_Write_Property, Analog_Value_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */,
+        Analog_Value_Encode_Value_List, Analog_Value_Change_Of_Value,
+        Analog_Value_Change_Of_Value_Clear, Analog_Value_Intrinsic_Reporting },
+#if defined(INTRINSIC_REPORTING)
+    { OBJECT_NOTIFICATION_CLASS, Notification_Class_Init,
+        Notification_Class_Count, Notification_Class_Index_To_Instance,
+        Notification_Class_Valid_Instance, Notification_Class_Object_Name,
+        Notification_Class_Read_Property, Notification_Class_Write_Property,
+        Notification_Class_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
+        NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
+#endif
     { MAX_BACNET_OBJECT_TYPE, NULL /* Init */, NULL /* Count */,
         NULL /* Index_To_Instance */, NULL /* Valid_Instance */,
         NULL /* Object_Name */, NULL /* Read_Property */,
@@ -1640,6 +1662,34 @@ void Device_COV_Clear(BACNET_OBJECT_TYPE object_type, uint32_t object_instance)
         }
     }
 }
+
+#if defined(INTRINSIC_REPORTING)
+void Device_local_reporting(void)
+{
+    struct object_functions *pObject = NULL;
+    uint32_t objects_count = 0;
+    uint32_t object_instance = 0;
+    BACNET_OBJECT_TYPE object_type = OBJECT_NONE;
+    uint32_t idx = 0;
+
+    objects_count = Device_Object_List_Count();
+
+    /* loop for all objects */
+    for (idx = 1; idx <= objects_count; idx++) {
+        Device_Object_List_Identifier(idx, &object_type, &object_instance);
+
+        pObject = Device_Objects_Find_Functions(object_type);
+        if (pObject != NULL) {
+            if (pObject->Object_Valid_Instance &&
+                pObject->Object_Valid_Instance(object_instance)) {
+                if (pObject->Object_Intrinsic_Reporting) {
+                    pObject->Object_Intrinsic_Reporting(object_instance);
+                }
+            }
+        }
+    }
+}
+#endif
 
 /** Looks up the requested Object to see if the functionality is supported.
  * @ingroup ObjHelpers

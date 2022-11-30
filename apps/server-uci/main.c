@@ -47,6 +47,10 @@
 /* include the device object */
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/object/lc.h"
+//#include "bacnet/basic/object/trendlog.h"
+#if defined(INTRINSIC_REPORTING)
+#include "bacnet/basic/object/nc.h"
+#endif /* defined(INTRINSIC_REPORTING) */
 
 static enum {
     DATALINK_NONE = 0,
@@ -141,6 +145,14 @@ static void Init_Service_Handlers(void)
     /* handle the data coming back from private requests */
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,
         handler_unconfirmed_private_transfer);
+#if defined(INTRINSIC_REPORTING)
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_ACKNOWLEDGE_ALARM, handler_alarm_ack);
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_GET_EVENT_INFORMATION, handler_get_event_information);
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_GET_ALARM_SUMMARY, handler_get_alarm_summary);
+#endif /* defined(INTRINSIC_REPORTING) */
 #if defined(BACNET_TIME_MASTER)
     handler_timesync_init();
 #endif
@@ -174,6 +186,9 @@ int main(int argc, char *argv[])
     uint32_t elapsed_seconds = 0;
     uint32_t elapsed_milliseconds = 0;
     uint32_t address_binding_tmr = 0;
+#if defined(INTRINSIC_REPORTING)
+    uint32_t recipient_scan_tmr = 0;
+#endif
 #if defined(BACNET_TIME_MASTER)
     BACNET_DATE_TIME bdatetime;
 #endif
@@ -295,6 +310,9 @@ int main(int argc, char *argv[])
             handler_cov_timer_seconds(elapsed_seconds);
             tsm_timer_milliseconds(elapsed_milliseconds);
             //trend_log_timer(elapsed_seconds);
+#if defined(INTRINSIC_REPORTING)
+            Device_local_reporting();
+#endif
 #if defined(BACNET_TIME_MASTER)
             Device_getCurrentDateTime(&bdatetime);
             handler_timesync_task(&bdatetime);
@@ -307,6 +325,14 @@ int main(int argc, char *argv[])
             address_cache_timer(address_binding_tmr);
             address_binding_tmr = 0;
         }
+#if defined(INTRINSIC_REPORTING)
+        /* try to find addresses of recipients */
+        recipient_scan_tmr += elapsed_seconds;
+        if (recipient_scan_tmr >= NC_RESCAN_RECIPIENTS_SECS) {
+            Notification_Class_find_recipient();
+            recipient_scan_tmr = 0;
+        }
+#endif
         /* output */
 
         /* blink LEDs, Turn on or off outputs, etc */
