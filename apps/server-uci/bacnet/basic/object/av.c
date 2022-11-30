@@ -663,9 +663,9 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 apdu_len =
                     encode_opening_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
                 apdu_len += encode_application_date(&apdu[apdu_len],
-                    &CurrentAV->Event_Time_Stamps[rpdata->array_index].date);
+                    &CurrentAV->Event_Time_Stamps[rpdata->array_index-1].date);
                 apdu_len += encode_application_time(&apdu[apdu_len],
-                    &CurrentAV->Event_Time_Stamps[rpdata->array_index].time);
+                    &CurrentAV->Event_Time_Stamps[rpdata->array_index-1].time);
                 apdu_len +=
                     encode_closing_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
             } else {
