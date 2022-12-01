@@ -43,6 +43,12 @@
 #include "bacnet/bacerror.h"
 #include "bacnet/rp.h"
 #include "bacnet/wp.h"
+#if defined(INTRINSIC_REPORTING)
+#include "bacnet/basic/object/nc.h"
+#include "bacnet/alarm_ack.h"
+#include "bacnet/getevent.h"
+#include "bacnet/get_alarm_sum.h"
+#endif
 
 /**
  * @brief Callback for gateway write present value request
@@ -104,6 +110,14 @@ extern "C" {
     bool Analog_Output_Relinquish_Default_Set(
         uint32_t object_instance,
         float value);
+
+    BACNET_STACK_EXPORT
+    unsigned Analog_Output_Event_State(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Event_State_Set(
+        uint32_t object_instance,
+        unsigned state);
 
     BACNET_STACK_EXPORT
     bool Analog_Output_Change_Of_Value(
@@ -189,6 +203,25 @@ extern "C" {
     BACNET_STACK_EXPORT
     bool Analog_Output_Write_Property(
         BACNET_WRITE_PROPERTY_DATA * wp_data);
+
+    /* note: header of Intrinsic_Reporting function is required
+       even when INTRINSIC_REPORTING is not defined */
+    void Analog_Output_Intrinsic_Reporting(
+        uint32_t object_instance);
+
+#if defined(INTRINSIC_REPORTING)
+    int Analog_Output_Event_Information(
+        unsigned index,
+        BACNET_GET_EVENT_INFORMATION_DATA * getevent_data);
+
+    int Analog_Output_Alarm_Ack(
+        BACNET_ALARM_ACK_DATA * alarmack_data,
+        BACNET_ERROR_CODE * error_code);
+
+    int Analog_Output_Alarm_Summary(
+        unsigned index,
+        BACNET_GET_ALARM_SUMMARY_DATA * getalarm_data);
+#endif
 
     BACNET_STACK_EXPORT
     bool Analog_Output_Create(
