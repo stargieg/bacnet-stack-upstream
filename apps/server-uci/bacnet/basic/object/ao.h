@@ -198,6 +198,7 @@ extern "C" {
     bool Analog_Output_Max_Pres_Value_Set(
         uint32_t object_instance, float value);
 
+    BACNET_STACK_EXPORT
     int Analog_Output_Read_Property(
         BACNET_READ_PROPERTY_DATA * rpdata);
     BACNET_STACK_EXPORT
@@ -206,18 +207,26 @@ extern "C" {
 
     /* note: header of Intrinsic_Reporting function is required
        even when INTRINSIC_REPORTING is not defined */
+    BACNET_STACK_EXPORT
     void Analog_Output_Intrinsic_Reporting(
         uint32_t object_instance);
 
 #if defined(INTRINSIC_REPORTING)
+    BACNET_STACK_EXPORT
+    float Analog_Output_Feedback_Value(
+        uint32_t object_instance);
+
+    BACNET_STACK_EXPORT
     int Analog_Output_Event_Information(
         unsigned index,
         BACNET_GET_EVENT_INFORMATION_DATA * getevent_data);
 
+    BACNET_STACK_EXPORT
     int Analog_Output_Alarm_Ack(
         BACNET_ALARM_ACK_DATA * alarmack_data,
         BACNET_ERROR_CODE * error_code);
 
+    BACNET_STACK_EXPORT
     int Analog_Output_Alarm_Summary(
         unsigned index,
         BACNET_GET_ALARM_SUMMARY_DATA * getalarm_data);
