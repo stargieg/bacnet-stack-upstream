@@ -215,6 +215,57 @@ extern "C" {
     BACNET_STACK_EXPORT
     float Analog_Output_Feedback_Value(
         uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    uint32_t Analog_Output_Time_Delay(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Time_Delay_Set(
+        uint32_t object_instance, uint32_t value);
+    BACNET_STACK_EXPORT
+    uint32_t Analog_Output_Notification_Class(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Notification_Class_Set(
+        uint32_t object_instance, uint32_t value);
+    BACNET_STACK_EXPORT
+    float Analog_Output_High_Limit(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_High_Limit_Set(
+        uint32_t object_instance, float value);
+    BACNET_STACK_EXPORT
+    float Analog_Output_Low_Limit(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Low_Limit_Set(
+        uint32_t object_instance, float value);
+    BACNET_STACK_EXPORT
+    float Analog_Output_Deadband(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Deadband_Set(
+        uint32_t object_instance, float value);
+    BACNET_STACK_EXPORT
+    uint8_t Analog_Output_Limit_Enable(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Limit_Enable_Set(
+        uint32_t object_instance, uint8_t value);
+    BACNET_STACK_EXPORT
+    uint8_t Analog_Output_Event_Enable(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Event_Enable_Set(
+        uint32_t object_instance, uint8_t value);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Acked_Transitions(
+        uint32_t object_instance, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
+    BACNET_STACK_EXPORT
+    uint8_t Analog_Output_Notify_Type(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Output_Event_Time_Stamps(
+        uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION]);
 
     BACNET_STACK_EXPORT
     int Analog_Output_Event_Information(

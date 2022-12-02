@@ -278,6 +278,354 @@ float Analog_Output_Feedback_Value(uint32_t object_instance)
 
     return value;
 }
+
+/**
+ * For a given object instance-number, returns the units property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  time delay property value
+ */
+uint32_t Analog_Output_Time_Delay(uint32_t object_instance)
+{
+    uint32_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Time_Delay;
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, sets the units property value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - Time Delay property value
+ *
+ * @return true if the Time Delay property value was set
+ */
+bool Analog_Output_Time_Delay_Set(uint32_t object_instance, uint32_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Time_Delay = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the Notification Class
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  Notification Class property value
+ */
+uint32_t Analog_Output_Notification_Class(uint32_t object_instance)
+{
+    uint32_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Notification_Class;
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, sets the Notification Class
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - Notification Class
+ *
+ * @return true if the Notification Class value was set
+ */
+bool Analog_Output_Notification_Class_Set(uint32_t object_instance, uint32_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Notification_Class = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the High Limit
+ * @param  object_instance - object-instance number of the object
+ * @return value or 100.0 if not found
+ */
+float Analog_Output_High_Limit(uint32_t object_instance)
+{
+    float value = 100.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->High_Limit;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the High Limit
+ * @param  object_instance - object-instance number of the object
+ * @param  value - value to be set
+ * @return true if valid object-instance and value within range
+ */
+bool Analog_Output_High_Limit_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->High_Limit = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the Low Limit
+ * @param  object_instance - object-instance number of the object
+ * @return value or 0.0 if not found
+ */
+float Analog_Output_Low_Limit(uint32_t object_instance)
+{
+    float value = 0.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Low_Limit;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the Low Limit
+ * @param  object_instance - object-instance number of the object
+ * @param  value - value to be set
+ * @return true if valid object-instance and value within range
+ */
+bool Analog_Output_Low_Limit_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Low_Limit = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the Deadband
+ * @param  object_instance - object-instance number of the object
+ * @return value or 0.0 if not found
+ */
+float Analog_Output_Deadband(uint32_t object_instance)
+{
+    float value = 0.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Deadband;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the Deadband
+ * @param  object_instance - object-instance number of the object
+ * @param  value - value to be set
+ * @return true if valid object-instance and value within range
+ */
+bool Analog_Output_Deadband_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Deadband = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the Limit Enable value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  Limit Enable value
+ */
+uint8_t Analog_Output_Limit_Enable(uint32_t object_instance)
+{
+    uint8_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Limit_Enable;
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, sets the Limit Enable value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - Limit Enable value
+ *
+ * @return true if the Limit Enable value was set
+ */
+bool Analog_Output_Limit_Enable_Set(uint32_t object_instance, uint8_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Limit_Enable = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the Event Enable value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  Event Enable value
+ */
+uint8_t Analog_Output_Event_Enable(uint32_t object_instance)
+{
+    uint8_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Event_Enable;
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, sets the Event Enable value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - Event Enable value
+ *
+ * @return true if the Event Enable value was set
+ */
+bool Analog_Output_Event_Enable_Set(uint32_t object_instance, uint8_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Event_Enable = value;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the Acked Transitions
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - acked_info struct
+ *
+ * @return true
+ */
+bool Analog_Output_Acked_Transitions(uint32_t object_instance, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION])
+{
+    struct object_data *pObject;
+    u_int8_t b = 0;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
+            value[b] = &pObject->Acked_Transitions[b];
+        }
+        return true;
+    } else
+        return false;
+}
+
+/**
+ * For a given object instance-number, returns the Notify Type
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  Notify Type value
+ */
+uint8_t Analog_Output_Notify_Type(uint32_t object_instance)
+{
+    uint8_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Notify_Type;
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, returns the Acked Transitions
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - acked_info struct
+ *
+ * @return true
+ */
+bool Analog_Output_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION])
+{
+    struct object_data *pObject;
+    u_int8_t b = 0;
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
+            value[b] = &pObject->Event_Time_Stamps[b];
+        }
+        return true;
+    } else
+        return false;
+}
+
 #endif
 
 /**
@@ -1109,14 +1457,14 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     float real_value = 0.0;
     unsigned i = 0;
     bool state = false;
-    struct object_data *pObject;
+    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+    BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
+    //struct object_data *pObject;
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
     }
-
-    pObject = Keylist_Data(Object_List, rpdata->object_instance);
 
     apdu = rpdata->application_data;
     switch (rpdata->object_property) {
@@ -1259,69 +1607,76 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #endif
 #if defined(INTRINSIC_REPORTING)
         case PROP_TIME_DELAY:
-            apdu_len =
-                encode_application_unsigned(&apdu[0], pObject->Time_Delay);
+            i = Analog_Output_Time_Delay(rpdata->object_instance);
+            apdu_len = encode_application_unsigned(&apdu[0], i);
             break;
 
         case PROP_NOTIFICATION_CLASS:
-            apdu_len = encode_application_unsigned(
-                &apdu[0], pObject->Notification_Class);
+            i = Analog_Output_Notification_Class(rpdata->object_instance);
+            apdu_len = encode_application_unsigned(&apdu[0], i);
             break;
 
         case PROP_HIGH_LIMIT:
-            apdu_len = encode_application_real(&apdu[0], pObject->High_Limit);
+            real_value = Analog_Output_High_Limit(rpdata->object_instance);
+            apdu_len = encode_application_real(&apdu[0], real_value);
             break;
 
         case PROP_LOW_LIMIT:
-            apdu_len = encode_application_real(&apdu[0], pObject->Low_Limit);
+            real_value = Analog_Output_Low_Limit(rpdata->object_instance);
+            apdu_len = encode_application_real(&apdu[0], real_value);
             break;
 
         case PROP_DEADBAND:
-            apdu_len = encode_application_real(&apdu[0], pObject->Deadband);
+            real_value = Analog_Output_Deadband(rpdata->object_instance);
+            apdu_len = encode_application_real(&apdu[0], real_value);
             break;
 
         case PROP_LIMIT_ENABLE:
+            i = Analog_Output_Limit_Enable(rpdata->object_instance);
             bitstring_init(&bit_string);
             bitstring_set_bit(&bit_string, 0,
-                (pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ? true
-                                                                   : false);
+                (i & EVENT_LOW_LIMIT_ENABLE) ? true
+                                             : false);
             bitstring_set_bit(&bit_string, 1,
-                (pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ? true
-                                                                    : false);
+                (i & EVENT_HIGH_LIMIT_ENABLE) ? true
+                                              : false);
 
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
 
         case PROP_EVENT_ENABLE:
+            i = Analog_Output_Event_Enable(rpdata->object_instance);
             bitstring_init(&bit_string);
             bitstring_set_bit(&bit_string, TRANSITION_TO_OFFNORMAL,
-                (pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ? true
-                                                                      : false);
+                (i & EVENT_ENABLE_TO_OFFNORMAL) ? true
+                                                : false);
             bitstring_set_bit(&bit_string, TRANSITION_TO_FAULT,
-                (pObject->Event_Enable & EVENT_ENABLE_TO_FAULT) ? true
-                                                                  : false);
+                (i & EVENT_ENABLE_TO_FAULT) ? true
+                                            : false);
             bitstring_set_bit(&bit_string, TRANSITION_TO_NORMAL,
-                (pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ? true
-                                                                   : false);
+                (i & EVENT_ENABLE_TO_NORMAL) ? true
+                                             : false);
 
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
 
         case PROP_ACKED_TRANSITIONS:
+            state = Analog_Output_Acked_Transitions(rpdata->object_instance, ack_info);
             bitstring_init(&bit_string);
             bitstring_set_bit(&bit_string, TRANSITION_TO_OFFNORMAL,
-                pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].bIsAcked);
+                ack_info[TRANSITION_TO_OFFNORMAL]->bIsAcked);
             bitstring_set_bit(&bit_string, TRANSITION_TO_FAULT,
-                pObject->Acked_Transitions[TRANSITION_TO_FAULT].bIsAcked);
+                ack_info[TRANSITION_TO_FAULT]->bIsAcked);
             bitstring_set_bit(&bit_string, TRANSITION_TO_NORMAL,
-                pObject->Acked_Transitions[TRANSITION_TO_NORMAL].bIsAcked);
+                ack_info[TRANSITION_TO_NORMAL]->bIsAcked);
 
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
 
         case PROP_NOTIFY_TYPE:
+            i = Analog_Output_Notify_Type(rpdata->object_instance);
             apdu_len = encode_application_enumerated(
-                &apdu[0], pObject->Notify_Type ? NOTIFY_EVENT : NOTIFY_ALARM);
+                &apdu[0], i ? NOTIFY_EVENT : NOTIFY_ALARM);
             break;
 
         case PROP_EVENT_TIME_STAMPS:
@@ -1332,13 +1687,14 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             /* if no index was specified, then try to encode the entire list */
             /* into one packet. */
             else if (rpdata->array_index == BACNET_ARRAY_ALL) {
+                state = Analog_Output_Event_Time_Stamps(rpdata->object_instance, timestamp);
                 for (i = 0; i < MAX_BACNET_EVENT_TRANSITION; i++) {
                     len = encode_opening_tag(
                         &apdu[apdu_len], TIME_STAMP_DATETIME);
                     len += encode_application_date(&apdu[apdu_len + len],
-                        &pObject->Event_Time_Stamps[i].date);
+                        &timestamp[i]->date);
                     len += encode_application_time(&apdu[apdu_len + len],
-                        &pObject->Event_Time_Stamps[i].time);
+                        &timestamp[i]->time);
                     len += encode_closing_tag(
                         &apdu[apdu_len + len], TIME_STAMP_DATETIME);
 
@@ -1353,12 +1709,13 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                     }
                 }
             } else if (rpdata->array_index <= MAX_BACNET_EVENT_TRANSITION) {
+                state = Analog_Output_Event_Time_Stamps(rpdata->object_instance, timestamp);
                 apdu_len =
                     encode_opening_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
                 apdu_len += encode_application_date(&apdu[apdu_len],
-                    &pObject->Event_Time_Stamps[rpdata->array_index-1].date);
+                    &timestamp[rpdata->array_index-1]->date);
                 apdu_len += encode_application_time(&apdu[apdu_len],
-                    &pObject->Event_Time_Stamps[rpdata->array_index-1].time);
+                    &timestamp[rpdata->array_index-1]->time);
                 apdu_len +=
                     encode_closing_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
             } else {
