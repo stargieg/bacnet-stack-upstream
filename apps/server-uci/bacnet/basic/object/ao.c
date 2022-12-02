@@ -1486,6 +1486,11 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 free(value_c);
             }
             break;
+        case PROP_OBJECT_IDENTIFIER:
+        case PROP_OBJECT_TYPE:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
         case PROP_OBJECT_NAME:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
@@ -1498,6 +1503,11 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             break;
+        case PROP_STATUS_FLAGS:
+        case PROP_EVENT_STATE:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
         case PROP_UNITS:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_ENUMERATED);
@@ -1509,6 +1519,24 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_commit(ctxw,sec);
                 }
             }
+            break;
+        case PROP_RELIABILITY:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_ENUMERATED);
+            if (status)
+                Analog_Output_Reliability_Set(wp_data->object_instance,
+                    value.type.Enumerated);
+            break;
+        case PROP_PRIORITY_ARRAY:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
+        case PROP_RELINQUISH_DEFAULT:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status)
+                Analog_Output_Relinquish_Default_Set(wp_data->object_instance,
+                    value.type.Real);
             break;
         case PROP_MAX_PRES_VALUE:
             status = write_property_type_valid(wp_data, &value,
@@ -1554,19 +1582,19 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             break;
-        case PROP_OBJECT_IDENTIFIER:
-        case PROP_OBJECT_TYPE:
-        case PROP_STATUS_FLAGS:
-        case PROP_EVENT_STATE:
-        case PROP_RELIABILITY:
-        case PROP_PRIORITY_ARRAY:
-        case PROP_RELINQUISH_DEFAULT:
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
-#endif
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             break;
+#endif
+#if defined(INTRINSIC_REPORTING)
+        case PROP_ACKED_TRANSITIONS:
+        case PROP_EVENT_TIME_STAMPS:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
+#endif
         default:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
