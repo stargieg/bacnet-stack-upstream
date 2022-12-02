@@ -605,6 +605,29 @@ uint8_t Analog_Output_Notify_Type(uint32_t object_instance)
 }
 
 /**
+ * For a given object instance-number, sets the Notify_Type value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - Notify Type value
+ *
+ * @return true if the Notify Type value was set
+ */
+bool Analog_Output_Notify_Type_Set(uint32_t object_instance, uint8_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Notify_Type = value;
+        status = true;
+    }
+
+    return status;
+}
+
+
+/**
  * For a given object instance-number, returns the Acked Transitions
  *
  * @param  object_instance - object-instance number of the object
@@ -1946,6 +1969,114 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
 #endif
 #if defined(INTRINSIC_REPORTING)
+        case PROP_TIME_DELAY:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_UNSIGNED_INT);
+            if (status) {
+                if (Analog_Output_Time_Delay_Set(
+                    wp_data->object_instance, value.type.Unsigned_Int)) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "time_delay",
+                        Analog_Output_Time_Delay(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
+        case PROP_NOTIFICATION_CLASS:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_UNSIGNED_INT);
+            if (status) {
+                if (Analog_Output_Time_Delay_Set(
+                    wp_data->object_instance, value.type.Unsigned_Int)) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "nc",
+                        Analog_Output_Time_Delay(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
+        case PROP_HIGH_LIMIT:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Output_High_Limit_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Output_High_Limit(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "high_limit", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
+        case PROP_LOW_LIMIT:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Output_Low_Limit_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Output_Low_Limit(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "low_limit", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
+        case PROP_DEADBAND:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Output_Deadband_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Output_Deadband(wp_data->object_instance);
+                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "dead_limit", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
+        case PROP_LIMIT_ENABLE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_BIT_STRING);
+            if (status) {
+                if (Analog_Output_Limit_Enable_Set(
+                    wp_data->object_instance, value.type.Bit_String.value[0])) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "limit",
+                        Analog_Output_Limit_Enable(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
+        case PROP_EVENT_ENABLE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_BIT_STRING);
+            if (status) {
+                if (Analog_Output_Event_Enable_Set(
+                    wp_data->object_instance, value.type.Bit_String.value[0])) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "event",
+                        Analog_Output_Event_Enable(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
+        case PROP_NOTIFY_TYPE:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_ENUMERATED);
+            if (status) {
+                if (Analog_Output_Notify_Type_Set(
+                    wp_data->object_instance, value.type.Enumerated)) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "notify_type",
+                        Analog_Output_Notify_Type(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                    }
+            }
+            break;
         case PROP_ACKED_TRANSITIONS:
         case PROP_EVENT_TIME_STAMPS:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -2676,6 +2807,8 @@ static void uci_list(const char *sec_idx,
         option = "0";
     pObject->Deadband = strtof(option,(char **) NULL);
 
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
+
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
     for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
@@ -2743,6 +2876,7 @@ void Analog_Output_Init(void)
     if (option)
         if (characterstring_init_ansi(&option_str, option))
             tObject.Deadband = strndup(option,option_str.length);
+    tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0); // 0=Alarm 1=Event
 #endif
     struct itr_ctx itr_m;
 	itr_m.section = sec;

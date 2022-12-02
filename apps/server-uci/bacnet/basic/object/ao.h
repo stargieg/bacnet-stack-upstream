@@ -264,6 +264,8 @@ extern "C" {
     uint8_t Analog_Output_Notify_Type(
         uint32_t object_instance);
     BACNET_STACK_EXPORT
+    bool Analog_Output_Notify_Type_Set(uint32_t object_instance, uint8_t value);
+    BACNET_STACK_EXPORT
     bool Analog_Output_Event_Time_Stamps(
         uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION]);
 
