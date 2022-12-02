@@ -204,7 +204,7 @@ bool Analog_Value_Valid_Instance(uint32_t object_instance)
  */
 unsigned Analog_Value_Count(void)
 {
-    return Keylist_Count(Object_List);
+    return Keylist_Count(Object_List)-1;
 }
 
 /**
