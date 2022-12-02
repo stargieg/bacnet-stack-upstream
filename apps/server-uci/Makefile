@@ -144,10 +144,9 @@ SRC = main.c \
 	bacnet/datalink/datalink.c \
 	bacnet/datalink/dlenv.c \
 	$(BACNET_OBJECT_DIR)/netport.c \
-	$(BACNET_OBJECT_DIR)/lc.c \
+	bacnet/basic/object/ao.c \
 	bacnet/basic/object/av.c \
-	$(BACNET_OBJECT_DIR)/nc.c \
-	bacnet/basic/object/ao.c
+	$(BACNET_OBJECT_DIR)/nc.c
 
 BACNET_SRC = \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/*.c) \

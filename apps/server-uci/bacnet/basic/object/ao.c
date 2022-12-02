@@ -2842,6 +2842,11 @@ void Analog_Output_Init(void)
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
+
+    struct object_data *pObject = NULL;
+    /* add to list */
+    Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
+
     option = ucix_get_option(ctx, sec, "default", "description");
     if (option)
         if (characterstring_init_ansi(&option_str, option))

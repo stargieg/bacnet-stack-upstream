@@ -305,7 +305,6 @@ int main(int argc, char *argv[])
             last_seconds = current_seconds;
             dcc_timer_seconds(elapsed_seconds);
             datalink_maintenance_timer(elapsed_seconds);
-            Load_Control_State_Machine_Handler();
             elapsed_milliseconds = elapsed_seconds * 1000;
             handler_cov_timer_seconds(elapsed_seconds);
             tsm_timer_milliseconds(elapsed_milliseconds);
