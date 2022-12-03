@@ -572,7 +572,7 @@ bool Analog_Output_Event_Enable_Set(uint32_t object_instance, uint8_t value)
 bool Analog_Output_Acked_Transitions(uint32_t object_instance, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION])
 {
     struct object_data *pObject;
-    u_int8_t b = 0;
+    uint8_t b = 0;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -638,7 +638,7 @@ bool Analog_Output_Notify_Type_Set(uint32_t object_instance, uint8_t value)
 bool Analog_Output_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION])
 {
     struct object_data *pObject;
-    u_int8_t b = 0;
+    uint8_t b = 0;
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
