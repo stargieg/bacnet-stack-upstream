@@ -44,6 +44,12 @@ const char *ucix_get_option(
     const char *s,
     const char *o);
 BACNET_STACK_EXPORT
+int ucix_get_list(char *value[254],
+    struct uci_context *ctx,
+	const char *p,
+    const char *s,
+    const char *o);
+BACNET_STACK_EXPORT
 int ucix_get_option_int(
     struct uci_context *ctx,
     const char *p,
@@ -64,6 +70,13 @@ void ucix_add_option(
     const char *o,
     const char *t);
 BACNET_STACK_EXPORT
+BACNET_STACK_EXPORT
+void ucix_set_list(struct uci_context *ctx,
+	const char *p,
+    const char *s,
+    const char *o,
+    char value[254][64],
+    int l);
 void ucix_add_option_int(
     struct uci_context *ctx,
     const char *p,
