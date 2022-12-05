@@ -61,7 +61,7 @@ BACNET_DEFINES += $(BBMD_DEFINE)
 BACNET_DEFINES += -DWEAK_FUNC=
 BACNET_DEFINES += $(MAKE_DEFINE)
 
-BACNET_LIB =
+#BACNET_LIB =
 # build in uci integration - use UCI=1 when invoking make
 ifeq (${UCI},1)
 BACNET_DEFINES += -DBAC_UCI
