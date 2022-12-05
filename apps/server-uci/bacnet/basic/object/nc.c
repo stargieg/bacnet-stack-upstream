@@ -432,7 +432,6 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_BIT_STRING bit_string;
     uint8_t *apdu = NULL;
     uint8_t u8Val;
-    bool state = false;
     uint8_t prio[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DESTINATION *RecipientEntry = NULL;
     int idx;
@@ -477,17 +476,19 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 apdu_len += encode_application_unsigned(&apdu[0], 3);
             else {
                 if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                    state = Notification_Class_Priority(rpdata->object_instance, prio);
-                    apdu_len += encode_application_unsigned(&apdu[apdu_len],
-                        prio[TRANSITION_TO_OFFNORMAL]);
-                    apdu_len += encode_application_unsigned(&apdu[apdu_len],
-                        prio[TRANSITION_TO_FAULT]);
-                    apdu_len += encode_application_unsigned(&apdu[apdu_len],
-                        prio[TRANSITION_TO_NORMAL]);
+                    if (Notification_Class_Priority(rpdata->object_instance, prio)) {
+                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                            prio[TRANSITION_TO_OFFNORMAL]);
+                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                            prio[TRANSITION_TO_FAULT]);
+                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                            prio[TRANSITION_TO_NORMAL]);
+                    }
                 } else if (rpdata->array_index <= MAX_BACNET_EVENT_TRANSITION) {
-                    state = Notification_Class_Priority(rpdata->object_instance, prio);
-                    apdu_len += encode_application_unsigned(&apdu[apdu_len],
-                        prio[rpdata->array_index - 1]);
+                    if (Notification_Class_Priority(rpdata->object_instance, prio)) {
+                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                            prio[rpdata->array_index - 1]);
+                    }
                 } else {
                     rpdata->error_class = ERROR_CLASS_PROPERTY;
                     rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
@@ -996,7 +997,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
 
-            char ucirecp[NC_MAX_RECIPIENTS][64];
+            char ucirecp[NC_MAX_RECIPIENTS][254];
             int ucirecp_n = 0;
             char uci_str[64];
             for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
@@ -1342,7 +1343,7 @@ static void uci_list(const char *sec_idx,
     pObject->Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_fault", ictx->Object.Priority[TRANSITION_TO_FAULT]);
     pObject->Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_normal", ictx->Object.Priority[TRANSITION_TO_NORMAL]);
 
-    char *ucirecp[NC_MAX_RECIPIENTS];
+    char *ucirecp[254];
     BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
     int ucirecp_n = 0;
     int ucirecp_i = 0;
