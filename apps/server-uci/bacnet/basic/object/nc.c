@@ -997,7 +997,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
 
-            char ucirecp[NC_MAX_RECIPIENTS][254];
+            char ucirecp[254][64];
             int ucirecp_n = 0;
             char uci_str[64];
             for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
