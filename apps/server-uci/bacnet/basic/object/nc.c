@@ -568,14 +568,16 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                             RecipientEntry->Recipient._.Address.net);
 
                         /* mac-address OCTET STRING */
-                        if (RecipientEntry->Recipient._.Address.net) {
+                        if (RecipientEntry->Recipient._.Address.len > 0) {
                             octetstring_init(&octet_string,
                                 RecipientEntry->Recipient._.Address.adr,
                                 RecipientEntry->Recipient._.Address.len);
-                        } else {
+                        } else if (RecipientEntry->Recipient._.Address.mac_len > 0) {
                             octetstring_init(&octet_string,
                                 RecipientEntry->Recipient._.Address.mac,
                                 RecipientEntry->Recipient._.Address.mac_len);
+                        } else {
+                            octetstring_init(&octet_string, 0, 0);
                         }
                         apdu_len += encode_application_octet_string(
                             &apdu[apdu_len], &octet_string);
@@ -1369,40 +1371,57 @@ static void uci_list(const char *sec_idx,
         recplist[ucirecp_i].ToTime.sec = 59;
         recplist[ucirecp_i].ToTime.hundredths = 99;
         recplist[ucirecp_i].ConfirmedNotify = false;
-        recplist[ucirecp_i].Recipient.RecipientType =
-                    RECIPIENT_TYPE_ADDRESS;
-        recplist[ucirecp_i].Recipient._.Address.len = 0;
-        uci_ptr = strtok(ucirecp[ucirecp_i], ",");
-        src_net = uci_ptr;
-        if (!src_net) {
-            net = 65535;
-        } else {
-            net = atoi(src_net);
-        }
-        if (net != 65535) {
-            uci_ptr = strtok(NULL, ":");
-            src_ip = uci_ptr;
-            uci_ptr = strtok(NULL, "\0");
-            src_port = atoi(uci_ptr);
-            src.mac[4] = ( src_port / 256 );
-            src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
-            uci_ptr_a = strtok(src_ip, ".");
-            src.mac[0] = atoi(uci_ptr_a);
-            uci_ptr_a = strtok(NULL, ".");
-            src.mac[1] = atoi(uci_ptr_a);
-            uci_ptr_a = strtok(NULL, ".");
-            src.mac[2] = atoi(uci_ptr_a);
-            uci_ptr_a = strtok(NULL, ".");
-            src.mac[3] = atoi(uci_ptr_a);
-            src.mac_len = 7;
-            src.net = 0;
-            recplist[ucirecp_i].Recipient._.Address = src;
-            recplist[ucirecp_i].ConfirmedNotify = false;
-        } else {
-            recplist[ucirecp_i].Recipient._.Address.net = net;
-        }
         recplist[ucirecp_i].ProcessIdentifier = ucirecp_i;
         recplist[ucirecp_i].Transitions = 7; //bit string 1,1,1 To Alarm,To Fault,To Normal
+        uci_ptr = strtok(ucirecp[ucirecp_i], ",");
+	    if (strcmp(uci_ptr,"d") == 0) {
+            uci_ptr = strtok(NULL, "\0");
+            recplist[ucirecp_i].Recipient._.DeviceIdentifier = atoi(uci_ptr);
+            recplist[ucirecp_i].Recipient.RecipientType =
+                RECIPIENT_TYPE_DEVICE;
+        } else if ((strcmp(uci_ptr,"n") == 0)) {
+            uci_ptr = strtok(NULL, "\0");
+            uci_ptr = strtok(uci_ptr, ",");
+            src_net = uci_ptr;
+            if (!src_net) {
+                net = 0;
+            } else {
+                net = atoi(src_net);
+            }
+            if (net != 65535) {
+                uci_ptr = strtok(NULL, ":");
+                if (uci_ptr) {
+                    src_ip = uci_ptr;
+                    uci_ptr = strtok(NULL, "\0");
+                    src_port = atoi(uci_ptr);
+                    src.mac[4] = ( src_port / 256 );
+                    src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
+                    uci_ptr_a = strtok(src_ip, ".");
+                    src.mac[0] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[1] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[2] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[3] = atoi(uci_ptr_a);
+                    src.mac_len = 7;
+                    src.net = net;
+                    src.len = 0;
+                    recplist[ucirecp_i].Recipient._.Address = src;
+                    recplist[ucirecp_i].Recipient.RecipientType =
+                        RECIPIENT_TYPE_ADDRESS;
+                }
+            } else {
+                recplist[ucirecp_i].Recipient._.Address.net = net;
+                recplist[ucirecp_i].Recipient.RecipientType =
+                        RECIPIENT_TYPE_ADDRESS;
+                recplist[ucirecp_i].Recipient._.Address.len = 0;
+                recplist[ucirecp_i].Recipient._.Address.mac_len = 0;
+            }
+        } else {
+            recplist[ucirecp_i].Recipient.RecipientType =
+                RECIPIENT_TYPE_NOTINITIALIZED;
+        }
     }
     for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
         BACNET_ADDRESS src = { 0 };
