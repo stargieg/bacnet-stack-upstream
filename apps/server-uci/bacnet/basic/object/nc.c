@@ -1272,7 +1272,7 @@ void Notification_Class_find_recipient(void)
     BACNET_DESTINATION *pBacDest;
     BACNET_ADDRESS src = { 0 };
     unsigned max_apdu = 0;
-    uint32_t notify_index;
+    int notify_index;
     uint32_t DeviceID;
     uint8_t idx;
 
