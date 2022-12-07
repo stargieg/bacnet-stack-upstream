@@ -149,8 +149,7 @@ BACnetRecipient ::= CHOICE {
     BACNET_STACK_EXPORT
     bool Notification_Class_Recipient_List_Set(
         uint32_t object_instance,
-        BACNET_DESTINATION *value,
-        int idx);
+        BACNET_DESTINATION value[NC_MAX_RECIPIENTS]);
 
     BACNET_STACK_EXPORT
     int Notification_Class_Read_Property(

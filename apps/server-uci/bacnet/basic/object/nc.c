@@ -382,41 +382,63 @@ BACNET_DESTINATION * Notification_Class_Recipient_List(uint32_t object_instance,
  *
  * @param  object_instance - object-instance number of the object
  * @param  value - Recipient struct
- * @param  b - Recipient index
+ * @param  b - list len
  *
  * @return true
  */
-bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DESTINATION *value, int idx)
+bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DESTINATION value[NC_MAX_RECIPIENTS])
 {
     struct object_data *pObject;
     pObject = Keylist_Data(Object_List, object_instance);
     bool ret = false;
+    int idx = 0;
     if (pObject) {
         /* Decoded all recipient list */
         /* copy elements from temporary object */
         for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
             BACNET_ADDRESS src = { 0 };
             unsigned max_apdu = 0;
-            int32_t DeviceID;
-
-            pObject->Recipient_List[idx] =
-                value[idx];
-
-            if (pObject->Recipient_List[idx]
-                    .Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
-                /* copy Device_ID */
-                DeviceID = pObject->Recipient_List[idx]
-                                .Recipient._.DeviceIdentifier;
+            uint32_t DeviceID = 0;
+            if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) &&
+            (value[idx].Recipient._.DeviceIdentifier > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
+                DeviceID = pObject->Recipient_List[idx].Recipient._.DeviceIdentifier;
                 address_bind_request(DeviceID, &max_apdu, &src);
                 ret = true;
-
-            } else if (pObject->Recipient_List[idx]
-                            .Recipient.RecipientType ==
-                RECIPIENT_TYPE_ADDRESS) {
+            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
+            (value[idx].Recipient._.Address.net == 0) &&
+            (value[idx].Recipient._.Address.mac_len > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
                 /* copy Address */
-                src =
-                    pObject->Recipient_List[idx].Recipient._.Address;
+                src = pObject->Recipient_List[idx].Recipient._.Address;
                 address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+                ret = true;
+            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
+            (value[idx].Recipient._.Address.net != 65535) &&
+            (value[idx].Recipient._.Address.len > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
+                /* copy Address */
+                src = pObject->Recipient_List[idx].Recipient._.Address;
+                address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+                ret = true;
+            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
+            (value[idx].Recipient._.Address.net == 65535)) {
+                pObject->Recipient_List[idx] = value[idx];
+                ret = true;
+            } else {
+                if (pObject->Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
+                    /* remove Device_ID */
+                    DeviceID = pObject->Recipient_List[idx].Recipient._.DeviceIdentifier;
+                    address_remove_device(DeviceID);
+                } else if (pObject->Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) {
+                    /* remove Address if not broadcast */
+                    if (pObject->Recipient_List[idx].Recipient._.Address.net != 65535) {
+                        src = pObject->Recipient_List[idx].Recipient._.Address;
+                        if (address_get_device_id(&src, &DeviceID))
+                            address_remove_device(DeviceID);
+                    }
+                }
+                pObject->Recipient_List[idx].Recipient.RecipientType = RECIPIENT_TYPE_NOTINITIALIZED;
                 ret = true;
             }
         }
@@ -635,7 +657,7 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 
 bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
-    struct object_data TmpNotify;
+    struct object_data TmpNotify = { 0 };
     BACNET_APPLICATION_DATA_VALUE value;
     uint8_t TmpPriority[MAX_BACNET_EVENT_TRANSITION]; /* BACnetARRAY[3] of
                                                          Unsigned */
@@ -998,21 +1020,24 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     return false;
                 }
             }
-
+            len = idx;
             char ucirecp[254][64];
             int ucirecp_n = 0;
-            char uci_str[64];
-            for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
-                if (Notification_Class_Recipient_List_Set(wp_data->object_instance, &TmpNotify.Recipient_List[idx], idx)) {
+            if (Notification_Class_Recipient_List_Set(wp_data->object_instance, TmpNotify.Recipient_List)) {
+                for (idx = 0; idx < len; idx++) {
                     unsigned src_port,src_port1,src_port2;
-                    if (TmpNotify.Recipient_List[idx].Recipient._.Address.
-                        net == 0) {
+                    if (TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
+                        sprintf(ucirecp[ucirecp_n], "d,%i", TmpNotify.
+                            Recipient_List[idx].Recipient._.DeviceIdentifier);
+                        ucirecp_n++;
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
+                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net == 0)) {
                         src_port1 = TmpNotify.Recipient_List[idx].Recipient._.
                             Address.mac[4];
                         src_port2 = TmpNotify.Recipient_List[idx].Recipient._.
                             Address.mac[5];
                         src_port = ( src_port1 * 256 ) + src_port2;
-                        sprintf(uci_str,  "%i,%i.%i.%i.%i:%i\n", TmpNotify.
+                        sprintf(ucirecp[ucirecp_n], "n,%i,%i.%i.%i.%i:%i", TmpNotify.
                             Recipient_List[idx].Recipient._.Address.net,
                             TmpNotify.Recipient_List[idx].Recipient._.
                                 Address.mac[0],
@@ -1023,10 +1048,9 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                             TmpNotify.Recipient_List[idx].Recipient._.
                                 Address.mac[3],
                             src_port);
-                        sprintf(ucirecp[ucirecp_n], "%s", uci_str);
                         ucirecp_n++;
-                    } else if (TmpNotify.Recipient_List[idx].Recipient._.Address.
-                        net != 65535) {
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
+                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net != 65535)) {
                         memcpy(TmpNotify.Recipient_List[idx].Recipient._.
                             Address.adr, value.type.Octet_String.value,
                             value.type.Octet_String.length);
@@ -1037,7 +1061,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         src_port2 = TmpNotify.Recipient_List[idx].Recipient._.
                             Address.adr[5];
                         src_port = ( src_port1 * 256 ) + src_port2;
-                        sprintf(uci_str,  "%i,%i.%i.%i.%i:%i\n", TmpNotify.
+                        sprintf(ucirecp[ucirecp_n], "n,%i,%i.%i.%i.%i:%i", TmpNotify.
                             Recipient_List[idx].Recipient._.Address.net,
                             TmpNotify.Recipient_List[idx].Recipient._.
                             Address.adr[0],
@@ -1047,12 +1071,11 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                             Address.adr[2],
                             TmpNotify.Recipient_List[idx].Recipient._.
                             Address.adr[3], src_port);
-                        sprintf(ucirecp[ucirecp_n], "%s", uci_str);
                         ucirecp_n++;
-                    } else {
-                        sprintf(uci_str,  "%i\n", TmpNotify.
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) &&
+                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net == 65535)) {
+                        sprintf(ucirecp[ucirecp_n], "n,%i", TmpNotify.
                             Recipient_List[idx].Recipient._.Address.net);
-                        sprintf(ucirecp[ucirecp_n], "%s", uci_str);
                         ucirecp_n++;
                     }
                 }
@@ -1347,6 +1370,8 @@ static void uci_list(const char *sec_idx,
 
     char *ucirecp[254];
     BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
+    //BACNET_IP6_ADDRESS addr6;
+    //BACNET_IP_ADDRESS addr;
     int ucirecp_n = 0;
     int ucirecp_i = 0;
     char *uci_ptr;
@@ -1388,7 +1413,7 @@ static void uci_list(const char *sec_idx,
             } else {
                 net = atoi(src_net);
             }
-            if (net != 65535) {
+            if (net == 0) {
                 uci_ptr = strtok(NULL, ":");
                 if (uci_ptr) {
                     src_ip = uci_ptr;
@@ -1396,6 +1421,8 @@ static void uci_list(const char *sec_idx,
                     src_port = atoi(uci_ptr);
                     src.mac[4] = ( src_port / 256 );
                     src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
+                    //bip_get_addr_by_name(src_ip, &addr);
+                    //addr.port = src_port;
                     uci_ptr_a = strtok(src_ip, ".");
                     src.mac[0] = atoi(uci_ptr_a);
                     uci_ptr_a = strtok(NULL, ".");
@@ -1411,7 +1438,7 @@ static void uci_list(const char *sec_idx,
                     recplist[ucirecp_i].Recipient.RecipientType =
                         RECIPIENT_TYPE_ADDRESS;
                 }
-            } else {
+            } else if (net == 65535) {
                 recplist[ucirecp_i].Recipient._.Address.net = net;
                 recplist[ucirecp_i].Recipient.RecipientType =
                         RECIPIENT_TYPE_ADDRESS;
