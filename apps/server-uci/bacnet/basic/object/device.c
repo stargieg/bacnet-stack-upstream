@@ -52,7 +52,7 @@
 #include "bacnet/basic/object/netport.h"
 #endif
 //#include "bacnet/basic/object/schedule.h"
-//#include "bacnet/basic/object/trendlog.h"
+#include "bacnet/basic/object/trendlog.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #endif /* defined(INTRINSIC_REPORTING) */
@@ -107,6 +107,12 @@ static object_functions_t My_Object_Table[] = {
         NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
         NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
 #endif
+    { OBJECT_TRENDLOG, Trend_Log_Init, Trend_Log_Count,
+        Trend_Log_Index_To_Instance, Trend_Log_Valid_Instance,
+        Trend_Log_Object_Name, Trend_Log_Read_Property,
+        Trend_Log_Write_Property, Trend_Log_Property_Lists, TrendLogGetRRInfo,
+        NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
+        NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
     { MAX_BACNET_OBJECT_TYPE, NULL /* Init */, NULL /* Count */,
         NULL /* Index_To_Instance */, NULL /* Valid_Instance */,
         NULL /* Object_Name */, NULL /* Read_Property */,
@@ -117,7 +123,6 @@ static object_functions_t My_Object_Table[] = {
 };
 
 static const char *sec = "bacnet_dev";
-//static const char *type = "dev";
 
 /** Glue function to let the Device object, when called by a handler,
  * lookup which Object type needs to be invoked.

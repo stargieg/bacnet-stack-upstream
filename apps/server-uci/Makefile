@@ -146,6 +146,7 @@ SRC = main.c \
 	$(BACNET_OBJECT_DIR)/netport.c \
 	bacnet/basic/object/ao.c \
 	bacnet/basic/object/av.c \
+	bacnet/basic/object/trendlog.c \
 	bacnet/basic/object/nc.c
 
 BACNET_SRC = \

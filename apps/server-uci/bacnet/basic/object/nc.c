@@ -82,8 +82,6 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_NOTIFICATION_CLASS;
 
-//static NOTIFICATION_CLASS_INFO NC_Info[MAX_NOTIFICATION_CLASSES];
-
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int Notification_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME, PROP_OBJECT_TYPE, PROP_NOTIFICATION_CLASS, PROP_PRIORITY,
