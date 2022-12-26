@@ -98,13 +98,7 @@ extern "C" {
     /* utility functions for calculating current Present Value
      * if Exception Schedule is to be added, these functions must take that into account */
     BACNET_STACK_EXPORT
-    bool Schedule_In_Effective_Period(SCHEDULE_DESCR * desc,
-        BACNET_DATE * date);
-    BACNET_STACK_EXPORT
-    void Schedule_Recalculate_PV(SCHEDULE_DESCR * desc,
-        BACNET_WEEKDAY wday,
-        BACNET_TIME * time);
-
+    void schedule_timer(uint16_t uSeconds);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

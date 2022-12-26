@@ -389,7 +389,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     return status;
 }
 
-bool Schedule_In_Effective_Period(SCHEDULE_DESCR *desc, BACNET_DATE *date)
+static bool Schedule_In_Effective_Period(struct object_data *desc, BACNET_DATE *date)
 {
     bool res = false;
 
@@ -403,40 +403,56 @@ bool Schedule_In_Effective_Period(SCHEDULE_DESCR *desc, BACNET_DATE *date)
     return res;
 }
 
-void Schedule_Recalculate_PV(
-    SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, BACNET_TIME *time)
+static void Schedule_Recalculate_PV(
+    struct object_data *desc, BACNET_DATE_TIME *date)
 {
     int i;
-    desc->Present_Value.tag = BACNET_APPLICATION_TAG_NULL;
+    bool active = false;
 
     /* for future development, here should be the loop for Exception Schedule */
 
-    /* Just a note to developers: We have a paying customer who has asked us to
-       fully implement the Schedule Object. In good spirit, they have agreed to
-       allow us to release the code we develop back to the Open Source community
-       after a 6-12 month waiting period. However, if you are about to work on
-       this yourself, please ping us at info@connect-ex.com, we may be able to
-       broker an early release on a case-by-case basis. */
-
-    for (i = 0; i < desc->Weekly_Schedule[wday - 1].TV_Count &&
-         desc->Present_Value.tag == BACNET_APPLICATION_TAG_NULL;
-         i++) {
+    for (i = 0; i < desc->Weekly_Schedule[date->date.wday - 1].TV_Count; i++) {
         int diff = datetime_wildcard_compare_time(
-            time, &desc->Weekly_Schedule[wday - 1].Time_Values[i].Time);
-        if (diff >= 0 &&
-            desc->Weekly_Schedule[wday - 1].Time_Values[i].Value.tag !=
+            &date->time, &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time);
+        if (diff >= 0) {
+            if (desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.tag !=
                 BACNET_APPLICATION_TAG_NULL) {
-            bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                &desc->Weekly_Schedule[wday - 1].Time_Values[i].Value);
+                bacnet_primitive_to_application_data_value(&desc->Present_Value,
+                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value);
+                active = true;
+            } else {
+            memcpy(&desc->Present_Value, &desc->Schedule_Default,
+                sizeof(desc->Present_Value));
+                active = true;
+            }
         }
     }
 
-    if (desc->Present_Value.tag == BACNET_APPLICATION_TAG_NULL) {
+    if (! active ) {
         memcpy(&desc->Present_Value, &desc->Schedule_Default,
             sizeof(desc->Present_Value));
     }
 }
 
+void schedule_timer(uint16_t uSeconds)
+{
+    struct object_data *pObject;
+    int iCount = 0;
+    bacnet_time_t tNow = 0;
+    BACNET_DATE_TIME bdatetime;
+
+    (void)uSeconds;
+    /* use OS to get the current time */
+    Device_getCurrentDateTime(&bdatetime);
+    tNow = datetime_seconds_since_epoch(&bdatetime);
+    for (iCount = 0; iCount < Keylist_Count(Object_List);
+        iCount++) {
+        pObject = Keylist_Data_Index(Object_List, iCount);
+        if (Schedule_In_Effective_Period(pObject, &bdatetime.date)) {
+            Schedule_Recalculate_PV(pObject, &bdatetime);
+        }
+    }
+}
 /* structure to hold tuple-list and uci context during iteration */
 struct itr_ctx {
 	struct uci_context *ctx;
@@ -475,26 +491,45 @@ static void uci_list(const char *sec_idx,
         pObject->Description = strdup(ictx->Object.Description);
 
     /* whole year, change as necessary */
-    pObject->Start_Date.year = 0xFF;
+    pObject->Start_Date.year = 0x0000;
     pObject->Start_Date.month = 1;
     pObject->Start_Date.day = 1;
-    pObject->Start_Date.wday = 0xFF;
-    pObject->End_Date.year = 0xFF;
+    pObject->Start_Date.wday = 0x01;
+    pObject->End_Date.year = 0xFFFF;
     pObject->End_Date.month = 12;
     pObject->End_Date.day = 31;
     pObject->End_Date.wday = 0xFF;
     for (j = 0; j < 7; j++) {
-        pObject->Weekly_Schedule[j].TV_Count = 0;
+        pObject->Weekly_Schedule[j].TV_Count = 2;
+        pObject->Weekly_Schedule[j].Time_Values[0].Time.hour = 8;
+        pObject->Weekly_Schedule[j].Time_Values[0].Time.min = 0;
+        pObject->Weekly_Schedule[j].Time_Values[0].Time.sec = 0;
+        pObject->Weekly_Schedule[j].Time_Values[0].Time.hundredths = 0;
+        pObject->Weekly_Schedule[j].Time_Values[0].Value.tag = BACNET_APPLICATION_TAG_REAL;
+        pObject->Weekly_Schedule[j].Time_Values[0].Value.type.Real = 23.0f;
+        pObject->Weekly_Schedule[j].Time_Values[1].Time.hour = 22;
+        pObject->Weekly_Schedule[j].Time_Values[1].Time.min = 0;
+        pObject->Weekly_Schedule[j].Time_Values[1].Time.sec = 0;
+        pObject->Weekly_Schedule[j].Time_Values[1].Time.hundredths = 0;
+        pObject->Weekly_Schedule[j].Time_Values[1].Value.tag = BACNET_APPLICATION_TAG_NULL;
     }
-    memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
-        sizeof(pObject->Present_Value));
     pObject->Schedule_Default.context_specific = false;
     pObject->Schedule_Default.tag = BACNET_APPLICATION_TAG_REAL;
     pObject->Schedule_Default.type.Real = 21.0f; /* 21 C, room temperature */
-    pObject->obj_prop_ref_cnt = 0; /* no references, add as needed */
-    pObject->Priority_For_Writing = 16; /* lowest priority */
+    pObject->obj_prop_ref_cnt = 1; /* no references, add as needed */
+    pObject->Object_Property_References[0].deviceIdentifier.instance =
+        Device_Object_Instance_Number();
+    pObject->Object_Property_References[0].deviceIdentifier.type = OBJECT_DEVICE;
+    pObject->Object_Property_References[0].objectIdentifier.instance = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "object_instance", 0);
+    pObject->Object_Property_References[0].objectIdentifier.type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "object_type", 0);
+    pObject->Object_Property_References[0].arrayIndex = BACNET_ARRAY_ALL;
+    pObject->Object_Property_References[0].propertyIdentifier = PROP_PRESENT_VALUE;
+
+    pObject->Priority_For_Writing = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio", ictx->Object.Priority_For_Writing); /* lowest priority */
     pObject->Out_Of_Service = false;
     pObject->Changed = false;
+    memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+        sizeof(pObject->Present_Value));
 
     /* add to list */
     index = Keylist_Data_Add(Object_List, idx, pObject);

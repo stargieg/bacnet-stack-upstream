@@ -48,6 +48,7 @@
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/object/lc.h"
 #include "bacnet/basic/object/trendlog.h"
+#include "bacnet/basic/object/schedule.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #endif /* defined(INTRINSIC_REPORTING) */
@@ -309,6 +310,7 @@ int main(int argc, char *argv[])
             handler_cov_timer_seconds(elapsed_seconds);
             tsm_timer_milliseconds(elapsed_milliseconds);
             trend_log_timer(elapsed_seconds);
+            schedule_timer(elapsed_seconds);
 #if defined(INTRINSIC_REPORTING)
             Device_local_reporting();
 #endif
