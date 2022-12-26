@@ -274,7 +274,7 @@ int dlenv_register_as_foreign_device(void)
 static void dlenv_network_port_init_bip(void)
 {
     const uint32_t instance = 1;
-    BACNET_IP_ADDRESS addr = { 0 };
+    BACNET_IP_ADDRESS addr = { .address={0}, .port=0 };
     uint8_t addr0, addr1, addr2, addr3;
 
     Network_Port_Object_Instance_Number_Set(0, instance);
@@ -343,7 +343,7 @@ static void dlenv_network_port_init_bip6(void)
     uint32_t instance = 1;
     uint8_t prefix = 0;
     BACNET_ADDRESS addr = { 0 };
-    BACNET_IP6_ADDRESS addr6 = { 0 };
+    BACNET_IP6_ADDRESS addr6 = { .address={0}, .port=0 };
 
     Network_Port_Object_Instance_Number_Set(0, instance);
     Network_Port_Name_Set(instance, "BACnet/IPv6 Port");

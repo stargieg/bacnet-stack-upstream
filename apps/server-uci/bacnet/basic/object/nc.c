@@ -651,7 +651,7 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 
 bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
-    struct object_data TmpNotify = { 0 };
+    struct object_data TmpNotify;
     BACNET_APPLICATION_DATA_VALUE value;
     uint8_t TmpPriority[MAX_BACNET_EVENT_TRANSITION]; /* BACnetARRAY[3] of
                                                          Unsigned */
