@@ -1831,6 +1831,6 @@ void Trend_Log_Init(void)
 	itr_m.ctx = ctx;
 	itr_m.Object = tObject;
     ucix_for_each_section_type(ctx, sec, type,
-        (void *)uci_list,&itr_m);
+        (void (*)(const char *, void *))uci_list, &itr_m);
     ucix_cleanup(ctx);
 }
