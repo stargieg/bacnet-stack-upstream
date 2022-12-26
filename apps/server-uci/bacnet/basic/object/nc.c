@@ -40,6 +40,7 @@
 #include "bacnet/bacenum.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/config.h"
@@ -50,12 +51,7 @@
 #include "bacnet/basic/object/nc.h"
 #include "bacnet/datalink/datalink.h"
 
-#if PRINT_ENABLED
-#include <stdio.h>
-#define PRINTF(...) fprintf(stderr, __VA_ARGS__)
-#else
-#define PRINTF(...)
-#endif
+#define PRINTF debug_perror
 
 #if defined(INTRINSIC_REPORTING)
 static const char *sec = "bacnet_nc";
@@ -1084,6 +1080,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 ucix_commit(ctxw,sec);
             }
             status = true;
+            break;
 
         case PROP_OBJECT_NAME:
             status = write_property_type_valid(wp_data, &value,
