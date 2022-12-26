@@ -51,7 +51,7 @@
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
-//#include "bacnet/basic/object/schedule.h"
+#include "bacnet/basic/object/schedule.h"
 #include "bacnet/basic/object/trendlog.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
@@ -113,6 +113,12 @@ static object_functions_t My_Object_Table[] = {
         Trend_Log_Write_Property, Trend_Log_Property_Lists, TrendLogGetRRInfo,
         NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
         NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
+    { OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
+        Schedule_Index_To_Instance, Schedule_Valid_Instance,
+        Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
+        Schedule_Property_Lists, NULL /* ReadRangeInfo */, NULL /* Iterator */,
+        NULL /* Value_Lists */, NULL /* COV */, NULL /* COV Clear */,
+        NULL /* Intrinsic Reporting */ },
     { MAX_BACNET_OBJECT_TYPE, NULL /* Init */, NULL /* Count */,
         NULL /* Index_To_Instance */, NULL /* Valid_Instance */,
         NULL /* Object_Name */, NULL /* Read_Property */,

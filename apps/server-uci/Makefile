@@ -166,7 +166,8 @@ SRC = main.c \
 	bacnet/basic/object/ao.c \
 	bacnet/basic/object/av.c \
 	bacnet/basic/object/trendlog.c \
-	bacnet/basic/object/nc.c
+	bacnet/basic/object/nc.c \
+	bacnet/basic/object/schedule.c
 
 BACNET_SRC = \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/*.c) \
