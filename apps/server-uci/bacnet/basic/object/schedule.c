@@ -144,7 +144,7 @@ bool Schedule_Object_Name(
             status = characterstring_init_ansi(object_name,
                 pObject->Object_Name);
         } else {
-            snprintf(name_text, sizeof(name_text), "NC %u",
+            snprintf(name_text, sizeof(name_text), "SC %u",
                 object_instance);
             status = characterstring_init_ansi(object_name, name_text);
         }
@@ -153,13 +153,75 @@ bool Schedule_Object_Name(
     return status;
 }
 
-/* 	BACnet Testing Observed Incident oi00106
-        Out of service was not supported by Schedule object
-        Revealed by BACnet Test Client v1.8.16 (
-   www.bac-test.com/bacnet-test-client-download ) BITS: BIT00032 Any discussions
-   can be directed to edward@bac-test.com Please feel free to remove this
-   comment when my changes accepted after suitable time for review by all
-   interested parties. Say 6 months -> September 2016 */
+/**
+ * For a given object instance-number, sets the object-name
+ * Note that the object name must be unique within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Schedule_Name_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    BACNET_CHARACTER_STRING object_name;
+    BACNET_OBJECT_TYPE found_type = 0;
+    uint32_t found_instance = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        /* All the object names in a device must be unique */
+        characterstring_init_ansi(&object_name, new_name);
+        if (Device_Valid_Object_Name(
+                &object_name, &found_type, &found_instance)) {
+            if ((found_type == Object_Type) &&
+                (found_instance == object_instance)) {
+                /* writing same name to same object */
+                status = true;
+            } else {
+                /* duplicate name! */
+                status = false;
+            }
+        } else {
+            status = true;
+            pObject->Object_Name = new_name;
+            Device_Inc_Database_Revision();
+        }
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the out-of-service
+ * status flag
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  out-of-service status flag
+ */
+bool Schedule_Out_Of_Service(uint32_t object_instance)
+{
+    bool value = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Out_Of_Service;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the out-of-service status
+ * flag
+ * @param object_instance - object-instance number of the object
+ * @param value - boolean out-of-service value
+ * @return true if the out-of-service status flag was set
+ */
 void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
 {
     struct object_data *pObject;
@@ -173,6 +235,44 @@ void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
     }
 }
 
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param  object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+char *Schedule_Description(uint32_t object_instance)
+{
+    char *name = NULL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = (char *)pObject->Description;
+    }
+
+    return name;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ * @return  true if object-name was set
+ */
+bool Schedule_Description_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        status = true;
+        pObject->Description = new_name;
+    }
+
+    return status;
+}
+
 int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int apdu_len = 0;
@@ -181,6 +281,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     int i;
+    bool state = false;
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
@@ -283,17 +384,14 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_OUT_OF_SERVICE:
-            /* 	BACnet Testing Observed Incident oi00106
-                    Out of service was not supported by Schedule object
-                    Revealed by BACnet Test Client v1.8.16 (
-               www.bac-test.com/bacnet-test-client-download ) BITS: BIT00032 Any
-               discussions can be directed to edward@bac-test.com Please feel
-               free to remove this comment when my changes accepted after
-               suitable time for
-                    review by all interested parties. Say 6 months -> September
-               2016 */
+            state = Schedule_Out_Of_Service(rpdata->object_instance);
+            apdu_len = encode_application_boolean(&apdu[0], state);
+            break;
+        case PROP_DESCRIPTION:
+            characterstring_init_ansi(&char_string,
+                Schedule_Description(rpdata->object_instance));
             apdu_len =
-                encode_application_boolean(&apdu[0], pObject->Out_Of_Service);
+                encode_application_character_string(&apdu[0], &char_string);
             break;
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
@@ -314,32 +412,34 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 
 bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
-    /* Ed->Steve, I know that initializing stack values used to be 'safer', but
-       warnings in latest compilers indicate when uninitialized values are being
-       used, and I think that the warnings are more useful to reveal bad code
-       flow than the "safety: of pre-intializing variables. Please give this
-       some thought let me know if you agree we should start to remove
-       initializations */
     bool status = false; /* return value */
+    int iOffset;
+    uint8_t idx;
     struct object_data *pObject;
     int len;
     BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_TIME_VALUE time_value;
+    BACNET_UNSIGNED_INTEGER unsigned_value = 0;
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE obj_prop_ref_value;
+    int k;
+    struct uci_context *ctxw = NULL;
+    char *idx_c = NULL;
+    int idx_c_len = 0;
 
-    /* 	BACnet Testing Observed Incident oi00106
-            Out of service was not supported by Schedule object
-            Revealed by BACnet Test Client v1.8.16 (
-       www.bac-test.com/bacnet-test-client-download ) BITS: BIT00032 Any
-       discussions can be directed to edward@bac-test.com Please feel free to
-       remove this comment when my changes accepted after suitable time for
-            review by all interested parties. Say 6 months -> September 2016 */
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
-    /* FIXME: len < application_data_len: more data? */
     if (len < 0) {
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        return false;
+    }
+    if ((wp_data->object_property != PROP_PRIORITY) &&
+        (wp_data->array_index != BACNET_ARRAY_ALL)) {
+        /*  only array properties can have array options */
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
 
@@ -347,17 +447,14 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     if (!pObject)
         return status;
 
+    ctxw = ucix_init(sec);
+    if (!ctxw)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+    idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
+    idx_c = malloc(idx_c_len + 1);
+    snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
     switch ((int)wp_data->object_property) {
         case PROP_OUT_OF_SERVICE:
-            /* 	BACnet Testing Observed Incident oi00106
-                    Out of service was not supported by Schedule object
-                    Revealed by BACnet Test Client v1.8.16 (
-               www.bac-test.com/bacnet-test-client-download ) BITS: BIT00032 Any
-               discussions can be directed to edward@bac-test.com Please feel
-               free to remove this comment when my changes accepted after
-               suitable time for
-                    review by all interested parties. Say 6 months -> September
-               2016 */
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
@@ -365,20 +462,159 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data->object_instance, value.type.Boolean);
             }
             break;
-
         case PROP_OBJECT_IDENTIFIER:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
         case PROP_OBJECT_NAME:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Schedule_Name_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "name",
+                        strndup(value.type.Character_String.value,value.type.Character_String.length));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
         case PROP_OBJECT_TYPE:
         case PROP_PRESENT_VALUE:
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
         case PROP_EFFECTIVE_PERIOD:
+            iOffset = 0;
+            /* Decode From Date */
+            len = bacapp_decode_application_data(
+                &wp_data->application_data[iOffset],
+                wp_data->application_data_len, &value);
+
+            if ((len == 0) || (value.tag != BACNET_APPLICATION_TAG_DATE)) {
+                /* Bad decode, wrong tag or following required parameter
+                    * missing */
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
+                return false;
+            }
+            /* store value */
+            pObject->Start_Date = value.type.Date;
+
+            iOffset += len;
+            /* Decode To Time */
+            len = bacapp_decode_application_data(
+                &wp_data->application_data[iOffset],
+                wp_data->application_data_len, &value);
+
+            if ((len == 0) || (value.tag != BACNET_APPLICATION_TAG_DATE)) {
+                /* Bad decode, wrong tag or following required parameter
+                    * missing */
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
+                return false;
+            }
+            /* store value */
+            pObject->End_Date = value.type.Date;
+            status = true;
+            break;
         case PROP_WEEKLY_SCHEDULE:
+            idx = 0;
+            iOffset = 0;
+            /* decode MO - SA */
+            for (idx = 0 ; idx < 7 ; idx++) {
+                if (decode_is_opening_tag_number(
+                    &wp_data->application_data[iOffset], 0)) {
+                    iOffset++;
+                    /* Decode Valid Days */
+                    for (k = 0 ; k < BACNET_WEEKLY_SCHEDULE_SIZE;k++) {
+                        len = bacnet_time_value_decode(
+                            &wp_data->application_data[iOffset],
+                            wp_data->application_data_len,
+                            &time_value);
+                        iOffset += len;
+                        /* store value */
+                        pObject->Weekly_Schedule[idx].Time_Values[k] = time_value;
+                        if (decode_is_closing_tag_number(
+                                &wp_data->application_data[iOffset], 0)) {
+                            iOffset++;
+                            /* store value */
+                            pObject->Weekly_Schedule[idx].TV_Count = k + 1;
+                            k = BACNET_WEEKLY_SCHEDULE_SIZE;
+                        }
+                    }
+                } else {
+                    idx = 7;
+                }
+            }
+            status = true;
+            break;
         case PROP_SCHEDULE_DEFAULT:
+            iOffset = 0;
+            len = bacapp_decode_application_data(
+                &wp_data->application_data[iOffset],
+                wp_data->application_data_len, &value);
+
+            if (len == 0) {
+                /* Bad decode, wrong tag or following required parameter
+                    * missing */
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
+                return false;
+            }
+            /* store value */
+            pObject->Schedule_Default = value;
+            status = true;
+            break;
         case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
+            idx = 0;
+            iOffset = 0;
+            for (idx = 0 ; idx < BACNET_SCHEDULE_OBJ_PROP_REF_SIZE ; idx++) {
+                len = bacapp_decode_device_obj_property_ref(
+                    &wp_data->application_data[iOffset],
+                    &obj_prop_ref_value);
+                if (len <= 0) {
+                    idx = BACNET_SCHEDULE_OBJ_PROP_REF_SIZE;
+                } else {
+                    /* store value */
+                    pObject->Object_Property_References[idx] = obj_prop_ref_value;
+                    pObject->obj_prop_ref_cnt = idx + 1;
+                    iOffset += len;
+                }
+            }
+            status = true;
+            break;
         case PROP_PRIORITY_FOR_WRITING:
+            iOffset = 0;
+            len = decode_unsigned(
+                &wp_data->application_data[iOffset],
+                wp_data->application_data_len, &unsigned_value);
+
+            if (len == 0) {
+                /* Bad decode, wrong tag or following required parameter
+                    * missing */
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
+                return false;
+            }
+            pObject->Priority_For_Writing = unsigned_value;
+            status = true;
+            break;
         case PROP_STATUS_FLAGS:
         case PROP_RELIABILITY:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Schedule_Description_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "description",
+                        Schedule_Description(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                }
+            }
             break;
         default:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
