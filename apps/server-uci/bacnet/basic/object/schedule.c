@@ -313,15 +313,6 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = bacapp_encode_data(&apdu[0], &pObject->Present_Value);
             break;
         case PROP_EFFECTIVE_PERIOD:
-            /* 	BACnet Testing Observed Incident oi00110
-                    Effective Period of Schedule object not correctly formatted
-                    Revealed by BACnet Test Client v1.8.16 (
-               www.bac-test.com/bacnet-test-client-download ) BITS: BIT00031 Any
-               discussions can be directed to edward@bac-test.com Please feel
-               free to remove this comment when my changes accepted after
-               suitable time for
-                    review by all interested parties. Say 6 months -> September
-               2016 */
             apdu_len =
                 encode_application_date(&apdu[0], &pObject->Start_Date);
             apdu_len +=
@@ -393,6 +384,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
+        case PROP_EXCEPTION_SCHEDULE:
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
             rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
@@ -425,6 +417,11 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
+    char *uci_list_name = NULL;
+    int uci_list_name_len = 0;
+    char uci_list_values[BACNET_WEEKLY_SCHEDULE_SIZE][64];
+    char *value_c = NULL;
+    int value_c_len = 0;
 
     /* decode the some of the request */
     len = bacapp_decode_application_data(
@@ -473,7 +470,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Schedule_Name_Set(
                     wp_data->object_instance, value.type.Character_String.value)) {
                     ucix_add_option(ctxw, sec, idx_c, "name",
-                        strndup(value.type.Character_String.value,value.type.Character_String.length));
+                        strndup(value.type.Character_String.value, value.type.Character_String.length));
                     ucix_commit(ctxw,sec);
                 }
             }
@@ -497,7 +494,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 return false;
             }
-            /* store value */
+            /* store value object */
             pObject->Start_Date = value.type.Date;
 
             iOffset += len;
@@ -513,7 +510,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 return false;
             }
-            /* store value */
+            /* store value object */
             pObject->End_Date = value.type.Date;
             status = true;
             break;
@@ -532,14 +529,56 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                             wp_data->application_data_len,
                             &time_value);
                         iOffset += len;
-                        /* store value */
+                        /* store value object */
                         pObject->Weekly_Schedule[idx].Time_Values[k] = time_value;
+                        switch (time_value.Value.tag) {
+                        case BACNET_APPLICATION_TAG_BOOLEAN:
+                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
+                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%i",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
+                            break;
+                        case BACNET_APPLICATION_TAG_REAL:
+                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%f",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%f",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                            break;
+                        case BACNET_APPLICATION_TAG_ENUMERATED:
+                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
+                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%i",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
+                            break;
+                        case BACNET_APPLICATION_TAG_NULL:
+                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,0",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_NULL);
+                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,0",
+                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                            BACNET_APPLICATION_TAG_NULL);
+                            break;
+                        default:
+                            break;
+                        }
                         if (decode_is_closing_tag_number(
                                 &wp_data->application_data[iOffset], 0)) {
                             iOffset++;
-                            /* store value */
+                            /* store value object */
                             pObject->Weekly_Schedule[idx].TV_Count = k + 1;
                             k = BACNET_WEEKLY_SCHEDULE_SIZE;
+                            uci_list_name_len = snprintf(NULL, 0, "weekly_%d", idx);
+                            uci_list_name = malloc(uci_list_name_len + 1);
+                            snprintf(uci_list_name,uci_list_name_len + 1, "weekly_%d", idx);
+                            ucix_set_list(ctxw, sec, idx_c, uci_list_name,
+                            uci_list_values, pObject->Weekly_Schedule[idx].TV_Count);
+                            ucix_commit(ctxw, sec);
                         }
                     }
                 } else {
@@ -561,8 +600,36 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 return false;
             }
-            /* store value */
+            /* store value object */
             pObject->Schedule_Default = value;
+            /* store value uci */
+            switch (value.tag) {
+            case BACNET_APPLICATION_TAG_BOOLEAN:
+                value_c_len = snprintf(NULL, 0, "%i,%i", BACNET_APPLICATION_TAG_BOOLEAN, value.type.Boolean);
+                value_c = malloc(value_c_len + 1);
+                snprintf(value_c,value_c_len + 1,"%i,%i", BACNET_APPLICATION_TAG_BOOLEAN, value.type.Boolean);
+                break;
+            case BACNET_APPLICATION_TAG_REAL:
+                value_c_len = snprintf(NULL, 0, "%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
+                value_c = malloc(value_c_len + 1);
+                snprintf(value_c,value_c_len + 1,"%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
+                break;
+            case BACNET_APPLICATION_TAG_ENUMERATED:
+                value_c_len = snprintf(NULL, 0, "%i,%i", BACNET_APPLICATION_TAG_ENUMERATED, value.type.Enumerated);
+                value_c = malloc(value_c_len + 1);
+                snprintf(value_c,value_c_len + 1,"%i,%i", BACNET_APPLICATION_TAG_ENUMERATED, value.type.Enumerated);
+                break;
+            case BACNET_APPLICATION_TAG_NULL:
+                value_c_len = snprintf(NULL, 0, "%i,0", BACNET_APPLICATION_TAG_NULL);
+                value_c = malloc(value_c_len + 1);
+                snprintf(value_c,value_c_len + 1, "%i,0", BACNET_APPLICATION_TAG_NULL);
+                break;
+            default:
+                break;
+            }
+            ucix_add_option(ctxw, sec, idx_c, "default", value_c);
+            ucix_commit(ctxw, sec);
+            free(value_c);
             status = true;
             break;
         case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
@@ -575,12 +642,19 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (len <= 0) {
                     idx = BACNET_SCHEDULE_OBJ_PROP_REF_SIZE;
                 } else {
-                    /* store value */
+                    /* store value object */
                     pObject->Object_Property_References[idx] = obj_prop_ref_value;
                     pObject->obj_prop_ref_cnt = idx + 1;
                     iOffset += len;
+                    value_c_len = snprintf(NULL, 0, "%i,%i",
+                    obj_prop_ref_value.objectIdentifier.type, obj_prop_ref_value.objectIdentifier.instance);
+                    snprintf(uci_list_values[idx],value_c_len + 1, "%i,%i",
+                    obj_prop_ref_value.objectIdentifier.type, obj_prop_ref_value.objectIdentifier.instance);
                 }
             }
+            ucix_set_list(ctxw, sec, idx_c, "references",
+            uci_list_values, pObject->obj_prop_ref_cnt);
+            ucix_commit(ctxw, sec);
             status = true;
             break;
         case PROP_PRIORITY_FOR_WRITING:
@@ -596,9 +670,17 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 return false;
             }
+            /* store value object */
             pObject->Priority_For_Writing = unsigned_value;
+            value_c_len = snprintf(NULL, 0, "%llu", unsigned_value);
+            value_c = malloc(value_c_len + 1);
+            snprintf(value_c,value_c_len + 1, "%llu", unsigned_value);
+            ucix_add_option(ctxw, sec, idx_c, "prio", value_c);
+            ucix_commit(ctxw, sec);
+            free(value_c);
             status = true;
             break;
+        case PROP_EXCEPTION_SCHEDULE:
         case PROP_STATUS_FLAGS:
         case PROP_RELIABILITY:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -612,7 +694,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data->object_instance, value.type.Character_String.value)) {
                     ucix_add_option(ctxw, sec, idx_c, "description",
                         Schedule_Description(wp_data->object_instance));
-                    ucix_commit(ctxw,sec);
+                    ucix_commit(ctxw, sec);
                 }
             }
             break;
@@ -869,29 +951,32 @@ static void uci_list(const char *sec_idx,
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option)
         if (characterstring_init_ansi(&option_str, option))
-            pObject->Object_Name = strndup(option,option_str.length);
+            pObject->Object_Name = strndup(option, option_str.length);
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
     if (option)
         if (characterstring_init_ansi(&option_str, option))
-            pObject->Description = strndup(option,option_str.length);
+            pObject->Description = strndup(option, option_str.length);
 
     if ((pObject->Description == NULL) && (ictx->Object.Description))
         pObject->Description = strdup(ictx->Object.Description);
-
     pObject->Schedule_Default.context_specific = false;
-    pObject->Schedule_Default.tag = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "tag", 0);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "default");
     if (option){
+        uci_ptr = strtok(strdup(option), ",");
+        pObject->Schedule_Default.tag = atoi(uci_ptr);
         switch (pObject->Schedule_Default.tag) {
         case BACNET_APPLICATION_TAG_BOOLEAN:
-                pObject->Schedule_Default.type.Boolean = atoi(option);
+            uci_ptr = strtok(NULL, ",");
+            pObject->Schedule_Default.type.Boolean = atoi(uci_ptr);
             break;
         case BACNET_APPLICATION_TAG_REAL:
-                pObject->Schedule_Default.type.Real = atof(option);
+            uci_ptr = strtok(NULL, ",");
+            pObject->Schedule_Default.type.Real = atof(uci_ptr);
             break;
         case BACNET_APPLICATION_TAG_ENUMERATED:
-                pObject->Schedule_Default.type.Enumerated = atoi(option);
+            uci_ptr = strtok(NULL, ",");
+            pObject->Schedule_Default.type.Enumerated = atoi(uci_ptr);
             break;
         default:
             break;
@@ -910,7 +995,7 @@ static void uci_list(const char *sec_idx,
     for (j = 0; j < 7; j++) {
         uci_list_name_len = snprintf(NULL, 0, "weekly_%d", j);
         uci_list_name = malloc(uci_list_name_len + 1);
-        snprintf(uci_list_name,uci_list_name_len + 1,"weekly_%d",j);
+        snprintf(uci_list_name, uci_list_name_len + 1, "weekly_%d", j);
         pObject->Weekly_Schedule[j].TV_Count = ucix_get_list(uci_list_values, ictx->ctx, ictx->section, sec_idx,
             uci_list_name);
         for (k = 0; k < pObject->Weekly_Schedule[j].TV_Count; k++) {
@@ -922,23 +1007,22 @@ static void uci_list(const char *sec_idx,
             pObject->Weekly_Schedule[j].Time_Values[k].Time.sec = atoi(uci_ptr);
             pObject->Weekly_Schedule[j].Time_Values[k].Time.hundredths = 0;
             uci_ptr = strtok(NULL, ",");
-            if ((strcmp(uci_ptr,"NULL") == 0)) {
-                pObject->Weekly_Schedule[j].Time_Values[k].Value.tag = BACNET_APPLICATION_TAG_NULL;
-            } else {
-                pObject->Weekly_Schedule[j].Time_Values[k].Value.tag = pObject->Schedule_Default.tag;
-                switch (pObject->Schedule_Default.tag) {
-                case BACNET_APPLICATION_TAG_BOOLEAN:
-                        pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Boolean = atoi(uci_ptr);
-                    break;
-                case BACNET_APPLICATION_TAG_REAL:
-                        pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Real = atof(uci_ptr);
-                    break;
-                case BACNET_APPLICATION_TAG_ENUMERATED:
-                        pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Enumerated = atoi(uci_ptr);
-                    break;
-                default:
-                    break;
-                }
+            pObject->Weekly_Schedule[j].Time_Values[k].Value.tag = atoi(uci_ptr);
+            switch (pObject->Weekly_Schedule[j].Time_Values[k].Value.tag) {
+            case BACNET_APPLICATION_TAG_BOOLEAN:
+                uci_ptr = strtok(NULL, ",");
+                pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Boolean = atoi(uci_ptr);
+                break;
+            case BACNET_APPLICATION_TAG_REAL:
+                uci_ptr = strtok(NULL, ",");
+                pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Real = atof(uci_ptr);
+                break;
+            case BACNET_APPLICATION_TAG_ENUMERATED:
+                uci_ptr = strtok(NULL, ",");
+                pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Enumerated = atoi(uci_ptr);
+                break;
+            default:
+                break;
             }
         }
     }
@@ -976,7 +1060,7 @@ void Schedule_Init(void)
     struct uci_context *ctx;
     ctx = ucix_init(sec);
     if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+        fprintf(stderr, "Failed to load config file %s\n", sec);
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
@@ -984,7 +1068,7 @@ void Schedule_Init(void)
     option = ucix_get_option(ctx, sec, "default", "description");
     if (option)
         if (characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
+            tObject.Description = strndup(option, option_str.length);
     if (!tObject.Description)
         tObject.Description = "Schedule";
     tObject.Priority_For_Writing = ucix_get_option_int(ctx, sec, "default", "prio", 16);
