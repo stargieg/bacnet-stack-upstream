@@ -101,19 +101,8 @@ static void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_IS, handler_who_is);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_HAS, handler_who_has);
 
-#if 0
-	/* 	BACnet Testing Observed Incident oi00107
-		Server only devices should not indicate that they EXECUTE I-Am
-		Revealed by BACnet Test Client v1.8.16 ( www.bac-test.com/bacnet-test-client-download )
-			BITS: BIT00040
-		Any discussions can be directed to edward@bac-test.com
-		Please feel free to remove this comment when my changes accepted after suitable time for
-		review by all interested parties. Say 6 months -> September 2016 */
-	/* In this demo, we are the server only ( BACnet "B" device ) so we do not indicate
-	   that we can execute the I-Am message */
     /* handle i-am to support binding to other devices */
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_I_AM, handler_i_am_bind);
-#endif
 
     /* set the handler for all the services we don't implement */
     /* It is required to send the proper reject message... */
@@ -141,11 +130,19 @@ static void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_COV_NOTIFICATION, handler_ucov_notification);
     /* handle communication so we can shutup when asked */
-    apdu_set_confirmed_handler(SERVICE_CONFIRMED_DEVICE_COMMUNICATION_CONTROL,
-        handler_device_communication_control);
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_DEVICE_COMMUNICATION_CONTROL, handler_device_communication_control);
     /* handle the data coming back from private requests */
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_PRIVATE_TRANSFER,
-        handler_unconfirmed_private_transfer);
+    apdu_set_unconfirmed_handler(
+        SERVICE_UNCONFIRMED_PRIVATE_TRANSFER, handler_unconfirmed_private_transfer);
+    /* handle the Simple ack coming back from SubscribeCOV */
+    apdu_set_confirmed_simple_ack_handler(
+        SERVICE_CONFIRMED_SUBSCRIBE_COV, trend_log_writepropertysimpleackhandler);
+    /* handle the data coming back from COV subscriptions */
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_COV_NOTIFICATION, trend_log_confirmed_cov_notification_handler);
+    apdu_set_unconfirmed_handler(
+        SERVICE_UNCONFIRMED_COV_NOTIFICATION, trend_log_unconfirmed_cov_notification_handler);
 #if defined(INTRINSIC_REPORTING)
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_ACKNOWLEDGE_ALARM, handler_alarm_ack);

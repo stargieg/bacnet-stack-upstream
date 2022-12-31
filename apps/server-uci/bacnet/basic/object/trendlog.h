@@ -168,6 +168,20 @@ extern "C" {
     void trend_log_timer(
         uint16_t uSeconds);
 
+    BACNET_STACK_EXPORT
+    void trend_log_writepropertysimpleackhandler(
+    BACNET_ADDRESS *src, uint8_t invoke_id);
+
+    BACNET_STACK_EXPORT
+    void trend_log_unconfirmed_cov_notification_handler(
+    uint8_t *service_request, uint16_t service_len, BACNET_ADDRESS *src);
+
+    BACNET_STACK_EXPORT
+    void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
+    uint16_t service_len,
+    BACNET_ADDRESS *src,
+    BACNET_CONFIRMED_SERVICE_DATA *service_data);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

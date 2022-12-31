@@ -28,6 +28,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> /* for memmove */
+#include <errno.h>
+#include <time.h> /* for time */
 
 #include "bacnet/bacdef.h"
 #include "bacnet/bacdcode.h"
@@ -43,8 +45,19 @@
 #include "bacnet/bacdevobjpropref.h"
 #include "bacnet/basic/object/trendlog.h"
 #include "bacnet/datetime.h"
+#include "bacnet/basic/tsm/tsm.h"
+#include "bacnet/cov.h"
+#include "bacnet/bactext.h"
+#include "bacnet/basic/sys/debug.h"
 #if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h" /* object list dependency */
+#endif
+
+#define PRINTF debug_perror
+
+/* max number of COV properties decoded in a COV notification */
+#ifndef MAX_COV_PROPERTIES
+#define MAX_COV_PROPERTIES 8
 #endif
 
 static const char *sec = "bacnet_tl";
@@ -86,12 +99,27 @@ struct object_data {
     int iIndex;     /* Current insertion point */
     bacnet_time_t tLastDataTime;
     struct tl_data_record Logs[TL_MAX_ENTRIES];
+    BACNET_SUBSCRIBE_COV_DATA cov_data;
+    uint8_t Request_Invoke_ID;
+    BACNET_ADDRESS Target_Address;
+    bool Error_Detected;
+    unsigned max_apdu;
+    bool Simple_Ack_Detected;
+    time_t elapsed_seconds;
+    time_t last_seconds;
+    time_t current_seconds;
+    time_t timeout_seconds;
+    time_t delta_seconds;
+    bool found;
     const char *Object_Name;
     const char *Description;
 };
 
 struct object_data_t {
     uint32_t ulLogInterval;
+    BACNET_LOGGING_TYPE LoggingType;
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE Source; /* Where the data comes from */
+    BACNET_SUBSCRIBE_COV_DATA cov_data;
     const char *Object_Name;
     const char *Description;
 };
@@ -1668,6 +1696,84 @@ static void TL_fetch_property(int iLog)
     }
 }
 
+void trend_log_writepropertysimpleackhandler(
+    BACNET_ADDRESS *src, uint8_t invoke_id)
+{
+    struct object_data *pObject;
+    int iCount = 0;
+    for (iCount = 0; iCount < Keylist_Count(Object_List);
+        iCount++) {
+        pObject = Keylist_Data_Index(Object_List, iCount);
+        if (address_match(&pObject->Target_Address, src) &&
+        (invoke_id == pObject->Request_Invoke_ID)) {
+            printf("SubscribeCOV Acknowledged!\n");
+            pObject->Simple_Ack_Detected = true;
+        }
+    }
+}
+
+void trend_log_unconfirmed_cov_notification_handler(
+    uint8_t *service_request, uint16_t service_len, BACNET_ADDRESS *src)
+{
+    printf("Subscribe unconfirmed COV Notification!\n");
+    handler_ucov_notification(service_request, service_len, src);
+}
+
+void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
+    uint16_t service_len,
+    BACNET_ADDRESS *src,
+    BACNET_CONFIRMED_SERVICE_DATA *service_data)
+{
+    struct object_data *pObject;
+    int iCount = 0;
+    BACNET_COV_DATA cov_data;
+    BACNET_PROPERTY_VALUE property_value[MAX_COV_PROPERTIES];
+    BACNET_PROPERTY_VALUE *pProperty_value = NULL;
+    int len = 0;
+    struct tl_data_record TempRec;
+
+    handler_ccov_notification(service_request, service_len, src, service_data);
+    for (iCount = 0; iCount < Keylist_Count(Object_List);
+        iCount++) {
+        pObject = Keylist_Data_Index(Object_List, iCount);
+        if (address_match(&pObject->Target_Address, src)) {
+            /* create linked list to store data if more
+            than one property value is expected */
+            bacapp_property_value_list_init(&property_value[0], MAX_COV_PROPERTIES);
+            cov_data.listOfValues = &property_value[0];
+            /* decode the service request only */
+            len = cov_notify_decode_service_request(
+                service_request, service_len, &cov_data);
+            if (len > 0) {
+                if (cov_data.subscriberProcessIdentifier ==
+                pObject->cov_data.subscriberProcessIdentifier) {
+                    pProperty_value = &property_value[0];
+                    while (pProperty_value) {
+                        if (pProperty_value->propertyIdentifier == PROP_PRESENT_VALUE) {
+                            /* Record the current time in the log entry and also in the info block
+                            * for the log so we can figure out when the next reading is due */
+                            TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+                            pObject->tLastDataTime = TempRec.tTimeStamp;
+                            TempRec.ucStatus = 0;
+                            TempRec.ucRecType = TL_TYPE_REAL;
+                            TempRec.Datum.fReal = pProperty_value->value.type.Real;
+                            pObject->Logs[pObject->iIndex++] = TempRec;
+                            if (pObject->iIndex >= TL_MAX_ENTRIES) {
+                                pObject->iIndex = 0;
+                            }
+                            pObject->ulTotalRecordCount++;
+                            if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+                                pObject->ulRecordCount++;
+                            }
+                        }
+                        pProperty_value = pProperty_value->next;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /****************************************************************************
  * Check each log to see if any data needs to be recorded.                  *
  ****************************************************************************/
@@ -1677,6 +1783,7 @@ void trend_log_timer(uint16_t uSeconds)
     struct object_data *pObject;
     int iCount = 0;
     bacnet_time_t tNow = 0;
+    unsigned max_apdu = 0;
 
     (void)uSeconds;
     /* use OS to get the current time */
@@ -1735,6 +1842,69 @@ void trend_log_timer(uint16_t uSeconds)
                     TL_fetch_property(iCount);
                     pObject->bTrigger = false;
                 }
+            } else if (pObject->LoggingType == LOGGING_TYPE_COV) {
+                /* COV logs */
+                /* increment timer - exit if timed out */
+                pObject->current_seconds = time(NULL);
+                /* at least one second has passed */
+                if (pObject->current_seconds != pObject->last_seconds) {
+                    /* increment timer - exit if timed out */
+                    pObject->delta_seconds = pObject->current_seconds - pObject->last_seconds;
+                    pObject->elapsed_seconds += pObject->delta_seconds;
+                    tsm_timer_milliseconds((pObject->delta_seconds * 1000));
+                    /* keep track of time for next check */
+                    pObject->last_seconds = pObject->current_seconds;
+                }
+                if (!pObject->found) {
+                    pObject->found = address_bind_request(
+                        pObject->Source.deviceIdentifier.instance, &max_apdu,
+                        &pObject->Target_Address);
+                }
+                if (!pObject->found) {
+                    Send_WhoIs( pObject->Source.deviceIdentifier.instance,
+                    pObject->Source.deviceIdentifier.instance);
+                }
+                if (pObject->found) {
+                    if (pObject->Request_Invoke_ID == 0) {
+                        pObject->Simple_Ack_Detected = false;
+                        pObject->Request_Invoke_ID =
+                            Send_COV_Subscribe(pObject->Source.deviceIdentifier.instance,
+                            &pObject->cov_data);
+                        if (!pObject->cov_data.cancellationRequest &&
+                            (pObject->timeout_seconds < pObject->cov_data.lifetime)) {
+                            /* increase the timeout to the longest lifetime */
+                            pObject->timeout_seconds = pObject->cov_data.lifetime;
+                        }
+                        printf("Sent SubscribeCOV request. "
+                            " Waiting up to %u seconds....\n",
+                            (unsigned)(pObject->timeout_seconds - pObject->elapsed_seconds));
+                    } else if (tsm_invoke_id_free(pObject->Request_Invoke_ID)) {
+                        if (pObject->cov_data.cancellationRequest &&
+                        pObject->Simple_Ack_Detected) {
+                            pObject->found = NULL;
+                        }
+                    } else if (tsm_invoke_id_failed(pObject->Request_Invoke_ID)) {
+                        fprintf(stderr, "\rError: TSM Timeout!\n");
+                        tsm_free_invoke_id(pObject->Request_Invoke_ID);
+                        pObject->Error_Detected = true;
+                        pObject->found = NULL;
+                    }
+                } else {
+                    /* exit if timed out */
+                    if (pObject->elapsed_seconds > pObject->timeout_seconds) {
+                        pObject->Error_Detected = true;
+                        printf("\rError: APDU Timeout!\n");
+                        pObject->found = NULL;
+                    }
+                }
+                /* COV - so just wait until lifetime value expires */
+                if (pObject->elapsed_seconds > pObject->timeout_seconds) {
+                    printf("\rError: APDU Timeout! %li %li\n",pObject->elapsed_seconds, pObject->timeout_seconds);
+                    tsm_free_invoke_id(pObject->Request_Invoke_ID);
+                    pObject->Request_Invoke_ID = 0;
+                    pObject->elapsed_seconds = 0;
+                    pObject->found = NULL;
+                }
             }
         }
     }
@@ -1781,7 +1951,7 @@ static void uci_list(const char *sec_idx,
     pObject->bEnable = true;
     pObject->bStopWhenFull = false;
     pObject->bTrigger = false;
-    pObject->LoggingType = LOGGING_TYPE_POLLED;
+    pObject->LoggingType = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "type", ictx->Object.LoggingType);
     pObject->Source.arrayIndex = 0;
     pObject->ulIntervalOffset = 0;
     pObject->iIndex = 0;
@@ -1790,15 +1960,41 @@ static void uci_list(const char *sec_idx,
     pObject->ulTotalRecordCount = 0;
 
     pObject->Source.deviceIdentifier.instance =
-        Device_Object_Instance_Number();
+        ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "device_id", ictx->Object.Source.deviceIdentifier.instance);
     pObject->Source.deviceIdentifier.type = OBJECT_DEVICE;
     pObject->Source.objectIdentifier.instance = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "object_instance", 0);
     pObject->Source.objectIdentifier.type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "object_type", 0);
     pObject->Source.arrayIndex = BACNET_ARRAY_ALL;
+    pObject->Source.arrayIndex = 0;
     pObject->Source.propertyIdentifier = PROP_PRESENT_VALUE;
 
     pObject->ucTimeFlags |= TL_T_STOP_WILD;
     pObject->ucTimeFlags |= TL_T_START_WILD;
+
+    if (pObject->LoggingType == LOGGING_TYPE_COV) {
+        int32_t PID = 0;
+        PID = Keylist_Count(Object_List); PID++; PID = PID*2;
+        pObject->max_apdu = 0;
+        //pObject->cov_data.covIncrement = 10.0;
+        //pObject->cov_data.covIncrementPresent = 10.0;
+        pObject->cov_data.covSubscribeToProperty = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "subscribetoproperty", ictx->Object.cov_data.covSubscribeToProperty);
+        pObject->cov_data.monitoredProperty.propertyIdentifier = PROP_PRESENT_VALUE;
+        pObject->cov_data.monitoredObjectIdentifier = pObject->Source.objectIdentifier;
+        pObject->cov_data.subscriberProcessIdentifier = PID;
+        pObject->cov_data.cancellationRequest = false;
+        pObject->cov_data.issueConfirmedNotifications = true;
+        pObject->cov_data.lifetime = 60;
+        pObject->Request_Invoke_ID = 0;
+        pObject->Simple_Ack_Detected = false;
+        /* configure the timeout values */
+        pObject->elapsed_seconds = 0;
+        pObject->last_seconds = time(NULL);
+        pObject->current_seconds = 0;
+        pObject->timeout_seconds = (apdu_timeout() / 1000) * apdu_retries();
+        pObject->delta_seconds = 0;
+        pObject->found = false;
+        pObject->Error_Detected = false;
+    }
 
     /* add to list */
     index = Keylist_Data_Add(Object_List, idx, pObject);
@@ -1826,6 +2022,10 @@ void Trend_Log_Init(void)
     if (!tObject.Description)
         tObject.Description = "Trendlog";
     tObject.ulLogInterval = ucix_get_option_int(ctx, sec, "default", "interval", 900);
+    tObject.LoggingType = ucix_get_option_int(ctx, sec, "default", "type", LOGGING_TYPE_POLLED);
+    tObject.Source.deviceIdentifier.instance = ucix_get_option_int(ctx, sec, "default", "device_id",
+        Device_Object_Instance_Number());
+    tObject.cov_data.covSubscribeToProperty = ucix_get_option_int(ctx, sec, "default", "subscribetoproperty", 0);
     struct itr_ctx itr_m;
 	itr_m.section = sec;
 	itr_m.ctx = ctx;
