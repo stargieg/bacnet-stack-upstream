@@ -1334,7 +1334,7 @@ static void uci_list(const char *sec_idx,
 	int disable,idx;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
-	if (strcmp(sec_idx,"default") == 0)
+	if (strcmp(sec_idx, "default") == 0)
 		return;
 	if (disable)
 		return;
@@ -1355,7 +1355,7 @@ static void uci_list(const char *sec_idx,
         if (characterstring_init_ansi(&option_str, option))
             pObject->Description = strndup(option,option_str.length);
 
-    if ((pObject->Description == NULL) && (ictx->Object.Description))
+    if (pObject->Description == NULL)
         pObject->Description = strdup(ictx->Object.Description);
 
     pObject->Ack_Required = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "ack_required", ictx->Object.Ack_Required);
@@ -1365,8 +1365,6 @@ static void uci_list(const char *sec_idx,
 
     char *ucirecp[254];
     BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
-    //BACNET_IP6_ADDRESS addr6;
-    //BACNET_IP_ADDRESS addr;
     int ucirecp_n = 0;
     int ucirecp_i = 0;
     char *uci_ptr;
@@ -1489,10 +1487,9 @@ void Notification_Class_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
-    if (!tObject.Description)
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Description = strndup(option,option_str.length);
+    else
         tObject.Description = "Notification Class";
     tObject.Ack_Required = ucix_get_option_int(ctx, sec, "default", "ack_required", 0); // or 3?
     tObject.Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_offnormal", 255);

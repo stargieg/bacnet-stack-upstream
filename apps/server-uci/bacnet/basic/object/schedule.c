@@ -947,7 +947,7 @@ static void uci_list(const char *sec_idx,
     char *uci_ptr;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
-	if (strcmp(sec_idx,"default") == 0)
+	if (strcmp(sec_idx, "default") == 0)
 		return;
 	if (disable)
 		return;
@@ -968,7 +968,7 @@ static void uci_list(const char *sec_idx,
         if (characterstring_init_ansi(&option_str, option))
             pObject->Description = strndup(option, option_str.length);
 
-    if ((pObject->Description == NULL) && (ictx->Object.Description))
+    if (pObject->Description == NULL)
         pObject->Description = strdup(ictx->Object.Description);
     pObject->Schedule_Default.context_specific = false;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "default");
@@ -1076,10 +1076,9 @@ void Schedule_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option, option_str.length);
-    if (!tObject.Description)
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Description = strndup(option, option_str.length);
+    else
         tObject.Description = "Schedule";
     tObject.Priority_For_Writing = ucix_get_option_int(ctx, sec, "default", "prio", 16);
     struct itr_ctx itr_m;

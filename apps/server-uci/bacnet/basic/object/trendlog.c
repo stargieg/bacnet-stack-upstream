@@ -1706,7 +1706,6 @@ void trend_log_writepropertysimpleackhandler(
         pObject = Keylist_Data_Index(Object_List, iCount);
         if (address_match(&pObject->Target_Address, src) &&
         (invoke_id == pObject->Request_Invoke_ID)) {
-            printf("SubscribeCOV Acknowledged!\n");
             pObject->Simple_Ack_Detected = true;
         }
     }
@@ -1715,7 +1714,8 @@ void trend_log_writepropertysimpleackhandler(
 void trend_log_unconfirmed_cov_notification_handler(
     uint8_t *service_request, uint16_t service_len, BACNET_ADDRESS *src)
 {
-    printf("Subscribe unconfirmed COV Notification!\n");
+    //todo
+    //printf("Subscribe unconfirmed COV Notification!\n");
     handler_ucov_notification(service_request, service_len, src);
 }
 
@@ -1875,16 +1875,12 @@ void trend_log_timer(uint16_t uSeconds)
                             /* increase the timeout to the longest lifetime */
                             pObject->timeout_seconds = pObject->cov_data.lifetime;
                         }
-                        printf("Sent SubscribeCOV request. "
-                            " Waiting up to %u seconds....\n",
-                            (unsigned)(pObject->timeout_seconds - pObject->elapsed_seconds));
                     } else if (tsm_invoke_id_free(pObject->Request_Invoke_ID)) {
                         if (pObject->cov_data.cancellationRequest &&
                         pObject->Simple_Ack_Detected) {
                             pObject->found = NULL;
                         }
                     } else if (tsm_invoke_id_failed(pObject->Request_Invoke_ID)) {
-                        fprintf(stderr, "\rError: TSM Timeout!\n");
                         tsm_free_invoke_id(pObject->Request_Invoke_ID);
                         pObject->Error_Detected = true;
                         pObject->found = NULL;
@@ -1893,13 +1889,11 @@ void trend_log_timer(uint16_t uSeconds)
                     /* exit if timed out */
                     if (pObject->elapsed_seconds > pObject->timeout_seconds) {
                         pObject->Error_Detected = true;
-                        printf("\rError: APDU Timeout!\n");
                         pObject->found = NULL;
                     }
                 }
                 /* COV - so just wait until lifetime value expires */
                 if (pObject->elapsed_seconds > pObject->timeout_seconds) {
-                    printf("\rError: APDU Timeout! %li %li\n",pObject->elapsed_seconds, pObject->timeout_seconds);
                     tsm_free_invoke_id(pObject->Request_Invoke_ID);
                     pObject->Request_Invoke_ID = 0;
                     pObject->elapsed_seconds = 0;
@@ -1923,7 +1917,7 @@ static void uci_list(const char *sec_idx,
 	int disable,idx;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
-	if (strcmp(sec_idx,"default") == 0)
+	if (strcmp(sec_idx, "default") == 0)
 		return;
 	if (disable)
 		return;
@@ -1944,7 +1938,7 @@ static void uci_list(const char *sec_idx,
         if (characterstring_init_ansi(&option_str, option))
             pObject->Description = strndup(option,option_str.length);
 
-    if ((pObject->Description == NULL) && (ictx->Object.Description))
+    if (pObject->Description == NULL)
         pObject->Description = strdup(ictx->Object.Description);
 
     pObject->bAlignIntervals = true;
@@ -1983,7 +1977,7 @@ static void uci_list(const char *sec_idx,
         pObject->cov_data.subscriberProcessIdentifier = PID;
         pObject->cov_data.cancellationRequest = false;
         pObject->cov_data.issueConfirmedNotifications = true;
-        pObject->cov_data.lifetime = 60;
+        pObject->cov_data.lifetime = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "lifetime", ictx->Object.cov_data.lifetime);;
         pObject->Request_Invoke_ID = 0;
         pObject->Simple_Ack_Detected = false;
         /* configure the timeout values */
@@ -2016,16 +2010,16 @@ void Trend_Log_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
-    if (!tObject.Description)
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Description = strndup(option,option_str.length);
+    else
         tObject.Description = "Trendlog";
     tObject.ulLogInterval = ucix_get_option_int(ctx, sec, "default", "interval", 900);
     tObject.LoggingType = ucix_get_option_int(ctx, sec, "default", "type", LOGGING_TYPE_POLLED);
     tObject.Source.deviceIdentifier.instance = ucix_get_option_int(ctx, sec, "default", "device_id",
         Device_Object_Instance_Number());
     tObject.cov_data.covSubscribeToProperty = ucix_get_option_int(ctx, sec, "default", "subscribetoproperty", 0);
+    tObject.cov_data.lifetime = ucix_get_option_int(ctx, sec, "default", "lifetime", 300);
     struct itr_ctx itr_m;
 	itr_m.section = sec;
 	itr_m.ctx = ctx;

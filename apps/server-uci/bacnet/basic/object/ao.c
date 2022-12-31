@@ -2715,7 +2715,7 @@ static void uci_list(const char *sec_idx,
 #endif
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
-	if (strcmp(sec_idx,"default") == 0)
+	if (strcmp(sec_idx, "default") == 0)
 		return;
 	if (disable)
 		return;
@@ -2737,7 +2737,7 @@ static void uci_list(const char *sec_idx,
         if (characterstring_init_ansi(&option_str, option))
             pObject->Description = strndup(option,option_str.length);
 
-    if ((pObject->Description == NULL) && (ictx->Object.Description))
+    if (pObject->Description == NULL)
         pObject->Description = strdup(ictx->Object.Description);
 
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
@@ -2748,7 +2748,7 @@ static void uci_list(const char *sec_idx,
     }
     pObject->Relinquish_Default = 0.0;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "cov_increment");
-    if ((!option) && (ictx->Object.COV_Increment))
+    if (!option)
         option = ictx->Object.COV_Increment;
     pObject->COV_Increment = strtof(option,(char **) NULL);
     pObject->Prior_Value = 0.0;
@@ -2756,16 +2756,12 @@ static void uci_list(const char *sec_idx,
     pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
     pObject->Changed = false;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "min_value");
-    if ((!option) && (ictx->Object.Min_Pres_Value))
+    if (!option)
         option = ictx->Object.Min_Pres_Value;
-    else
-        option = "0";
     pObject->Min_Pres_Value = strtof(option,(char **) NULL);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "max_value");
-    if ((!option) && (ictx->Object.Max_Pres_Value))
+    if (!option)
         option = ictx->Object.Max_Pres_Value;
-    else
-        option = "100";
     pObject->Max_Pres_Value = strtof(option,(char **) NULL);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "value");
     if (option) {
@@ -2778,6 +2774,12 @@ static void uci_list(const char *sec_idx,
         else
             pObject->Feedback_Value = pObject->Priority_Array[BACNET_MAX_PRIORITY-1];
 #endif
+    } else {
+        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = 0.0;
+        pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
+#if defined(INTRINSIC_REPORTING)
+        pObject->Feedback_Value = 0.0;
+#endif
     }
 #if defined(INTRINSIC_REPORTING)
     pObject->Event_State = EVENT_STATE_NORMAL;
@@ -2787,24 +2789,18 @@ static void uci_list(const char *sec_idx,
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay); // or 2s
     pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable); // or 3
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "high_limit");
-    if ((!option) && (ictx->Object.High_Limit))
+    if (!option)
         option = ictx->Object.High_Limit;
-    else
-        option = "100";
     pObject->High_Limit = strtof(option,(char **) NULL);
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "low_limit");
-    if ((!option) && (ictx->Object.Low_Limit))
+    if (!option)
         option = ictx->Object.Low_Limit;
-    else
-        option = "0";
     pObject->Low_Limit = strtof(option,(char **) NULL);
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "dead_limit");
-    if ((!option) && (ictx->Object.Deadband))
+    if (!option)
         option = ictx->Object.Deadband;
-    else
-        option = "0";
     pObject->Deadband = strtof(option,(char **) NULL);
 
     pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
@@ -2816,16 +2812,12 @@ static void uci_list(const char *sec_idx,
         pObject->Acked_Transitions[j].bIsAcked = true;
     }
 #endif
-
     /* add to list */
     index = Keylist_Data_Add(Object_List, idx, pObject);
     if (index >= 0) {
         Device_Inc_Database_Revision();
     }
-    //Analog_Output_Name_Set(idx,
-    //    ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name"));
-    //Analog_Output_Description_Set(idx,
-    //    ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description"));
+
     return;
 }
 
@@ -2848,39 +2840,46 @@ void Analog_Output_Init(void)
     Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Description = strndup(option,option_str.length);
+    else
+        tObject.Description = "Analog Ouput";
     option = ucix_get_option(ctx, sec, "default", "cov_increment");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.COV_Increment = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.COV_Increment = strndup(option,option_str.length);
+    else
+        tObject.COV_Increment = "0.1";
     tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
     option = ucix_get_option(ctx, sec, "default", "min_value");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Min_Pres_Value = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Min_Pres_Value = strndup(option,option_str.length);
+    else
+        tObject.Min_Pres_Value = "0.0";
     option = ucix_get_option(ctx, sec, "default", "max_value");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Max_Pres_Value = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Max_Pres_Value = strndup(option,option_str.length);
+    else
+        tObject.Max_Pres_Value = "100.0";
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
     tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0); // or 7?
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0); // or 2s
     tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0); // or 3
     option = ucix_get_option(ctx, sec, "default", "high_limit");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.High_Limit = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.High_Limit = strndup(option,option_str.length);
+    else
+        tObject.High_Limit = "100.0";
     option = ucix_get_option(ctx, sec, "default", "low_limit");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Low_Limit = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Low_Limit = strndup(option,option_str.length);
+    else
+        tObject.Low_Limit = "0.0";
     option = ucix_get_option(ctx, sec, "default", "dead_limit");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            tObject.Deadband = strndup(option,option_str.length);
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Deadband = strndup(option,option_str.length);
+    else
+        tObject.Deadband = "0.0";
     tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0); // 0=Alarm 1=Event
 #endif
     struct itr_ctx itr_m;
