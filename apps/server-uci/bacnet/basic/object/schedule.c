@@ -767,89 +767,99 @@ static int Schedule_Data_Encode(uint8_t *apdu,
 static void Schedule_Recalculate_PV(
     struct object_data *desc, BACNET_DATE_TIME *date)
 {
-    int i;
+    int i,j;
     bool active = false;
     bool change = false;
     BACNET_WRITE_PROPERTY_DATA wpdata;
     int apdu_len = 0;
     unsigned m = 0;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember = NULL;
-
+    int diff = 0;
     /* for future development, here should be the loop for Exception Schedule */
-
+    j = -1;
     for (i = 0; i < desc->Weekly_Schedule[date->date.wday - 1].TV_Count; i++) {
-        int diff = datetime_wildcard_compare_time(
+        diff = datetime_wildcard_compare_time(
             &date->time, &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time);
         if (diff >= 0) {
-            if (desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.tag !=
-                BACNET_APPLICATION_TAG_NULL) {
-                switch (desc->Schedule_Default.tag) {
-                case BACNET_APPLICATION_TAG_BOOLEAN:
-                    if (desc->Present_Value.type.Boolean != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.type.Boolean) {
-                        bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                            &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value);
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    active = true;
-                    break;
-                case BACNET_APPLICATION_TAG_REAL:
-                    if (desc->Present_Value.type.Real < desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.type.Real ||
-                        desc->Present_Value.type.Real > desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.type.Real) {
-                        bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                            &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value);
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    active = true;
-                    break;
-                case BACNET_APPLICATION_TAG_ENUMERATED:
-                    if (desc->Present_Value.type.Enumerated != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value.type.Enumerated) {
-                        bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                            &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Value);
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    active = true;
-                    break;
-                default:
-                    break;
-                }
+            if (j >= 0) {
+                diff = datetime_wildcard_compare_time(
+                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time,
+                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Time);
+                if (diff >= 0) j = i;
             } else {
-                switch (desc->Schedule_Default.tag) {
-                case BACNET_APPLICATION_TAG_BOOLEAN:
-                    if (desc->Present_Value.type.Boolean != desc->Schedule_Default.type.Boolean) {
-                        memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                            sizeof(desc->Present_Value));
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    break;
-                case BACNET_APPLICATION_TAG_REAL:
-                    if (desc->Present_Value.type.Real < desc->Schedule_Default.type.Real ||
-                        desc->Present_Value.type.Real > desc->Schedule_Default.type.Real) {
-                        memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                            sizeof(desc->Present_Value));
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    break;
-                case BACNET_APPLICATION_TAG_ENUMERATED:
-                    if (desc->Present_Value.type.Enumerated != desc->Schedule_Default.type.Enumerated) {
-                        memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                            sizeof(desc->Present_Value));
-                        change = true;
-                        desc->Changed = true;
-                    }
-                    break;
-                default:
-                    break;
-                }
-                active = true;
+                j = i;
             }
         }
     }
 
+    if (j >= 0) {
+        if (desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.tag !=
+            BACNET_APPLICATION_TAG_NULL) {
+            switch (desc->Schedule_Default.tag) {
+            case BACNET_APPLICATION_TAG_BOOLEAN:
+                if (desc->Present_Value.type.Boolean != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Boolean) {
+                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
+                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
+                    change = true;
+                    desc->Changed = true;
+                }
+                active = true;
+                break;
+            case BACNET_APPLICATION_TAG_REAL:
+                if (desc->Present_Value.type.Real < desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real ||
+                    desc->Present_Value.type.Real > desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real) {
+                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
+                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
+                    change = true;
+                    desc->Changed = true;
+                }
+                active = true;
+                break;
+            case BACNET_APPLICATION_TAG_ENUMERATED:
+                if (desc->Present_Value.type.Enumerated != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Enumerated) {
+                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
+                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
+                    change = true;
+                    desc->Changed = true;
+                }
+                active = true;
+                break;
+            default:
+                break;
+            }
+        } else {
+            switch (desc->Schedule_Default.tag) {
+            case BACNET_APPLICATION_TAG_BOOLEAN:
+                if (desc->Present_Value.type.Boolean != desc->Schedule_Default.type.Boolean) {
+                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
+                        sizeof(desc->Present_Value));
+                    change = true;
+                    desc->Changed = true;
+                }
+                break;
+            case BACNET_APPLICATION_TAG_REAL:
+                if (desc->Present_Value.type.Real < desc->Schedule_Default.type.Real ||
+                    desc->Present_Value.type.Real > desc->Schedule_Default.type.Real) {
+                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
+                        sizeof(desc->Present_Value));
+                    change = true;
+                    desc->Changed = true;
+                }
+                break;
+            case BACNET_APPLICATION_TAG_ENUMERATED:
+                if (desc->Present_Value.type.Enumerated != desc->Schedule_Default.type.Enumerated) {
+                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
+                        sizeof(desc->Present_Value));
+                    change = true;
+                    desc->Changed = true;
+                }
+                break;
+            default:
+                break;
+            }
+            active = true;
+        }
+    }
     if (! active ) {
         switch (desc->Schedule_Default.tag) {
         case BACNET_APPLICATION_TAG_BOOLEAN:
