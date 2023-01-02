@@ -672,12 +672,8 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             /* store value object */
             pObject->Priority_For_Writing = unsigned_value;
-            value_c_len = snprintf(NULL, 0, "%llu", unsigned_value);
-            value_c = malloc(value_c_len + 1);
-            snprintf(value_c,value_c_len + 1, "%llu", unsigned_value);
-            ucix_add_option(ctxw, sec, idx_c, "prio", value_c);
+            ucix_add_option_int(ctxw, sec, idx_c, "prio", pObject->Priority_For_Writing);
             ucix_commit(ctxw, sec);
-            free(value_c);
             status = true;
             break;
         case PROP_EXCEPTION_SCHEDULE:
