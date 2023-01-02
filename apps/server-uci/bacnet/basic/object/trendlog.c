@@ -252,6 +252,86 @@ bool Trend_Log_Object_Name(
     return status;
 }
 
+/**
+ * For a given object instance-number, sets the object-name
+ * Note that the object name must be unique within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Trend_Log_Name_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    BACNET_CHARACTER_STRING object_name;
+    BACNET_OBJECT_TYPE found_type = 0;
+    uint32_t found_instance = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        /* All the object names in a device must be unique */
+        characterstring_init_ansi(&object_name, new_name);
+        if (Device_Valid_Object_Name(
+                &object_name, &found_type, &found_instance)) {
+            if ((found_type == Object_Type) &&
+                (found_instance == object_instance)) {
+                /* writing same name to same object */
+                status = true;
+            } else {
+                /* duplicate name! */
+                status = false;
+            }
+        } else {
+            status = true;
+            pObject->Object_Name = new_name;
+            Device_Inc_Database_Revision();
+        }
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param  object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+char *Trend_Log_Description(uint32_t object_instance)
+{
+    char *name = NULL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = (char *)pObject->Description;
+    }
+
+    return name;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ * @return  true if object-name was set
+ */
+bool Trend_Log_Description_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        status = true;
+        pObject->Description = new_name;
+    }
+
+    return status;
+}
+
+
 /* return the length of the apdu encoded or BACNET_STATUS_ERROR for error or
    BACNET_STATUS_ABORT for abort message */
 int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
@@ -283,6 +363,12 @@ int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_DESCRIPTION:
+            characterstring_init_ansi(&char_string,
+                Trend_Log_Description(rpdata->object_instance));
+            apdu_len =
+                encode_application_character_string(&apdu[0], &char_string);
+            break;
+
         case PROP_OBJECT_NAME:
             Trend_Log_Object_Name(rpdata->object_instance, &char_string);
             apdu_len =
@@ -432,6 +518,9 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_DATE start_date, stop_date;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE TempSource;
     bool bEffectiveEnable;
+    struct uci_context *ctxw = NULL;
+    char *idx_c = NULL;
+    int idx_c_len = 0;
 
     /* Pin down which log to look at */
     pObject = Keylist_Data(Object_List, wp_data->object_instance);
@@ -455,7 +544,28 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
+
+    ctxw = ucix_init(sec);
+    if (!ctxw)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+    idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
+    idx_c = malloc(idx_c_len + 1);
+    snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
+
     switch (wp_data->object_property) {
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Trend_Log_Name_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "name",
+                        strndup(value.type.Character_String.value, value.type.Character_String.length));
+                    ucix_commit(ctxw,sec);
+                }
+            }
+            break;
+
         case PROP_ENABLE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
@@ -551,28 +661,44 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
-                if (value.type.Enumerated != LOGGING_TYPE_COV) {
-                    pObject->LoggingType =
-                        (BACNET_LOGGING_TYPE)value.type.Enumerated;
-                    if (value.type.Enumerated == LOGGING_TYPE_POLLED) {
-                        /* As per 12.25.27 pick a suitable default if interval
-                         * is 0 */
-                        if (pObject->ulLogInterval == 0) {
-                            pObject->ulLogInterval = 900;
-                        }
+                pObject->LoggingType =
+                    (BACNET_LOGGING_TYPE)value.type.Enumerated;
+                if (value.type.Enumerated == LOGGING_TYPE_COV) {
+                    if (pObject->cov_data.lifetime == 0) {
+                        pObject->cov_data.lifetime = 300;
+                        ucix_add_option_int(ctxw, sec, idx_c, "lifetime", 300);
                     }
-                    if (value.type.Enumerated == LOGGING_TYPE_TRIGGERED) {
-                        /* As per 12.25.27 0 the interval if triggered logging
-                         * selected */
+                    if (pObject->ulLogInterval != 0) {
                         pObject->ulLogInterval = 0;
+                        ucix_add_option_int(ctxw, sec, idx_c, "interval", 0);
                     }
-                } else {
-                    /* We don't currently support COV */
-                    status = false;
-                    wp_data->error_class = ERROR_CLASS_PROPERTY;
-                    wp_data->error_code =
-                        ERROR_CODE_OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED;
                 }
+                if (value.type.Enumerated == LOGGING_TYPE_POLLED) {
+                    /* As per 12.25.27 pick a suitable default if interval
+                        * is 0 */
+                    if (pObject->ulLogInterval == 0) {
+                        pObject->ulLogInterval = 900;
+                        ucix_add_option_int(ctxw, sec, idx_c, "interval", 900);
+                    }
+                    if (pObject->cov_data.lifetime != 0) {
+                        pObject->cov_data.lifetime = 0;
+                        ucix_add_option_int(ctxw, sec, idx_c, "lifetime", 0);
+                    }
+                }
+                if (value.type.Enumerated == LOGGING_TYPE_TRIGGERED) {
+                    /* As per 12.25.27 0 the interval if triggered logging
+                        * selected */
+                    if (pObject->ulLogInterval != 0) {
+                        pObject->ulLogInterval = 0;
+                        ucix_add_option_int(ctxw, sec, idx_c, "interval", 0);
+                    }
+                    if (pObject->cov_data.lifetime != 0) {
+                        pObject->cov_data.lifetime = 0;
+                        ucix_add_option_int(ctxw, sec, idx_c, "lifetime", 0);
+                    }
+                }
+                ucix_add_option_int(ctxw, sec, idx_c, "type", value.type.Enumerated);
+                ucix_commit(ctxw, sec);
             }
             break;
 
@@ -709,37 +835,34 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 TL_Insert_Status_Rec(wp_data->object_instance, LOG_STATUS_BUFFER_PURGED, true);
             }
             pObject->Source = TempSource;
+            ucix_add_option_int(ctxw, sec, idx_c, "device_id", pObject->Source.deviceIdentifier.instance);
+            ucix_add_option_int(ctxw, sec, idx_c, "object_instance", pObject->Source.objectIdentifier.instance);
+            ucix_add_option_int(ctxw, sec, idx_c, "object_type", pObject->Source.objectIdentifier.type);
+            ucix_commit(ctxw, sec);
+
             status = true;
             break;
 
         case PROP_LOG_INTERVAL:
-            if (pObject->LoggingType == LOGGING_TYPE_TRIGGERED) {
-                /* Read only if triggered log so flag error and bail out */
-                wp_data->error_class = ERROR_CLASS_PROPERTY;
-                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-                break;
-            }
-            status = write_property_type_valid(
-                wp_data, &value, BACNET_APPLICATION_TAG_UNSIGNED_INT);
-            if (status) {
-                if ((pObject->LoggingType == LOGGING_TYPE_POLLED) &&
-                    (value.type.Unsigned_Int == 0)) {
-                    /* We don't support COV at the moment so don't allow
-                     * switching to it by clearing interval whilst in polling
-                     * mode */
-                    wp_data->error_class = ERROR_CLASS_PROPERTY;
-                    wp_data->error_code =
-                        ERROR_CODE_OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED;
-                    status = false;
-                } else {
+            if (pObject->LoggingType == LOGGING_TYPE_POLLED) {
+                status = write_property_type_valid(
+                    wp_data, &value, BACNET_APPLICATION_TAG_UNSIGNED_INT);
+                if (status) {
                     /* We only log to 1 sec accuracy so must divide by 100
-                     * before passing it on */
-                    pObject->ulLogInterval = value.type.Unsigned_Int / 100;
-                    if (0 == pObject->ulLogInterval) {
+                        * before passing it on */
+                    if (0 < value.type.Unsigned_Int / 100) {
+                        pObject->ulLogInterval = value.type.Unsigned_Int / 100;
+                    } else {
                         pObject->ulLogInterval =
                             1; /* Interval of 0 is not a good idea */
                     }
+                    ucix_add_option_int(ctxw, sec, idx_c, "interval", value.type.Enumerated);
+                    ucix_commit(ctxw, sec);
                 }
+            } else {
+                /* Read only if triggered or COV log so flag error and bail out */
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             }
             break;
 
@@ -782,11 +905,25 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
 
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                if (Trend_Log_Description_Set(
+                    wp_data->object_instance, value.type.Character_String.value)) {
+                    ucix_add_option(ctxw, sec, idx_c, "description",
+                        Trend_Log_Description(wp_data->object_instance));
+                    ucix_commit(ctxw, sec);
+                }
+            }
+            break;
         default:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             break;
     }
+    if (ctxw)
+        ucix_cleanup(ctxw);
 
     return status;
 }
@@ -2128,5 +2265,6 @@ void Trend_Log_Init(void)
 	itr_m.Object = tObject;
     ucix_for_each_section_type(ctx, sec, type,
         (void (*)(const char *, void *))uci_list, &itr_m);
-    ucix_cleanup(ctx);
+    if (ctx)
+        ucix_cleanup(ctx);
 }
