@@ -2060,7 +2060,8 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
     }
 
-    ucix_cleanup(ctxw);
+    if (ctxw)
+        ucix_cleanup(ctxw);
     free(idx_c);
     return status;
 }

@@ -703,6 +703,8 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             break;
     }
+    if (ctxw)
+        ucix_cleanup(ctxw);
 
     return status;
 }
