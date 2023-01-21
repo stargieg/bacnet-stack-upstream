@@ -77,6 +77,7 @@ struct object_data {
     float Relinquish_Default;
     float Min_Pres_Value;
     float Max_Pres_Value;
+    float Resolution;
     uint16_t Units;
     uint8_t Reliability;
     const char *Object_Name;
@@ -107,6 +108,7 @@ struct object_data_t {
     const char *Relinquish_Default;
     const char *Min_Pres_Value;
     const char *Max_Pres_Value;
+    const char *Resolution;
     uint16_t Units;
     uint8_t Reliability;
     const char *Object_Name;
@@ -154,6 +156,47 @@ static const int Analog_Value_Properties_Optional[] = { PROP_RELIABILITY,
     -1 };
 
 static const int Analog_Value_Properties_Proprietary[] = { -1 };
+
+/**
+ * @brief Set zero depends on resolution / precision
+ * @param value_f - Value
+ * @param resolution - Resolution
+ * @return rounded value
+ */
+static float limit_value_by_resolution(float value_f, float resolution) {
+    float ret = 0.0;
+    float prec = 0.0;
+    if (resolution < 1) {
+        prec = roundf(1 / resolution);
+        ret = roundf(value_f * prec);
+        ret = ret / prec;
+    } else {
+        ret = roundf(value_f / resolution);
+        ret = ret * resolution;
+    }
+    return ret;
+}
+
+
+/**
+ * @brief snprintf with resolution / precision
+ * @param value_c - Value
+ * @param value_c_len - Value Len
+ * @param resolution - Resolution
+ * @param value_f - Real Value
+ * @return rounded value
+ */
+static int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f) {
+    int ret = 0;
+    int prec = 0;
+    if (resolution < 1) {
+        prec = (int)log10(roundf(1 / resolution));
+        ret = snprintf(value_c, value_c_len, "%.*f", prec, value_f);
+    } else {
+        ret = snprintf(value_c, value_c_len, "%i", (int)value_f);
+    }
+    return ret;
+}
 
 /**
  * @brief Returns the list of required, optional, and proprietary properties.
@@ -371,6 +414,7 @@ bool Analog_Value_High_Limit_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->High_Limit = value;
         status = true;
     }
@@ -409,6 +453,7 @@ bool Analog_Value_Low_Limit_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->Low_Limit = value;
         status = true;
     }
@@ -447,6 +492,7 @@ bool Analog_Value_Deadband_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->Deadband = value;
         status = true;
     }
@@ -740,6 +786,7 @@ bool Analog_Value_Relinquish_Default_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->Relinquish_Default = value;
         status = true;
     }
@@ -851,8 +898,9 @@ static bool Analog_Value_Present_Value_Write(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= 0.0) && (value <= 100.0)) {
+            (value >= pObject->Low_Limit) && (value <= pObject->High_Limit)) {
             if (priority != 6) {
                 old_value = Analog_Value_Present_Value(object_instance);
                 Analog_Value_Present_Value_Set(object_instance, value, priority);
@@ -1278,6 +1326,7 @@ bool Analog_Value_Min_Pres_Value_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->Min_Pres_Value = value;
         status = true;
     }
@@ -1316,6 +1365,7 @@ bool Analog_Value_Max_Pres_Value_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->Max_Pres_Value = value;
         status = true;
     }
@@ -1434,8 +1484,46 @@ void Analog_Value_COV_Increment_Set(uint32_t object_instance, float value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
         pObject->COV_Increment = value;
     }
+}
+
+/**
+ * @brief Get the Resolution
+ * @param object_instance - object-instance number of the object
+ * @return the Resolution
+ */
+float Analog_Value_Resolution(uint32_t object_instance)
+{
+    float value = 0.0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Resolution;
+    }
+
+    return value;
+}
+
+/**
+ * @brief Set the Resolution
+ * @param object_instance - object-instance number of the object
+ * @param value - Resolution value to set
+ * @return true if valid object-instance and value within range
+ */
+bool Analog_Value_Resolution_Set(uint32_t object_instance, float value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Resolution = value;
+        status = true;
+    }
+    return status;
 }
 
 /**
@@ -1459,7 +1547,6 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     bool state = false;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
-    //struct object_data *pObject;
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
@@ -1588,6 +1675,10 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_COV_INCREMENT:
             apdu_len = encode_application_real(
                 &apdu[0], Analog_Value_COV_Increment(rpdata->object_instance));
+            break;
+        case PROP_RESOLUTION:
+            apdu_len = encode_application_real(
+                &apdu[0], Analog_Output_Resolution(rpdata->object_instance));
             break;
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
@@ -1753,6 +1844,7 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *idx_c = NULL;
     int idx_c_len = 0;
     float value_f = 0.0;
+    float resolution = 0.1;
     char *value_c = NULL;
     int value_c_len = 0;
 
@@ -1780,6 +1872,7 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
+    resolution = Analog_Output_Resolution(wp_data->object_instance);
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(wp_data, &value,
@@ -1789,9 +1882,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     value.type.Real, wp_data->priority,
                     &wp_data->error_class, &wp_data->error_code)) {
                     value_f = Analog_Value_Present_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "value", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -1804,9 +1897,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         wp_data->object_instance, wp_data->priority,
                         &wp_data->error_class, &wp_data->error_code)) {
                         value_f = Analog_Value_Present_Value(wp_data->object_instance);
-                        value_c_len = snprintf(NULL, 0, "%f", value_f);
+                        value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                         value_c = malloc(value_c_len + 1);
-                        snprintf(value_c,value_c_len + 1,"%f",value_f);
+                        snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                         ucix_add_option(ctxw, sec, idx_c, "value", value_c);
                         ucix_commit(ctxw,sec);
                         free(value_c);
@@ -1829,9 +1922,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 Analog_Value_COV_Increment_Set(wp_data->object_instance,
                 value.type.Real);
                 value_f = Analog_Value_COV_Increment(wp_data->object_instance);
-                value_c_len = snprintf(NULL, 0, "%f", value_f);
+                value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                 value_c = malloc(value_c_len + 1);
-                snprintf(value_c,value_c_len + 1,"%f",value_f);
+                snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                 ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
                 ucix_commit(ctxw,sec);
                 free(value_c);
@@ -1896,9 +1989,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Value_Max_Pres_Value_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Value_Max_Pres_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "max_value", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -1912,10 +2005,26 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Value_Min_Pres_Value_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Value_Min_Pres_Value(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "min_value", value_c);
+                    ucix_commit(ctxw,sec);
+                    free(value_c);
+                }
+            }
+            break;
+        case PROP_RESOLUTION:
+            status = write_property_type_valid(wp_data, &value,
+                BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                if (Analog_Value_Resolution_Set(wp_data->object_instance,
+                    value.type.Real)) {
+                    value_f = Analog_Value_Resolution(wp_data->object_instance);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
+                    value_c = malloc(value_c_len + 1);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
+                    ucix_add_option(ctxw, sec, idx_c, "resolution", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
                 }
@@ -1971,9 +2080,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Value_High_Limit_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Value_High_Limit(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "high_limit", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -1987,9 +2096,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Value_Low_Limit_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Value_Low_Limit(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "low_limit", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -2003,9 +2112,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_Value_Deadband_Set(wp_data->object_instance,
                     value.type.Real)) {
                     value_f = Analog_Value_Deadband(wp_data->object_instance);
-                    value_c_len = snprintf(NULL, 0, "%f", value_f);
+                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
                     value_c = malloc(value_c_len + 1);
-                    snprintf(value_c,value_c_len + 1,"%f",value_f);
+                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
                     ucix_add_option(ctxw, sec, idx_c, "dead_limit", value_c);
                     ucix_commit(ctxw,sec);
                     free(value_c);
@@ -2698,6 +2807,7 @@ static void uci_list(const char *sec_idx,
     pObject = calloc(1, sizeof(struct object_data));
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
+    float value_f = 0.0;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option)
@@ -2723,6 +2833,12 @@ static void uci_list(const char *sec_idx,
     if (!option)
         option = ictx->Object.COV_Increment;
     pObject->COV_Increment = strtof(option,(char **) NULL);
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "resolution");
+    if (!option)
+        option = ictx->Object.Resolution;
+    value_f = strtof(option,(char **) NULL);
+    if (!(value_f > 0)) value_f = 1;
+    pObject->Resolution = value_f;
     pObject->Prior_Value = 0.0;
     pObject->Units = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "si_unit", ictx->Object.Units);
     pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
@@ -2730,14 +2846,20 @@ static void uci_list(const char *sec_idx,
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "min_value");
     if (!option)
         option = ictx->Object.Min_Pres_Value;
-    pObject->Min_Pres_Value = strtof(option,(char **) NULL);
+    value_f = strtof(option,(char **) NULL);
+    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+    pObject->Min_Pres_Value = value_f;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "max_value");
     if (!option)
         option = ictx->Object.Max_Pres_Value;
-    pObject->Max_Pres_Value = strtof(option,(char **) NULL);
+    value_f = strtof(option,(char **) NULL);
+    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+    pObject->Max_Pres_Value = value_f;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "value");
     if (option) {
-        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = strtof(option,(char **) NULL);
+        value_f = strtof(option,(char **) NULL);
+        value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_f;
         pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
     } else {
         pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = 0.0;
@@ -2753,17 +2875,23 @@ static void uci_list(const char *sec_idx,
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "high_limit");
     if (!option)
         option = ictx->Object.High_Limit;
-    pObject->High_Limit = strtof(option,(char **) NULL);
+    value_f = strtof(option,(char **) NULL);
+    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+    pObject->High_Limit = value_f;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "low_limit");
     if (!option)
         option = ictx->Object.Low_Limit;
-    pObject->Low_Limit = strtof(option,(char **) NULL);
+    value_f = strtof(option,(char **) NULL);
+    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+    pObject->Low_Limit = value_f;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "dead_limit");
     if (!option)
         option = ictx->Object.Deadband;
-    pObject->Deadband = strtof(option,(char **) NULL);
+    value_f = strtof(option,(char **) NULL);
+    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
+    pObject->Deadband = value_f;
 
     pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
 
@@ -2812,6 +2940,11 @@ void Analog_Value_Init(void)
         tObject.COV_Increment = strndup(option,option_str.length);
     else
         tObject.COV_Increment = "0.1";
+    option = ucix_get_option(ctx, sec, "default", "resolution");
+    if (characterstring_init_ansi(&option_str, option))
+        tObject.Resolution = strndup(option,option_str.length);
+    else
+        tObject.Resolution = "0.1";
     tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
     option = ucix_get_option(ctx, sec, "default", "min_value");
     if (characterstring_init_ansi(&option_str, option))

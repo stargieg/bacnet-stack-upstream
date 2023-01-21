@@ -138,6 +138,13 @@ extern "C" {
     void Analog_Value_COV_Increment_Set(
         uint32_t instance,
         float value);
+    BACNET_STACK_EXPORT
+    float Analog_Value_Resolution(
+        uint32_t object_instance);
+    BACNET_STACK_EXPORT
+    bool Analog_Value_Resolution_Set(
+        uint32_t object_instance,
+        float value);
 
     BACNET_STACK_EXPORT
     bool Analog_Value_Object_Name(
