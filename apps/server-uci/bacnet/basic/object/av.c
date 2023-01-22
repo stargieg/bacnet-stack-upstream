@@ -1678,7 +1678,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
         case PROP_RESOLUTION:
             apdu_len = encode_application_real(
-                &apdu[0], Analog_Output_Resolution(rpdata->object_instance));
+                &apdu[0], Analog_Value_Resolution(rpdata->object_instance));
             break;
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
@@ -1872,7 +1872,7 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
-    resolution = Analog_Output_Resolution(wp_data->object_instance);
+    resolution = Analog_Value_Resolution(wp_data->object_instance);
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(wp_data, &value,
