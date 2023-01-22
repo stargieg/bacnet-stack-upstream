@@ -182,6 +182,12 @@ extern "C" {
     BACNET_ADDRESS *src,
     BACNET_CONFIRMED_SERVICE_DATA *service_data);
 
+    BACNET_STACK_EXPORT
+    void trend_log_read_property_ack_handler(uint8_t *service_request,
+    uint16_t service_len,
+    BACNET_ADDRESS *src,
+    BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

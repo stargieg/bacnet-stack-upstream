@@ -1703,6 +1703,219 @@ static int local_read_property(uint8_t *value,
     return (len);
 }
 
+static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
+    int iCount
+    )
+{
+    uint8_t ucCount;
+    struct object_data *pObject;
+    struct tl_data_record TempRec;
+    pObject = Keylist_Data_Index(Object_List, iCount);
+    switch (value.tag) {
+    case BACNET_APPLICATION_TAG_NULL:
+        TempRec.ucRecType = TL_TYPE_NULL;
+        break;
+
+    case BACNET_APPLICATION_TAG_BOOLEAN:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_BOOL;
+        TempRec.Datum.ucBoolean = value.type.Boolean;
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        /* Finally insert the status flags into the record */
+        //iLen = decode_tag_number_and_value(
+        //    StatusBuf, &tag_number, &len_value_type);
+        //decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        //TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+
+    case BACNET_APPLICATION_TAG_UNSIGNED_INT:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_UNSIGN;
+        TempRec.Datum.ulUValue = value.type.Unsigned_Int;
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+
+    case BACNET_APPLICATION_TAG_SIGNED_INT:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_SIGN;
+        TempRec.Datum.lSValue = value.type.Signed_Int;
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+
+    case BACNET_APPLICATION_TAG_REAL:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_REAL;
+        TempRec.Datum.fReal = value.type.Real;
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+    case BACNET_APPLICATION_TAG_BIT_STRING:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_BITS;
+        /* We truncate any bitstrings at 32 bits to conserve space */
+        if (bitstring_bits_used(&value.type.Bit_String) < 32) {
+            /* Store the bytes used and the bits free in the last byte
+            */
+            TempRec.Datum.Bits.ucLen = bitstring_bytes_used(&value.type.Bit_String)
+                << 4;
+            TempRec.Datum.Bits.ucLen |=
+                (8 - (bitstring_bits_used(&value.type.Bit_String) % 8)) & 7;
+            /* Fetch the octets with the bits directly */
+            for (ucCount = 0; ucCount < bitstring_bytes_used(&value.type.Bit_String);
+                ucCount++) {
+                TempRec.Datum.Bits.ucStore[ucCount] =
+                    bitstring_octet(&value.type.Bit_String, ucCount);
+            }
+        } else {
+            /* We will only use the first 4 octets to save space */
+            TempRec.Datum.Bits.ucLen = 4 << 4;
+            for (ucCount = 0; ucCount < 4; ucCount++) {
+                TempRec.Datum.Bits.ucStore[ucCount] =
+                    bitstring_octet(&value.type.Bit_String, ucCount);
+            }
+        }
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+
+    case BACNET_APPLICATION_TAG_ENUMERATED:
+        /* Record the current time in the log entry and also in the info block
+        * for the log so we can figure out when the next reading is due */
+        TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+        pObject->tLastDataTime = TempRec.tTimeStamp;
+        TempRec.ucStatus = 0;
+        TempRec.ucRecType = TL_TYPE_ENUM;
+        TempRec.Datum.ulEnum = value.type.Enumerated;
+        pObject->Logs[pObject->iIndex++] = TempRec;
+        if (pObject->iIndex >= TL_MAX_ENTRIES) {
+            pObject->iIndex = 0;
+        }
+        pObject->ulTotalRecordCount++;
+        if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+            pObject->ulRecordCount++;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/** Handler for a ReadProperty ACK.
+ * @ingroup DSRP
+ * Doesn't actually do anything, except, for debugging, to
+ * print out the ACK data of a matching request.
+ *
+ * @param service_request [in] The contents of the service request.
+ * @param service_len [in] The length of the service_request.
+ * @param src [in] BACNET_ADDRESS of the source of the message
+ * @param service_data [in] The BACNET_CONFIRMED_SERVICE_DATA information
+ *                          decoded from the APDU header of this message.
+ */
+void trend_log_read_property_ack_handler(uint8_t *service_request,
+    uint16_t service_len,
+    BACNET_ADDRESS *src,
+    BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data)
+{
+    struct object_data *pObject;
+    int iCount = 0;
+    BACNET_READ_PROPERTY_DATA data;
+    int len = 0;
+    uint8_t *application_data;
+    int application_data_len;
+    BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
+    for (iCount = 0; iCount < Keylist_Count(Object_List);
+        iCount++) {
+        pObject = Keylist_Data_Index(Object_List, iCount);
+        if (address_match(&pObject->Target_Address, src) &&
+            (service_data->invoke_id == pObject->Request_Invoke_ID)) {
+            len =
+                rp_ack_decode_service_request(service_request,
+                service_len, &data);
+            if (len > 0) {
+                application_data = data.application_data;
+                application_data_len = data.application_data_len;
+                /* FIXME: what if application_data_len is bigger than 255? */
+                /* value? need to loop until all of the len is gone... */
+                for (;;) {
+                    len = bacapp_decode_known_property(application_data,
+                        (unsigned)application_data_len, &value, data.object_type,
+                        data.object_property);
+
+                    if (len < 0) {
+                        break;
+                    }
+
+                    write_property_to_rec(value,iCount);
+
+                    if (len > 0) {
+                        if (len < application_data_len) {
+                            application_data += len;
+                            application_data_len -= len;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 /****************************************************************************
  * Attempt to fetch the logged property and store it in the Trend Log       *
  ****************************************************************************/
@@ -1715,122 +1928,86 @@ static void TL_fetch_property(int iLog)
                              of data */
     BACNET_ERROR_CLASS error_class = ERROR_CLASS_SERVICES;
     BACNET_ERROR_CODE error_code = ERROR_CODE_OTHER;
-    int iLen;
-    uint8_t ucCount;
-    struct tl_data_record TempRec;
+    int iLen = 0;
     uint8_t tag_number = 0;
     uint32_t len_value_type = 0;
-    BACNET_BIT_STRING TempBits;
-    BACNET_UNSIGNED_INTEGER unsigned_value = 0;
     struct object_data *pObject;
+    unsigned max_apdu = 0;
+    BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
 
     pObject = Keylist_Data(Object_List, iLog);
     if (!pObject)
         return;
 
-    /* Record the current time in the log entry and also in the info block
-     * for the log so we can figure out when the next reading is due */
-    TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-    pObject->tLastDataTime = TempRec.tTimeStamp;
-    TempRec.ucStatus = 0;
+    if (pObject->Source.deviceIdentifier.instance == Device_Object_Instance_Number()) {
 
-    iLen = local_read_property(
-        ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
-    if (iLen < 0) {
-        /* Insert error code into log */
-        TempRec.Datum.Error.usClass = error_class;
-        TempRec.Datum.Error.usCode = error_code;
-        TempRec.ucRecType = TL_TYPE_ERROR;
-    } else {
-        /* Decode data returned and see if we can fit it into the log */
-        iLen =
-            decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
-        switch (tag_number) {
-            case BACNET_APPLICATION_TAG_NULL:
-                TempRec.ucRecType = TL_TYPE_NULL;
-                break;
+        iLen = local_read_property(
+            ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
+        if (iLen > 0) {
+            /* Decode data returned and see if we can fit it into the log */
+            iLen =
+                decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
+            value.tag = tag_number;
 
-            case BACNET_APPLICATION_TAG_BOOLEAN:
-                TempRec.ucRecType = TL_TYPE_BOOL;
-                TempRec.Datum.ucBoolean = decode_boolean(len_value_type);
-                break;
+            switch (tag_number) {
+                case BACNET_APPLICATION_TAG_BOOLEAN:
+                    value.type.Boolean = decode_boolean(len_value_type);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            case BACNET_APPLICATION_TAG_UNSIGNED_INT:
-                TempRec.ucRecType = TL_TYPE_UNSIGN;
-                decode_unsigned(
-                    &ValueBuf[iLen], len_value_type, &unsigned_value);
-                TempRec.Datum.ulUValue = unsigned_value;
-                break;
+                case BACNET_APPLICATION_TAG_UNSIGNED_INT:
+                    decode_unsigned(
+                        &ValueBuf[iLen], len_value_type, &value.type.Unsigned_Int);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            case BACNET_APPLICATION_TAG_SIGNED_INT:
-                TempRec.ucRecType = TL_TYPE_SIGN;
-                decode_signed(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.lSValue);
-                break;
+                case BACNET_APPLICATION_TAG_SIGNED_INT:
+                    decode_signed(
+                        &ValueBuf[iLen], len_value_type, &value.type.Signed_Int);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            case BACNET_APPLICATION_TAG_REAL:
-                TempRec.ucRecType = TL_TYPE_REAL;
-                decode_real_safe(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.fReal);
-                break;
+                case BACNET_APPLICATION_TAG_REAL:
+                    decode_real_safe(
+                        &ValueBuf[iLen], len_value_type, &value.type.Real);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            case BACNET_APPLICATION_TAG_BIT_STRING:
-                TempRec.ucRecType = TL_TYPE_BITS;
-                decode_bitstring(&ValueBuf[iLen], len_value_type, &TempBits);
-                /* We truncate any bitstrings at 32 bits to conserve space */
-                if (bitstring_bits_used(&TempBits) < 32) {
-                    /* Store the bytes used and the bits free in the last byte
-                     */
-                    TempRec.Datum.Bits.ucLen = bitstring_bytes_used(&TempBits)
-                        << 4;
-                    TempRec.Datum.Bits.ucLen |=
-                        (8 - (bitstring_bits_used(&TempBits) % 8)) & 7;
-                    /* Fetch the octets with the bits directly */
-                    for (ucCount = 0; ucCount < bitstring_bytes_used(&TempBits);
-                         ucCount++) {
-                        TempRec.Datum.Bits.ucStore[ucCount] =
-                            bitstring_octet(&TempBits, ucCount);
-                    }
-                } else {
-                    /* We will only use the first 4 octets to save space */
-                    TempRec.Datum.Bits.ucLen = 4 << 4;
-                    for (ucCount = 0; ucCount < 4; ucCount++) {
-                        TempRec.Datum.Bits.ucStore[ucCount] =
-                            bitstring_octet(&TempBits, ucCount);
-                    }
-                }
-                break;
+                case BACNET_APPLICATION_TAG_BIT_STRING:
+                    decode_bitstring(&ValueBuf[iLen], len_value_type, &value.type.Bit_String);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            case BACNET_APPLICATION_TAG_ENUMERATED:
-                TempRec.ucRecType = TL_TYPE_ENUM;
-                decode_enumerated(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.ulEnum);
-                break;
+                case BACNET_APPLICATION_TAG_ENUMERATED:
+                    decode_enumerated(
+                        &ValueBuf[iLen], len_value_type, &value.type.Enumerated);
+                    write_property_to_rec(value,iLog);
+                    break;
 
-            default:
-                /* Fake an error response for any types we cannot handle */
-                TempRec.Datum.Error.usClass = ERROR_CLASS_PROPERTY;
-                TempRec.Datum.Error.usCode = ERROR_CODE_DATATYPE_NOT_SUPPORTED;
-                TempRec.ucRecType = TL_TYPE_ERROR;
-                break;
+                default:
+                    break;
+            }
         }
-        /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
-        TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
+    } else {
+        if (!pObject->found) {
+            Send_WhoIs( pObject->Source.deviceIdentifier.instance,
+            pObject->Source.deviceIdentifier.instance);
+        }
+        if (!pObject->found) {
+            pObject->found = address_bind_request(
+                pObject->Source.deviceIdentifier.instance, &max_apdu,
+                &pObject->Target_Address);
+        }
+        if (pObject->found) {
+            pObject->Request_Invoke_ID =
+                Send_Read_Property_Request(pObject->Source.deviceIdentifier.instance,
+                pObject->Source.objectIdentifier.type,
+                pObject->Source.objectIdentifier.instance,
+                PROP_PRESENT_VALUE,
+                BACNET_ARRAY_ALL);
+        }
     }
 
-    pObject->Logs[pObject->iIndex++] = TempRec;
-    if (pObject->iIndex >= TL_MAX_ENTRIES) {
-        pObject->iIndex = 0;
-    }
-
-    pObject->ulTotalRecordCount++;
-
-    if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-        pObject->ulRecordCount++;
-    }
 }
 
 void trend_log_writepropertysimpleackhandler(
@@ -1867,9 +2044,6 @@ void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
     BACNET_PROPERTY_VALUE property_value[MAX_COV_PROPERTIES];
     BACNET_PROPERTY_VALUE *pProperty_value = NULL;
     int len = 0;
-    struct tl_data_record TempRec;
-    uint8_t ucCount;
-
     handler_ccov_notification(service_request, service_len, src, service_data);
     for (iCount = 0; iCount < Keylist_Count(Object_List);
         iCount++) {
@@ -1888,124 +2062,7 @@ void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
                     pProperty_value = &property_value[0];
                     while (pProperty_value) {
                         if (pProperty_value->propertyIdentifier == PROP_PRESENT_VALUE) {
-                            switch (pProperty_value->value.tag) {
-                            case BACNET_APPLICATION_TAG_NULL:
-                                TempRec.ucRecType = TL_TYPE_NULL;
-                                break;
-
-                            case BACNET_APPLICATION_TAG_BOOLEAN:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_BOOL;
-                                TempRec.Datum.ucBoolean = pProperty_value->value.type.Boolean;
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-
-                            case BACNET_APPLICATION_TAG_UNSIGNED_INT:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_UNSIGN;
-                                TempRec.Datum.ulUValue = pProperty_value->value.type.Unsigned_Int;
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-
-                            case BACNET_APPLICATION_TAG_SIGNED_INT:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_SIGN;
-                                TempRec.Datum.lSValue = pProperty_value->value.type.Signed_Int;
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-
-                            case BACNET_APPLICATION_TAG_REAL:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_REAL;
-                                TempRec.Datum.fReal = pProperty_value->value.type.Real;
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-                            case BACNET_APPLICATION_TAG_BIT_STRING:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_BITS;
-                                TempRec.Datum.Bits.ucLen = pProperty_value->value.type.Bit_String.bits_used;
-                                for (ucCount = 0; ucCount < TempRec.Datum.Bits.ucLen; ucCount++) {
-                                    TempRec.Datum.Bits.ucStore[ucCount] =
-                                        pProperty_value->value.type.Bit_String.value[ucCount];
-                                }
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-
-                            case BACNET_APPLICATION_TAG_ENUMERATED:
-                                /* Record the current time in the log entry and also in the info block
-                                * for the log so we can figure out when the next reading is due */
-                                TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
-                                pObject->tLastDataTime = TempRec.tTimeStamp;
-                                TempRec.ucStatus = 0;
-                                TempRec.ucRecType = TL_TYPE_ENUM;
-                                TempRec.Datum.ulEnum = pProperty_value->value.type.Enumerated;
-                                pObject->Logs[pObject->iIndex++] = TempRec;
-                                if (pObject->iIndex >= TL_MAX_ENTRIES) {
-                                    pObject->iIndex = 0;
-                                }
-                                pObject->ulTotalRecordCount++;
-                                if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
-                                    pObject->ulRecordCount++;
-                                }
-                                break;
-                            default:
-                                break;
-                            }
+                            write_property_to_rec(pProperty_value->value,iCount);
                         }
                         pProperty_value = pProperty_value->next;
                     }
