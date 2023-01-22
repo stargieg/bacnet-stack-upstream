@@ -135,6 +135,9 @@ static void Init_Service_Handlers(void)
     /* handle the data coming back from private requests */
     apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_PRIVATE_TRANSFER, handler_unconfirmed_private_transfer);
+    /* handle the data coming back from confirmed requests */
+    apdu_set_confirmed_ack_handler(
+        SERVICE_CONFIRMED_READ_PROPERTY, trend_log_read_property_ack_handler);
     /* handle the Simple ack coming back from SubscribeCOV */
     apdu_set_confirmed_simple_ack_handler(
         SERVICE_CONFIRMED_SUBSCRIBE_COV, trend_log_writepropertysimpleackhandler);
