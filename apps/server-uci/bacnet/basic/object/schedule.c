@@ -413,6 +413,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_TIME_VALUE time_value;
     BACNET_UNSIGNED_INTEGER unsigned_value = 0;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE obj_prop_ref_value;
+    uint32_t instance;
     int k;
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
@@ -420,6 +421,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *uci_list_name = NULL;
     int uci_list_name_len = 0;
     char uci_list_values[BACNET_WEEKLY_SCHEDULE_SIZE][64];
+    int TV_Count = 0;
     char *value_c = NULL;
     int value_c_len = 0;
 
@@ -522,70 +524,94 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (decode_is_opening_tag_number(
                     &wp_data->application_data[iOffset], 0)) {
                     iOffset++;
+                    TV_Count = 0;
                     /* Decode Valid Days */
                     for (k = 0 ; k < BACNET_WEEKLY_SCHEDULE_SIZE;k++) {
                         len = bacnet_time_value_decode(
                             &wp_data->application_data[iOffset],
                             wp_data->application_data_len,
                             &time_value);
-                        iOffset += len;
-                        /* store value object */
-                        pObject->Weekly_Schedule[idx].Time_Values[k] = time_value;
-                        switch (time_value.Value.tag) {
-                        case BACNET_APPLICATION_TAG_BOOLEAN:
-                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
-                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%i",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
-                            break;
-                        case BACNET_APPLICATION_TAG_REAL:
-                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%f",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
-                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%f",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
-                            break;
-                        case BACNET_APPLICATION_TAG_ENUMERATED:
-                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
-                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%i",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
-                            break;
-                        case BACNET_APPLICATION_TAG_NULL:
-                            value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,0",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_NULL);
-                            snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,0",
-                            time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                            BACNET_APPLICATION_TAG_NULL);
-                            break;
-                        default:
-                            break;
+                        if (len > 0) {
+                            iOffset += len;
+                            /* store value object */
+                            switch (time_value.Value.tag) {
+                            case BACNET_APPLICATION_TAG_BOOLEAN:
+                                pObject->Weekly_Schedule[idx].Time_Values[TV_Count] = time_value;
+                                value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
+                                snprintf(uci_list_values[TV_Count],value_c_len + 1, "%i,%i,%i,%i,%i",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_BOOLEAN, time_value.Value.type.Boolean);
+                                TV_Count++;
+                                break;
+                            case BACNET_APPLICATION_TAG_REAL:
+                                pObject->Weekly_Schedule[idx].Time_Values[TV_Count] = time_value;
+                                value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%f",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                                snprintf(uci_list_values[TV_Count],value_c_len + 1, "%i,%i,%i,%i,%f",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                                TV_Count++;
+                                break;
+                            case BACNET_APPLICATION_TAG_ENUMERATED:
+                                pObject->Weekly_Schedule[idx].Time_Values[TV_Count] = time_value;
+                                value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%i",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
+                                snprintf(uci_list_values[TV_Count],value_c_len + 1, "%i,%i,%i,%i,%i",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_ENUMERATED, time_value.Value.type.Enumerated);
+                                TV_Count++;
+                                break;
+                            case BACNET_APPLICATION_TAG_NULL:
+                                pObject->Weekly_Schedule[idx].Time_Values[TV_Count] = time_value;
+                                value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,0",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_NULL);
+                                snprintf(uci_list_values[TV_Count],value_c_len + 1, "%i,%i,%i,%i,0",
+                                time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
+                                BACNET_APPLICATION_TAG_NULL);
+                                TV_Count++;
+                                break;
+                            default:
+                                break;
+                            }
                         }
                         if (decode_is_closing_tag_number(
                                 &wp_data->application_data[iOffset], 0)) {
                             iOffset++;
-                            /* store value object */
-                            pObject->Weekly_Schedule[idx].TV_Count = k + 1;
-                            k = BACNET_WEEKLY_SCHEDULE_SIZE;
+                            /* store time value count */
+                            pObject->Weekly_Schedule[idx].TV_Count = TV_Count;
                             uci_list_name_len = snprintf(NULL, 0, "weekly_%d", idx);
                             uci_list_name = malloc(uci_list_name_len + 1);
                             snprintf(uci_list_name,uci_list_name_len + 1, "weekly_%d", idx);
-                            ucix_set_list(ctxw, sec, idx_c, uci_list_name,
-                            uci_list_values, pObject->Weekly_Schedule[idx].TV_Count);
-                            ucix_commit(ctxw, sec);
+                            if (TV_Count > 0) {
+                                ucix_set_list(ctxw, sec, idx_c, uci_list_name,
+                                uci_list_values, TV_Count);
+                                status = true;
+                            } else {
+                                ucix_del(ctxw, sec, idx_c, uci_list_name);
+                                status = true;
+                            }
+                            free(uci_list_name);
                         }
                     }
                 } else {
-                    idx = 7;
+                    /* store time value count */
+                    pObject->Weekly_Schedule[idx].TV_Count = 0;
+                    uci_list_name_len = snprintf(NULL, 0, "weekly_%d", idx);
+                    uci_list_name = malloc(uci_list_name_len + 1);
+                    snprintf(uci_list_name,uci_list_name_len + 1, "weekly_%d", idx);
+                    ucix_del(ctxw, sec, idx_c, uci_list_name);
+                    free(uci_list_name);
+                    status = true;
                 }
             }
-            status = true;
+            if (status) {
+                ucix_commit(ctxw, sec);
+            }
             break;
         case PROP_SCHEDULE_DEFAULT:
             iOffset = 0;
@@ -608,33 +634,39 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 value_c_len = snprintf(NULL, 0, "%i,%i", BACNET_APPLICATION_TAG_BOOLEAN, value.type.Boolean);
                 value_c = malloc(value_c_len + 1);
                 snprintf(value_c,value_c_len + 1,"%i,%i", BACNET_APPLICATION_TAG_BOOLEAN, value.type.Boolean);
+                status = true;
                 break;
             case BACNET_APPLICATION_TAG_REAL:
                 value_c_len = snprintf(NULL, 0, "%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
                 value_c = malloc(value_c_len + 1);
                 snprintf(value_c,value_c_len + 1,"%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
+                status = true;
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
                 value_c_len = snprintf(NULL, 0, "%i,%i", BACNET_APPLICATION_TAG_ENUMERATED, value.type.Enumerated);
                 value_c = malloc(value_c_len + 1);
                 snprintf(value_c,value_c_len + 1,"%i,%i", BACNET_APPLICATION_TAG_ENUMERATED, value.type.Enumerated);
+                status = true;
                 break;
             case BACNET_APPLICATION_TAG_NULL:
                 value_c_len = snprintf(NULL, 0, "%i,0", BACNET_APPLICATION_TAG_NULL);
                 value_c = malloc(value_c_len + 1);
                 snprintf(value_c,value_c_len + 1, "%i,0", BACNET_APPLICATION_TAG_NULL);
+                status = true;
                 break;
             default:
                 break;
             }
-            ucix_add_option(ctxw, sec, idx_c, "default", value_c);
-            ucix_commit(ctxw, sec);
-            free(value_c);
-            status = true;
+            if (status) {
+                ucix_add_option(ctxw, sec, idx_c, "default", value_c);
+                ucix_commit(ctxw, sec);
+                free(value_c);
+            }
             break;
         case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
             idx = 0;
             iOffset = 0;
+            TV_Count = 0;
             for (idx = 0 ; idx < BACNET_SCHEDULE_OBJ_PROP_REF_SIZE ; idx++) {
                 len = bacapp_decode_device_obj_property_ref(
                     &wp_data->application_data[iOffset],
@@ -643,17 +675,32 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     idx = BACNET_SCHEDULE_OBJ_PROP_REF_SIZE;
                 } else {
                     /* store value object */
-                    pObject->Object_Property_References[idx] = obj_prop_ref_value;
-                    pObject->obj_prop_ref_cnt = idx + 1;
+                    pObject->Object_Property_References[TV_Count] = obj_prop_ref_value;
                     iOffset += len;
-                    value_c_len = snprintf(NULL, 0, "%i,%i",
-                    obj_prop_ref_value.objectIdentifier.type, obj_prop_ref_value.objectIdentifier.instance);
-                    snprintf(uci_list_values[idx],value_c_len + 1, "%i,%i",
-                    obj_prop_ref_value.objectIdentifier.type, obj_prop_ref_value.objectIdentifier.instance);
+                    if (obj_prop_ref_value.deviceIdentifier.type == 65535) {
+                        instance = -1;
+                    } else if (obj_prop_ref_value.deviceIdentifier.type == OBJECT_DEVICE) {
+                        instance = obj_prop_ref_value.deviceIdentifier.instance;
+                    }
+                    value_c_len = snprintf(NULL, 0, "%i,%i,%i",
+                    instance,
+                    obj_prop_ref_value.objectIdentifier.type,
+                    obj_prop_ref_value.objectIdentifier.instance);
+                    snprintf(uci_list_values[TV_Count],value_c_len + 1, "%i,%i,%i",
+                    instance,
+                    obj_prop_ref_value.objectIdentifier.type,
+                    obj_prop_ref_value.objectIdentifier.instance);
+                    status = true;
+                    TV_Count++;
                 }
             }
-            ucix_set_list(ctxw, sec, idx_c, "references",
-            uci_list_values, pObject->obj_prop_ref_cnt);
+            pObject->obj_prop_ref_cnt = TV_Count;
+            if (TV_Count > 0) {
+                ucix_set_list(ctxw, sec, idx_c, "references",
+                uci_list_values, TV_Count);
+            } else {
+                ucix_del(ctxw, sec, idx_c, "references");
+            }
             ucix_commit(ctxw, sec);
             status = true;
             break;
@@ -701,7 +748,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     }
     if (ctxw)
         ucix_cleanup(ctxw);
-
+    free(idx_c);
     return status;
 }
 
@@ -773,6 +820,12 @@ static void Schedule_Recalculate_PV(
     unsigned m = 0;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember = NULL;
     int diff = 0;
+    bool found = false;
+    /* needed to filter incoming messages */
+    static uint8_t Request_Invoke_ID = 0;
+    static BACNET_ADDRESS Target_Address;
+    unsigned max_apdu = 0;
+
     /* for future development, here should be the loop for Exception Schedule */
     j = -1;
     for (i = 0; i < desc->Weekly_Schedule[date->date.wday - 1].TV_Count; i++) {
@@ -796,8 +849,6 @@ static void Schedule_Recalculate_PV(
             switch (desc->Schedule_Default.tag) {
             case BACNET_APPLICATION_TAG_BOOLEAN:
                 if (desc->Present_Value.type.Boolean != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Boolean) {
-                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
                     change = true;
                     desc->Changed = true;
                 }
@@ -806,8 +857,6 @@ static void Schedule_Recalculate_PV(
             case BACNET_APPLICATION_TAG_REAL:
                 if (desc->Present_Value.type.Real < desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real ||
                     desc->Present_Value.type.Real > desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real) {
-                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
                     change = true;
                     desc->Changed = true;
                 }
@@ -815,8 +864,6 @@ static void Schedule_Recalculate_PV(
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
                 if (desc->Present_Value.type.Enumerated != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Enumerated) {
-                    bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                        &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
                     change = true;
                     desc->Changed = true;
                 }
@@ -824,6 +871,10 @@ static void Schedule_Recalculate_PV(
                 break;
             default:
                 break;
+            }
+            if (change) {
+                bacnet_primitive_to_application_data_value(&desc->Present_Value,
+                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
             }
         } else {
             switch (desc->Schedule_Default.tag) {
@@ -892,17 +943,41 @@ static void Schedule_Recalculate_PV(
     if (change) {
         for (m = 0 ; m < desc->obj_prop_ref_cnt; m++) {
             pMember = &desc->Object_Property_References[m];
-            wpdata.object_type = pMember->objectIdentifier.type;
-            wpdata.object_instance = pMember->objectIdentifier.instance;
-            wpdata.object_property = pMember->propertyIdentifier;
-            wpdata.array_index = pMember->arrayIndex;
-            wpdata.priority = desc->Priority_For_Writing;
-            wpdata.application_data_len = sizeof(wpdata.application_data);
-            apdu_len = Schedule_Data_Encode(&wpdata.application_data[0],
-                &wpdata.application_data_len, &desc->Present_Value);
-            if (apdu_len != BACNET_STATUS_ERROR) {
-                wpdata.application_data_len = apdu_len;
-                Device_Write_Property(&wpdata);
+            if (pMember->deviceIdentifier.type == 65535) {
+                wpdata.object_type = pMember->objectIdentifier.type;
+                wpdata.object_instance = pMember->objectIdentifier.instance;
+                wpdata.object_property = pMember->propertyIdentifier;
+                wpdata.array_index = pMember->arrayIndex;
+                wpdata.priority = desc->Priority_For_Writing;
+                wpdata.application_data_len = sizeof(wpdata.application_data);
+                apdu_len = Schedule_Data_Encode(&wpdata.application_data[0],
+                    &wpdata.application_data_len, &desc->Present_Value);
+                if (apdu_len != BACNET_STATUS_ERROR) {
+                    wpdata.application_data_len = apdu_len;
+                    Device_Write_Property(&wpdata);
+                }
+            } else if (pMember->deviceIdentifier.type == OBJECT_DEVICE) {
+                /* try to bind with the device */
+                found = address_bind_request(
+                    pMember->deviceIdentifier.instance, &max_apdu, &Target_Address);
+                if (!found) {
+                    Send_WhoIs(
+                        pMember->deviceIdentifier.instance, pMember->deviceIdentifier.instance);
+                    found = address_bind_request(
+                        pMember->deviceIdentifier.instance, &max_apdu, &Target_Address);
+                }
+                if (found) {
+                    if (Request_Invoke_ID == 0) {
+                        Request_Invoke_ID = Send_Write_Property_Request(
+                            pMember->deviceIdentifier.instance,
+                            pMember->objectIdentifier.type,
+                            pMember->objectIdentifier.instance,
+                            pMember->propertyIdentifier,
+                            &desc->Present_Value,
+                            desc->Priority_For_Writing,
+                            pMember->arrayIndex);
+                    }
+                }
             }
         }
     }
@@ -939,8 +1014,10 @@ static void uci_list(const char *sec_idx,
 {
 	int disable,idx,j,k;
     char *uci_list_values[254];
+    uint32_t instance;
     char *uci_list_name = NULL;
     int uci_list_name_len = 0;
+    int obj_prop_ref_cnt = 0;
 
     char *uci_ptr;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
@@ -1007,6 +1084,7 @@ static void uci_list(const char *sec_idx,
         pObject->Weekly_Schedule[j].TV_Count = ucix_get_list(uci_list_values, ictx->ctx, ictx->section, sec_idx,
             uci_list_name);
         for (k = 0; k < pObject->Weekly_Schedule[j].TV_Count; k++) {
+            if (*uci_list_values[k] == '\0') break;
             uci_ptr = strtok(uci_list_values[k], ",");
             pObject->Weekly_Schedule[j].Time_Values[k].Time.hour = atoi(uci_ptr);
             uci_ptr = strtok(NULL, ",");
@@ -1035,19 +1113,29 @@ static void uci_list(const char *sec_idx,
         }
     }
 
-    pObject->obj_prop_ref_cnt = ucix_get_list(uci_list_values, ictx->ctx, ictx->section, sec_idx,
+    j = ucix_get_list(uci_list_values, ictx->ctx, ictx->section, sec_idx,
         "references");
-    for (k = 0; k < pObject->obj_prop_ref_cnt; k++) {
-        pObject->Object_Property_References[k].deviceIdentifier.instance =
-            Device_Object_Instance_Number();
-        pObject->Object_Property_References[k].deviceIdentifier.type = OBJECT_DEVICE;
-        uci_ptr = strtok(uci_list_values[k], ",");
-        pObject->Object_Property_References[k].objectIdentifier.type = atoi(uci_ptr);
+    for (k = 0; k < j; k++) {
+        if (*uci_list_values[obj_prop_ref_cnt] == '\0') break;
+        if (k >= BACNET_SCHEDULE_OBJ_PROP_REF_SIZE ) break;
+        uci_ptr = strtok(uci_list_values[obj_prop_ref_cnt], ",");
+        instance = atoi(uci_ptr);
+        if ((instance >= BACNET_MAX_INSTANCE) || (instance < 0)) {
+            pObject->Object_Property_References[obj_prop_ref_cnt].deviceIdentifier.type = 65535;
+        } else {
+            pObject->Object_Property_References[obj_prop_ref_cnt].deviceIdentifier.instance =
+                instance;
+            pObject->Object_Property_References[obj_prop_ref_cnt].deviceIdentifier.type = OBJECT_DEVICE;
+        }
         uci_ptr = strtok(NULL, ",");
-        pObject->Object_Property_References[k].objectIdentifier.instance = atoi(uci_ptr);
-        pObject->Object_Property_References[k].arrayIndex = BACNET_ARRAY_ALL;
-        pObject->Object_Property_References[k].propertyIdentifier = PROP_PRESENT_VALUE;
+        pObject->Object_Property_References[obj_prop_ref_cnt].objectIdentifier.type = atoi(uci_ptr);
+        uci_ptr = strtok(NULL, ",");
+        pObject->Object_Property_References[obj_prop_ref_cnt].objectIdentifier.instance = atoi(uci_ptr);
+        pObject->Object_Property_References[obj_prop_ref_cnt].arrayIndex = BACNET_ARRAY_ALL;
+        pObject->Object_Property_References[obj_prop_ref_cnt].propertyIdentifier = PROP_PRESENT_VALUE;
+        obj_prop_ref_cnt++;
     }
+    pObject->obj_prop_ref_cnt = obj_prop_ref_cnt;
     pObject->Priority_For_Writing = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio", ictx->Object.Priority_For_Writing); /* lowest priority */
     pObject->Out_Of_Service = false;
     pObject->Changed = false;
