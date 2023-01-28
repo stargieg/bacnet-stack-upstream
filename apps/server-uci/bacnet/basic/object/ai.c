@@ -253,7 +253,7 @@ unsigned Analog_Input_Count(void)
 /**
  * @brief Determines the object instance-number for a given 0..N index
  * of Analog Value objects where N is Analog_Input_Count().
- * @param  index - 0..MAX_ANALOG_VALUES value
+ * @param  index - 0..MAX_ANALOG_INPUTS value
  * @return  object instance-number for the given index
  */
 uint32_t Analog_Input_Index_To_Instance(unsigned index)
@@ -265,7 +265,7 @@ uint32_t Analog_Input_Index_To_Instance(unsigned index)
  * @brief For a given object instance-number, determines a 0..N index
  * of Analog Value objects where N is Analog_Input_Count().
  * @param  object_instance - object-instance number of the object
- * @return  index for the given instance-number, or MAX_ANALOG_VALUES
+ * @return  index for the given instance-number, or MAX_ANALOG_INPUTS
  * if not valid.
  */
 unsigned Analog_Input_Instance_To_Index(uint32_t object_instance)
@@ -2217,7 +2217,7 @@ void Analog_Input_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
         fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(OBJECT_ANALOG_VALUE), object_instance);
+            bactext_object_type_name(OBJECT_ANALOG_INPUT), object_instance);
 #endif /* PRINT_ENABLED */
 
         characterstring_init_ansi(&msgText, "AckNotification");
@@ -2356,7 +2356,7 @@ void Analog_Input_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
             fprintf(stderr, "Event_State for (%s,%d) goes from %s to %s.\n",
-                bactext_object_type_name(OBJECT_ANALOG_VALUE), object_instance,
+                bactext_object_type_name(OBJECT_ANALOG_INPUT), object_instance,
                 bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
 #endif /* PRINT_ENABLED */
@@ -2372,7 +2372,7 @@ void Analog_Input_Intrinsic_Reporting(
 
     if (SendNotify) {
         /* Event Object Identifier */
-        event_data.eventObjectIdentifier.type = OBJECT_ANALOG_VALUE;
+        event_data.eventObjectIdentifier.type = OBJECT_ANALOG_INPUT;
         event_data.eventObjectIdentifier.instance = object_instance;
 
         /* Time Stamp */
@@ -2514,7 +2514,7 @@ int Analog_Input_Event_Information(
 
     if ((IsActiveEvent) || (IsNotAckedTransitions)) {
         /* Object Identifier */
-        getevent_data->objectIdentifier.type = OBJECT_ANALOG_VALUE;
+        getevent_data->objectIdentifier.type = OBJECT_ANALOG_INPUT;
         getevent_data->objectIdentifier.instance =
             Analog_Input_Index_To_Instance(index);
         /* Event State */
@@ -2670,7 +2670,7 @@ int Analog_Input_Alarm_Summary(
         if ((pObject->Event_State != EVENT_STATE_NORMAL) &&
             (pObject->Notify_Type == NOTIFY_ALARM)) {
             /* Object Identifier */
-            getalarm_data->objectIdentifier.type = OBJECT_ANALOG_VALUE;
+            getalarm_data->objectIdentifier.type = OBJECT_ANALOG_INPUT;
             getalarm_data->objectIdentifier.instance =
                 Analog_Input_Index_To_Instance(index);
             /* Alarm State */
