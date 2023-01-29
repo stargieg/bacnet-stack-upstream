@@ -2065,10 +2065,10 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_UNSIGNED_INT);
             if (status) {
-                if (Analog_Input_Time_Delay_Set(
+                if (Analog_Input_Notification_Class_Set(
                     wp_data->object_instance, value.type.Unsigned_Int)) {
                     ucix_add_option_int(ctxw, sec, idx_c, "nc",
-                        Analog_Input_Time_Delay(wp_data->object_instance));
+                        Analog_Input_Notification_Class(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
                 }
             }
