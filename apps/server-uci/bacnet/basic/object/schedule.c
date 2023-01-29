@@ -1034,17 +1034,15 @@ static void uci_list(const char *sec_idx,
     BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            pObject->Object_Name = strndup(option, option_str.length);
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Object_Name = strndup(option,option_str.length);
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            pObject->Description = strndup(option, option_str.length);
-
-    if (pObject->Description == NULL)
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Description = strndup(option,option_str.length);
+    else
         pObject->Description = strdup(ictx->Object.Description);
+
     pObject->Schedule_Default.context_specific = false;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "default");
     if (option){
@@ -1162,7 +1160,7 @@ void Schedule_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Description = strndup(option, option_str.length);
     else
         tObject.Description = "Schedule";

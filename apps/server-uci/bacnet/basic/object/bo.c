@@ -2493,7 +2493,7 @@ static void uci_list(const char *sec_idx,
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
     if (option && characterstring_init_ansi(&option_str, option))
-            pObject->Description = strndup(option,option_str.length);
+        pObject->Description = strndup(option,option_str.length);
     else
         pObject->Description = strdup(ictx->Object.Description);
 
@@ -2512,16 +2512,16 @@ static void uci_list(const char *sec_idx,
     pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "active_text");
     if (option && characterstring_init_ansi(&option_str, option))
-            pObject->Active_Text = strndup(option, option_str.length);
+        pObject->Active_Text = strndup(option, option_str.length);
     else
         pObject->Active_Text = strdup(ictx->Object.Active_Text);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "inactive_text");
     if (option && characterstring_init_ansi(&option_str, option))
-            pObject->Inactive_Text = strndup(option, option_str.length);
+        pObject->Inactive_Text = strndup(option, option_str.length);
     else
         pObject->Inactive_Text = strdup(ictx->Object.Inactive_Text);
 #if defined(INTRINSIC_REPORTING)
-    value_b = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "fb_value");
+    value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "fb_value", 0);
     pObject->Feedback_Value = value_b;
 #endif
 #if defined(INTRINSIC_REPORTING)

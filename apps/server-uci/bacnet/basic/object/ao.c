@@ -2839,16 +2839,13 @@ static void uci_list(const char *sec_idx,
     float value_f = 0.0;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            pObject->Object_Name = strndup(option,option_str.length);
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Object_Name = strndup(option,option_str.length);
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            pObject->Description = strndup(option,option_str.length);
-
-    if (pObject->Description == NULL)
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Description = strndup(option,option_str.length);
+    else
         pObject->Description = strdup(ictx->Object.Description);
 
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
@@ -2971,28 +2968,28 @@ void Analog_Output_Init(void)
     Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
 
     option = ucix_get_option(ctx, sec, "default", "description");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Description = strndup(option,option_str.length);
     else
         tObject.Description = "Analog Ouput";
     option = ucix_get_option(ctx, sec, "default", "cov_increment");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.COV_Increment = strndup(option,option_str.length);
     else
         tObject.COV_Increment = "0.1";
     option = ucix_get_option(ctx, sec, "default", "resolution");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Resolution = strndup(option,option_str.length);
     else
         tObject.Resolution = "0.1";
     tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
     option = ucix_get_option(ctx, sec, "default", "min_value");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Min_Pres_Value = strndup(option,option_str.length);
     else
         tObject.Min_Pres_Value = "0.0";
     option = ucix_get_option(ctx, sec, "default", "max_value");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Max_Pres_Value = strndup(option,option_str.length);
     else
         tObject.Max_Pres_Value = "100.0";
@@ -3002,17 +2999,17 @@ void Analog_Output_Init(void)
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0); // or 2s
     tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0); // or 3
     option = ucix_get_option(ctx, sec, "default", "high_limit");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.High_Limit = strndup(option,option_str.length);
     else
         tObject.High_Limit = "100.0";
     option = ucix_get_option(ctx, sec, "default", "low_limit");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Low_Limit = strndup(option,option_str.length);
     else
         tObject.Low_Limit = "0.0";
     option = ucix_get_option(ctx, sec, "default", "dead_limit");
-    if (characterstring_init_ansi(&option_str, option))
+    if (option && characterstring_init_ansi(&option_str, option))
         tObject.Deadband = strndup(option,option_str.length);
     else
         tObject.Deadband = "0.0";

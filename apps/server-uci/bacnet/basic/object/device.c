@@ -1759,20 +1759,15 @@ void Device_Init(object_functions_t *object_table)
     if (!ctx)
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
     option = ucix_get_option(ctx, sec, sec_idx, "Name");
-    if (option)
-        characterstring_init_ansi(&My_Object_Name, option);
-    if (!My_Object_Name.length) {
+    if (!(option && characterstring_init_ansi(&My_Object_Name, option)))
         characterstring_init_ansi(&My_Object_Name, "SimpleServer");
-    }
     Object_Instance_Number = ucix_get_option_int(ctx, sec, sec_idx, "Id", 4711);
     option = ucix_get_option(ctx, sec, sec_idx, "Location");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            characterstring_ansi_copy(Location,sizeof(Location),&option_str);
+    if (option && characterstring_init_ansi(&option_str, option))
+        characterstring_ansi_copy(Location,sizeof(Location),&option_str);
     option = ucix_get_option(ctx, sec, sec_idx, "Description");
-    if (option)
-        if (characterstring_init_ansi(&option_str, option))
-            characterstring_ansi_copy(Description,sizeof(Description),&option_str);
+    if (option && characterstring_init_ansi(&option_str, option))
+        characterstring_ansi_copy(Description,sizeof(Description),&option_str);
     ucix_cleanup(ctx);
     datetime_init();
     if (object_table) {
