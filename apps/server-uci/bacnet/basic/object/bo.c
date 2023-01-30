@@ -86,7 +86,6 @@ struct object_data {
     uint32_t Notification_Class;
     bool Alarm_Value;
     bool Feedback_Value;
-    unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
@@ -2530,7 +2529,6 @@ static void uci_list(const char *sec_idx,
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable); // or 7?
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay); // or 2s
-    pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable); // or 3
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
     pObject->Alarm_Value = value_b;
 
