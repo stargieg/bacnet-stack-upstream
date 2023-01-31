@@ -1400,7 +1400,7 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #if defined(INTRINSIC_REPORTING)
         case PROP_FEEDBACK_VALUE:
             present_value = Binary_Output_Feedback_Value(rpdata->object_instance);
-            apdu_len = encode_application_real(&apdu[0], present_value);
+            apdu_len = encode_application_enumerated(&apdu[0], present_value);
             break;
 #endif
         case PROP_STATUS_FLAGS:
