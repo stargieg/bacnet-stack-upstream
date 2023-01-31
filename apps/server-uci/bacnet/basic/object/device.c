@@ -52,6 +52,7 @@
 #include "bacnet/basic/object/bo.h"
 #include "bacnet/basic/object/bv.h"
 #include "bacnet/basic/object/bi.h"
+#include "bacnet/basic/object/mso.h"
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
@@ -130,6 +131,13 @@ static object_functions_t My_Object_Table[] = {
         NULL /* ReadRangeInfo */, NULL /* Iterator */,
         Binary_Input_Encode_Value_List, Binary_Input_Change_Of_Value,
         Binary_Input_Change_Of_Value_Clear, Binary_Input_Intrinsic_Reporting },
+    { OBJECT_MULTI_STATE_OUTPUT, Multistate_Output_Init, Multistate_Output_Count,
+        Multistate_Output_Index_To_Instance, Multistate_Output_Valid_Instance,
+        Multistate_Output_Object_Name, Multistate_Output_Read_Property,
+        Multistate_Output_Write_Property, Multistate_Output_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */,
+        Multistate_Output_Encode_Value_List, Multistate_Output_Change_Of_Value,
+        Multistate_Output_Change_Of_Value_Clear, Multistate_Output_Intrinsic_Reporting },
 #if defined(INTRINSIC_REPORTING)
     { OBJECT_NOTIFICATION_CLASS, Notification_Class_Init,
         Notification_Class_Count, Notification_Class_Index_To_Instance,

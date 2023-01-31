@@ -169,6 +169,7 @@ SRC = main.c \
 	bacnet/basic/object/bo.c \
 	bacnet/basic/object/bv.c \
 	bacnet/basic/object/bi.c \
+	bacnet/basic/object/mso.c \
 	bacnet/basic/object/trendlog.c \
 	bacnet/basic/object/nc.c \
 	bacnet/basic/object/schedule.c
