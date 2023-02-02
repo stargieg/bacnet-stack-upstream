@@ -2,7 +2,7 @@
  * @file
  * @author Steve Karg
  * @date 2005
- * @brief Multi-State Output objects, customize for your use
+ * @brief Multi-State Value objects, customize for your use
  *
  * @section DESCRIPTION
  *

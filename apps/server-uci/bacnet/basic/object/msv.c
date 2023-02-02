@@ -2,7 +2,7 @@
  * @file
  * @author Steve Karg
  * @date 2005
- * @brief Multi-State Output objects, customize for your use
+ * @brief Multi-State Value objects, customize for your use
  *
  * @section DESCRIPTION
  *
@@ -118,7 +118,7 @@ struct object_data_t {
 /* Key List for storing the object data sorted by instance number  */
 static OS_Keylist Object_List;
 /* common object type */
-static const BACNET_OBJECT_TYPE Object_Type = OBJECT_MULTI_STATE_OUTPUT;
+static const BACNET_OBJECT_TYPE Object_Type = OBJECT_MULTI_STATE_VALUE;
 /* callback for present value writes */
 static multistate_value_write_present_value_callback
     Multistate_Value_Write_Present_Value_Callback;
@@ -647,7 +647,7 @@ uint32_t Multistate_Value_Relinquish_Default(uint32_t object_instance)
 /**
  * @brief For a given object instance-number, sets the relinquish-default value
  * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog output relinquish-default value
+ * @param  value - floating point analog value relinquish-default value
  * @return  true if values are within range and relinquish-default value is set.
  */
 bool Multistate_Value_Relinquish_Default_Set(uint32_t object_instance,
@@ -775,7 +775,7 @@ static bool Multistate_Value_Present_Value_Write(
                     /* The physical point that the object represents
                         is not in service. This means that changes to the
                         Present_Value property are decoupled from the
-                        physical output when the value of Out_Of_Service
+                        physical value when the value of Out_Of_Service
                         is true. */
                 } else if (Multistate_Value_Write_Present_Value_Callback) {
                     new_value = Object_Present_Value(pObject);
@@ -829,7 +829,7 @@ static bool Multistate_Value_Present_Value_Relinquish_Write(
                     /* The physical point that the object represents
                         is not in service. This means that changes to the
                         Present_Value property are decoupled from the
-                        physical output when the value of Out_Of_Service
+                        physical value when the value of Out_Of_Service
                         is true. */
                 } else if (Multistate_Value_Write_Present_Value_Callback) {
                     new_value = Object_Present_Value(pObject);
@@ -875,7 +875,7 @@ bool Multistate_Value_Object_Name(
             status = characterstring_init_ansi(object_name,
                 pObject->Object_Name);
         } else {
-            snprintf(name_text, sizeof(name_text), "MULTI-STATE OUTPUT %u",
+            snprintf(name_text, sizeof(name_text), "MULTI-STATE VALUE %u",
                 object_instance);
             status = characterstring_init_ansi(object_name, name_text);
         }
@@ -1932,7 +1932,7 @@ void Multistate_Value_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
         fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(OBJECT_BINARY_OUTPUT), object_instance);
+            bactext_object_type_name(OBJECT_BINARY_VALUE), object_instance);
 #endif /* PRINT_ENABLED */
 
         characterstring_init_ansi(&msgText, "AckNotification");
@@ -2028,7 +2028,7 @@ void Multistate_Value_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
             fprintf(stderr, "Event_State for (%s,%d) goes from %s to %s.\n",
-                bactext_object_type_name(OBJECT_BINARY_OUTPUT), object_instance,
+                bactext_object_type_name(OBJECT_BINARY_VALUE), object_instance,
                 bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
 #endif /* PRINT_ENABLED */
@@ -2044,7 +2044,7 @@ void Multistate_Value_Intrinsic_Reporting(
 
     if (SendNotify) {
         /* Event Object Identifier */
-        event_data.eventObjectIdentifier.type = OBJECT_BINARY_OUTPUT;
+        event_data.eventObjectIdentifier.type = OBJECT_BINARY_VALUE;
         event_data.eventObjectIdentifier.instance = object_instance;
 
         /* Time Stamp */
@@ -2175,7 +2175,7 @@ int Multistate_Value_Event_Information(
 
     if ((IsActiveEvent) || (IsNotAckedTransitions)) {
         /* Object Identifier */
-        getevent_data->objectIdentifier.type = OBJECT_MULTI_STATE_OUTPUT;
+        getevent_data->objectIdentifier.type = OBJECT_MULTI_STATE_VALUE;
         getevent_data->objectIdentifier.instance =
             Multistate_Value_Index_To_Instance(index);
         /* Event State */
@@ -2329,7 +2329,7 @@ int Multistate_Value_Alarm_Summary(
         if ((pObject->Event_State != EVENT_STATE_NORMAL) &&
             (pObject->Notify_Type == NOTIFY_ALARM)) {
             /* Object Identifier */
-            getalarm_data->objectIdentifier.type = OBJECT_BINARY_OUTPUT;
+            getalarm_data->objectIdentifier.type = OBJECT_BINARY_VALUE;
             getalarm_data->objectIdentifier.instance =
                 Multistate_Value_Index_To_Instance(index);
             /* Alarm State */
