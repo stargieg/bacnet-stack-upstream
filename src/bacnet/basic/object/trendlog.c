@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h> /* for memmove */
+#include <stdlib.h> /* calloc */
 #include "bacnet/bacdef.h"
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacenum.h"
@@ -160,9 +161,8 @@ void Trend_Log_Init(void)
     static bool initialized = false;
     int iLog;
     int iEntry;
-    BACNET_DATE_TIME bdatetime = { 0 };
-    bacnet_time_t tClock;
-    uint8_t month;
+    struct tm TempTime = { 0 };
+    time_t tClock;
 
     if (!initialized) {
         initialized = true;
@@ -932,7 +932,30 @@ bool TL_Is_Enabled(int iLog)
 
 bacnet_time_t TL_BAC_Time_To_Local(BACNET_DATE_TIME *bdatetime)
 {
-    return datetime_seconds_since_epoch(bdatetime);
+    struct tm LocalTime = { 0 };
+    int iTemp;
+
+    LocalTime.tm_year =
+        SourceTime->date.year - 1900; /* We store BACnet year in full format */
+    /* Some clients send a date of all 0s to indicate start of epoch
+     * even though this is not a valid date. Pick this up here and
+     * correct the day and month for the local time functions.
+     */
+    iTemp =
+        SourceTime->date.year + SourceTime->date.month + SourceTime->date.day;
+    if (iTemp == 1900) {
+        LocalTime.tm_mon = 0;
+        LocalTime.tm_mday = 1;
+    } else {
+        LocalTime.tm_mon = SourceTime->date.month - 1;
+        LocalTime.tm_mday = SourceTime->date.day;
+    }
+
+    LocalTime.tm_hour = SourceTime->time.hour;
+    LocalTime.tm_min = SourceTime->time.min;
+    LocalTime.tm_sec = SourceTime->time.sec;
+
+    return (mktime(&LocalTime));
 }
 
 /*****************************************************************************
@@ -1514,6 +1537,109 @@ int TL_encode_entry(uint8_t *apdu, int iLog, int iEntry)
     }
 
     return (iLen);
+}
+
+int rr_decode_trendlog_entries(
+    uint8_t *apdu, int apdu_len, BACNET_TRENDLOG_RECORD *rec)
+{
+    int len;
+    uint8_t tag_number = 0;
+    uint32_t len_value_type = 0;
+    while (apdu_len > 0) {
+        if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
+            (decode_is_opening_tag_number(apdu, 0))) {
+            if (!rec->next) {
+                rec->next = calloc(sizeof(BACNET_TRENDLOG_RECORD), 1);
+                rec = rec->next;
+            } else {
+                rec = rec->next;
+            }
+
+            len = bacapp_decode_context_datetime(apdu, 0, &rec->timestamp);
+            if (len <= 0) {
+                return -1;
+            }
+            apdu += len;
+            apdu_len -= len;
+        } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
+            decode_is_opening_tag_number(apdu, 1)) {
+            // skip the opening tag
+            apdu++;
+            apdu_len--;
+
+            // decode the next context tag which has th value type
+            len =
+                decode_tag_number_and_value(apdu, &tag_number, &len_value_type);
+            if (len <= 0) {
+                return -1;
+            }
+            switch (tag_number) {
+                case TL_TYPE_BOOL:
+                    rec->value.tag = BACNET_APPLICATION_TAG_BOOLEAN;
+                    len = decode_context_boolean2(
+                        apdu, tag_number, &rec->value.type.Boolean);
+                    break;
+                case TL_TYPE_REAL:
+                    rec->value.tag = BACNET_APPLICATION_TAG_REAL;
+                    len = decode_context_real(
+                        apdu, tag_number, &rec->value.type.Real);
+                    break;
+                case TL_TYPE_ENUM:
+                    rec->value.tag = BACNET_APPLICATION_TAG_ENUMERATED;
+                    len = decode_context_enumerated(
+                        apdu, tag_number, &rec->value.type.Enumerated);
+                    break;
+                case TL_TYPE_UNSIGN:
+                    rec->value.tag = BACNET_APPLICATION_TAG_UNSIGNED_INT;
+                    len = decode_context_unsigned(
+                        apdu, tag_number, &rec->value.type.Unsigned_Int);
+                    break;
+                case TL_TYPE_SIGN:
+                    rec->value.tag = BACNET_APPLICATION_TAG_SIGNED_INT;
+                    len = decode_context_signed(
+                        apdu, tag_number, &rec->value.type.Signed_Int);
+                    break;
+                case TL_TYPE_BITS:
+                    rec->value.tag = BACNET_APPLICATION_TAG_BIT_STRING;
+                    len = decode_context_bitstring(
+                        apdu, tag_number, &rec->value.type.Bit_String);
+                    break;
+                case TL_TYPE_NULL:
+                    rec->value.tag = BACNET_APPLICATION_TAG_NULL;
+                    break;
+                default:
+                    // skip over the value if we don't suppord decoding it
+                    len += len_value_type;
+            }
+            if (len <= 0) {
+                break;
+            }
+            apdu += len;
+            apdu_len -= len;
+
+            // skip over the closing tag [1]
+            if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
+                decode_is_closing_tag_number(apdu, 1)) {
+                apdu++;
+                apdu_len--;
+            } else {
+                return -1;
+            }
+        } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
+            decode_is_opening_tag_number(apdu, 2)) {
+            // context tag 2 is a status bitstring.
+            // we don't do anything with this other than decode it.
+            len = decode_context_bitstring(apdu, 2, &rec->status);
+            if (len <= 0) {
+                return -1;
+            }
+            apdu += len;
+            apdu_len -= len;
+        } else {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 static int local_read_property(uint8_t *value,
