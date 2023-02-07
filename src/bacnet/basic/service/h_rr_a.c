@@ -44,11 +44,12 @@
 static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
 {
 #ifdef BACAPP_PRINT_ENABLED
-    BACNET_OBJECT_PROPERTY_VALUE object_value = { 0 };
+    BACNET_OBJECT_PROPERTY_VALUE object_value;
 #endif
-    BACNET_APPLICATION_DATA_VALUE value = { 0 };
-    BACNET_TRENDLOG_RECORD entry = { 0 };
-    int len = 0;
+    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_TRENDLOG_RECORD entry;
+    BACNET_TRENDLOG_RECORD *p;
+    int status = 0;
 
     if (data) {
         object_value.object_type = data->object_type;
@@ -59,13 +60,14 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
         /* FIXME: what if application_data_len is bigger than 255? */
         /* value? need to loop until all of the len is gone... */
 
-        // make sure it works if there is only one entry;
-        entry.next = NULL;
-        rr_decode_trendlog_entries(
+        status = rr_decode_trendlog_entries(
             data->application_data, data->application_data_len, &entry);
 #if PRINT_ENABLED
+        if (status < 1) {
+            return;
+        }
         printf("{\n");
-        for (BACNET_TRENDLOG_RECORD *p = &entry; p != NULL; p = p->next) {
+        for (p = &entry; p != NULL; p = p->next) {
             printf(" {");
             object_value.value = &value;
             value.tag = BACNET_APPLICATION_TAG_DATE;

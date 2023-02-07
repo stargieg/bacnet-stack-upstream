@@ -161,8 +161,9 @@ void Trend_Log_Init(void)
     static bool initialized = false;
     int iLog;
     int iEntry;
-    struct tm TempTime = { 0 };
-    time_t tClock;
+    BACNET_DATE_TIME bdatetime = { { 0 }, { 0 } };
+    bacnet_time_t tClock;
+    uint8_t month;
 
     if (!initialized) {
         initialized = true;
@@ -932,30 +933,7 @@ bool TL_Is_Enabled(int iLog)
 
 bacnet_time_t TL_BAC_Time_To_Local(BACNET_DATE_TIME *bdatetime)
 {
-    struct tm LocalTime = { 0 };
-    int iTemp;
-
-    LocalTime.tm_year =
-        SourceTime->date.year - 1900; /* We store BACnet year in full format */
-    /* Some clients send a date of all 0s to indicate start of epoch
-     * even though this is not a valid date. Pick this up here and
-     * correct the day and month for the local time functions.
-     */
-    iTemp =
-        SourceTime->date.year + SourceTime->date.month + SourceTime->date.day;
-    if (iTemp == 1900) {
-        LocalTime.tm_mon = 0;
-        LocalTime.tm_mday = 1;
-    } else {
-        LocalTime.tm_mon = SourceTime->date.month - 1;
-        LocalTime.tm_mday = SourceTime->date.day;
-    }
-
-    LocalTime.tm_hour = SourceTime->time.hour;
-    LocalTime.tm_min = SourceTime->time.min;
-    LocalTime.tm_sec = SourceTime->time.sec;
-
-    return (mktime(&LocalTime));
+    return datetime_seconds_since_epoch(bdatetime);
 }
 
 /*****************************************************************************
@@ -1543,17 +1521,17 @@ int rr_decode_trendlog_entries(
     uint8_t *apdu, int apdu_len, BACNET_TRENDLOG_RECORD *rec)
 {
     int len;
+    int status = -1;
+    bool tag0 = false;
+    bool tag1 = false;
+    bool tag2 = false;
     uint8_t tag_number = 0;
     uint32_t len_value_type = 0;
     while (apdu_len > 0) {
         if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            (decode_is_opening_tag_number(apdu, 0))) {
-            if (!rec->next) {
-                rec->next = calloc(sizeof(BACNET_TRENDLOG_RECORD), 1);
-                rec = rec->next;
-            } else {
-                rec = rec->next;
-            }
+            decode_is_opening_tag_number(apdu, 0) &&
+            !tag0) {
+            tag0 = true;
 
             len = bacapp_decode_context_datetime(apdu, 0, &rec->timestamp);
             if (len <= 0) {
@@ -1561,8 +1539,11 @@ int rr_decode_trendlog_entries(
             }
             apdu += len;
             apdu_len -= len;
+            status = 1;
         } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            decode_is_opening_tag_number(apdu, 1)) {
+            decode_is_opening_tag_number(apdu, 1) &&
+            !tag1) {
+            tag1 = true;
             // skip the opening tag
             apdu++;
             apdu_len--;
@@ -1573,6 +1554,7 @@ int rr_decode_trendlog_entries(
             if (len <= 0) {
                 return -1;
             }
+            status = 1;
             switch (tag_number) {
                 case TL_TYPE_BOOL:
                     rec->value.tag = BACNET_APPLICATION_TAG_BOOLEAN;
@@ -1626,20 +1608,30 @@ int rr_decode_trendlog_entries(
                 return -1;
             }
         } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            decode_is_opening_tag_number(apdu, 2)) {
+            decode_is_opening_tag_number(apdu, 2) &&
+            !tag2) {
+            tag2 = true;
             // context tag 2 is a status bitstring.
             // we don't do anything with this other than decode it.
             len = decode_context_bitstring(apdu, 2, &rec->status);
             if (len <= 0) {
                 return -1;
             }
+            status = 1;
             apdu += len;
             apdu_len -= len;
         } else {
-            return -1;
+            if (apdu_len > 0) {
+                // each context tag may occur only once.
+                tag0 = false;
+                tag1 = false;
+                tag2 = false;
+                rec->next = calloc(sizeof(BACNET_TRENDLOG_RECORD), 1);
+                rec = rec->next;
+            }
         }
     }
-    return 0;
+    return status;
 }
 
 static int local_read_property(uint8_t *value,
