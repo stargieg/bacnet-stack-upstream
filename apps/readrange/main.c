@@ -190,10 +190,10 @@ static void print_help(char *filename)
         "you could send the following commands:\n");
     printf("%s 123 trend-log 2 log-buffer 1 1 10\n", filename);
     printf("%s 123 trend-log 2 log-buffer 2 1 10\n", filename);
-    printf("%s 123 trend-log 2 log-buffer 3 1/1/2014 00:00:01 10\n", filename);
+    printf("%s 123 trend-log 2 log-buffer 3 2014/1/1 00:00:01 10\n", filename);
     printf("%s 123 20 2 131 1 1 10\n", filename);
     printf("%s 123 20 2 131 2 1 10\n", filename);
-    printf("%s 123 20 2 131 3 1/1/2014 00:00:01 10\n", filename);
+    printf("%s 123 20 2 131 3 2014/1/1 00:00:01 10\n", filename);
 }
 
 int main(int argc, char *argv[])
