@@ -52,17 +52,19 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
     int status = 0;
 
     if (data) {
+#ifdef BACAPP_PRINT_ENABLED
         object_value.object_type = data->object_type;
         object_value.object_instance = data->object_instance;
         object_value.object_property = data->object_property;
         object_value.array_index = data->array_index;
+#endif
 
         /* FIXME: what if application_data_len is bigger than 255? */
         /* value? need to loop until all of the len is gone... */
 
         status = rr_decode_trendlog_entries(
             data->application_data, data->application_data_len, &entry);
-#if PRINT_ENABLED
+#ifdef BACAPP_PRINT_ENABLED
         if (status < 1) {
             return;
         }
