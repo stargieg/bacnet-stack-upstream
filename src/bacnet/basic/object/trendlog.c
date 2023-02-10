@@ -1527,6 +1527,7 @@ int rr_decode_trendlog_entries(
     bool tag2 = false;
     uint8_t tag_number = 0;
     uint32_t len_value_type = 0;
+    rec->next = NULL;
     while (apdu_len > 0) {
         if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
             decode_is_opening_tag_number(apdu, 0) &&
@@ -1628,6 +1629,7 @@ int rr_decode_trendlog_entries(
                 tag2 = false;
                 rec->next = calloc(sizeof(BACNET_TRENDLOG_RECORD), 1);
                 rec = rec->next;
+                rec->next = NULL;
             }
         }
     }
