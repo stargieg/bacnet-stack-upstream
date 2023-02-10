@@ -66,26 +66,24 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
         if (status < 1) {
             return;
         }
-        printf("{\n");
+        printf("[\n");
         for (p = &entry; p != NULL; p = p->next) {
-            printf(" {");
+            printf(" [\"");
             object_value.value = &value;
-            value.tag = BACNET_APPLICATION_TAG_DATE;
-            value.type.Date = p->timestamp.date;
+            value.tag = BACNET_APPLICATION_TAG_TIMESTAMP;
+            value.type.Time_Stamp.value.dateTime = p->timestamp;
             bacapp_print_value(stdout, &object_value);
+            printf("\",\"");
 
-            printf(", ");
-            value.tag = BACNET_APPLICATION_TAG_TIME;
-            value.type.Time = p->timestamp.time;
-            bacapp_print_value(stdout, &object_value);
-
-            printf(", ");
             object_value.value = &p->value;
             bacapp_print_value(stdout, &object_value);
 
-            printf(" }\n");
+            if (p->next)
+                printf("\"],\n");
+            else
+                printf("\"]\n");
         }
-        printf("}\n");
+        printf("]\n");
 #endif
     }
 }
