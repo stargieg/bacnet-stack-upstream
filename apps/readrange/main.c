@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     if (Target_Object_Range_Type == 1) {
-        if (argc < 7) {
+        if (argc < 8) {
             print_usage(filename);
             return 0;
         }
@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
         RR_Request.Range.RefIndex = Target_Object_Index;
         RR_Request.Count = Target_Object_Count;
     } else if (Target_Object_Range_Type == 2) {
-        if (argc < 7) {
+        if (argc < 8) {
             print_usage(filename);
             return 0;
         }
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
         RR_Request.Range.RefSeqNum = Target_Object_Index;
         RR_Request.Count = Target_Object_Count;
     } else if (Target_Object_Range_Type == 3) {
-        if (argc < 8) {
+        if (argc < 9) {
             print_usage(filename);
             return 0;
         }
