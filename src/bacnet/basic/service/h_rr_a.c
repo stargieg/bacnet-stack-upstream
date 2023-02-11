@@ -68,7 +68,7 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
         if (status < 1) {
             return;
         }
-        printf("[\n");
+        printf("{\"list\": [\n");
         for (p = &entry; p != NULL; p = p->next) {
             printf(" [\"");
             object_value.value = &value;
@@ -85,7 +85,7 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
             else
                 printf("\"]\n");
         }
-        printf("]\n");
+        printf("]}\n");
 #endif
     }
 }
