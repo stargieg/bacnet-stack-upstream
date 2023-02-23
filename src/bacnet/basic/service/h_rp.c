@@ -39,7 +39,7 @@
 #include "bacnet/rp.h"
 /* basic objects, services, TSM, and datalink */
 #include "bacnet/basic/object/device.h"
-#if (BACNET_PROTOCOL_REVISION >= 17)
+#if (BACNET_PROTOCOL_REVISION >= 25)
 #include "bacnet/basic/object/netport.h"
 #endif
 #include "bacnet/basic/tsm/tsm.h"
@@ -126,7 +126,7 @@ void handler_read_property(uint8_t *service_request,
                 (rpdata.object_instance == BACNET_MAX_INSTANCE)) {
                 rpdata.object_instance = Device_Object_Instance_Number();
             }
-#if (BACNET_PROTOCOL_REVISION >= 17)
+#if (BACNET_PROTOCOL_REVISION >= 25)
             /* When the object-type in the Object Identifier parameter
                contains the value NETWORK_PORT and the instance in the 'Object
                Identifier' parameter contains the value 4194303, the responding

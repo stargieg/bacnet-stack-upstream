@@ -267,7 +267,7 @@ int dlenv_register_as_foreign_device(void)
     return retval;
 }
 
-#if defined(BACDL_BIP)
+#if defined(NO_BACDL_BIP)
 /**
  * Datalink network port object settings
  */
@@ -306,7 +306,7 @@ static void dlenv_network_port_init_bip(void)
     Network_Port_Changes_Pending_Set(instance, false);
 }
 #endif
-#if defined(BACDL_MSTP)
+#if defined(NO_BACDL_MSTP)
 /**
  * Datalink network port object settings
  */
@@ -334,7 +334,7 @@ static void dlenv_network_port_init_mstp(void)
     Network_Port_Changes_Pending_Set(instance, false);
 }
 #endif
-#if defined(BACDL_BIP6)
+#if defined(NO_BACDL_BIP6)
 /**
  * Datalink network port object settings
  */
@@ -368,7 +368,7 @@ static void dlenv_network_port_init_bip6(void)
     Network_Port_Changes_Pending_Set(instance, false);
 }
 #endif
-
+#if 0
 /**
  * Datalink network port object settings
  */
@@ -406,6 +406,7 @@ void dlenv_network_port_init(void)
             break;
     }
 }
+#endif
 
 /** Datalink maintenance timer
  * @ingroup DataLink
@@ -564,6 +565,8 @@ int dlenv_init(void)
     }
 #endif
     ucix_cleanup(ctx);
+#if 0
     dlenv_network_port_init();
+#endif
     return Datalink_Transport;
 }

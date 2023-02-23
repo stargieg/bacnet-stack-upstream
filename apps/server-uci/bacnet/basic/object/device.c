@@ -55,9 +55,6 @@
 #include "bacnet/basic/object/mso.h"
 #include "bacnet/basic/object/msv.h"
 #include "bacnet/basic/object/ms-input.h"
-#if (BACNET_PROTOCOL_REVISION >= 17)
-#include "bacnet/basic/object/netport.h"
-#endif
 #include "bacnet/basic/object/schedule.h"
 #include "bacnet/basic/object/trendlog.h"
 #if defined(INTRINSIC_REPORTING)
@@ -83,14 +80,6 @@ static object_functions_t My_Object_Table[] = {
         Device_Property_Lists, DeviceGetRRInfo, NULL /* Iterator */,
         NULL /* Value_Lists */, NULL /* COV */, NULL /* COV Clear */,
         NULL /* Intrinsic Reporting */ },
-#if (BACNET_PROTOCOL_REVISION >= 17)
-    { OBJECT_NETWORK_PORT, Network_Port_Init, Network_Port_Count,
-        Network_Port_Index_To_Instance, Network_Port_Valid_Instance,
-        Network_Port_Object_Name, Network_Port_Read_Property,
-        Network_Port_Write_Property, Network_Port_Property_Lists,
-        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
-        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */ },
-#endif
     { OBJECT_ANALOG_OUTPUT, Analog_Output_Init, Analog_Output_Count,
         Analog_Output_Index_To_Instance, Analog_Output_Valid_Instance,
         Analog_Output_Object_Name, Analog_Output_Read_Property,
@@ -850,7 +839,7 @@ bool Device_Valid_Object_Id(
 {
     bool status = false; /* return value */
     struct object_functions *pObject = NULL;
-
+    fprintf(stderr,"object_type %i object_instance %i\n",object_type,object_instance);
     pObject = Device_Objects_Find_Functions(object_type);
     if ((pObject != NULL) && (pObject->Object_Valid_Instance != NULL)) {
         status = pObject->Object_Valid_Instance(object_instance);
