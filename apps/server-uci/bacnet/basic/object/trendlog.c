@@ -1648,19 +1648,15 @@ int TL_encode_entry(uint8_t *apdu, int iLog, int iEntry)
         default:
             break;
     }
-
     iLen += encode_closing_tag(&apdu[iLen], 1);
     /* Check if status bit string is required and insert with tag [2] */
-    //if ((pSource->ucStatus & 128) == 128) {
-        //iLen += encode_opening_tag(&apdu[iLen], 2);
-        //bitstring_init(&TempBits);
-        //bitstring_set_bits_used(&TempBits, 1, 4);
+    if ((pSource->ucStatus & 128) == 128) {
+        bitstring_init(&TempBits);
+        bitstring_set_bits_used(&TempBits, 1, 4);
         /* only insert the 1st 4 bits */
-        //bitstring_set_octet(&TempBits, 0, (pSource->ucStatus & 0x0F));
-        //iLen += encode_context_bitstring(&apdu[iLen], 2, &TempBits);
-        //iLen += encode_application_bitstring(&apdu[iLen], &TempBits);
-        //iLen += encode_closing_tag(&apdu[iLen], 2);
-    //}
+        bitstring_set_octet(&TempBits, 0, (pSource->ucStatus & 0x0F));
+        iLen += encode_context_bitstring(&apdu[iLen], 2, &TempBits);
+    }
 
     return (iLen);
 }
