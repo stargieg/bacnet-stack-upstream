@@ -2180,9 +2180,7 @@ int Binary_Input_Alarm_Ack(
     BACNET_ERROR_CODE * error_code)
 {
     struct object_data *pObject;
-    unsigned index = 0;
-
-    pObject = Keylist_Data(Object_List, index);
+    pObject = Keylist_Data(Object_List, alarmack_data->eventObjectIdentifier.instance);
 
     /* check index */
     if (!pObject) {
