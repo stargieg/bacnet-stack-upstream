@@ -125,7 +125,7 @@ BACNET_DEFINES += -DBIP_DEBUG
 endif
 endif
 
-#BACNET_DEFINES += -DPRINT_ENABLED=1
+BACNET_DEFINES += -DPRINT_ENABLED=1
 #BACNET_DEFINES += -DBACAPP_ALL
 #BACNET_DEFINES += -DBACFILE
 BACNET_DEFINES += -DINTRINSIC_REPORTING
@@ -162,7 +162,6 @@ SRC = main.c \
 	bacnet/basic/object/device.c \
 	bacnet/datalink/datalink.c \
 	bacnet/datalink/dlenv.c \
-	$(BACNET_OBJECT_DIR)/netport.c \
 	bacnet/basic/object/ao.c \
 	bacnet/basic/object/av.c \
 	bacnet/basic/object/ai.c \
