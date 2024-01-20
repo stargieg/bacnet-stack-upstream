@@ -38,6 +38,7 @@ add_executable(${PROJECT_NAME}
 	${SRC_DIR}/bacnet/bacaddr.c
 	${SRC_DIR}/bacnet/bacapp.c
 	${SRC_DIR}/bacnet/bacdcode.c
+	${SRC_DIR}/bacnet/bacdest.c
 	${SRC_DIR}/bacnet/bacdevobjpropref.c
 	${SRC_DIR}/bacnet/bacerror.c
 	${SRC_DIR}/bacnet/bacint.c
@@ -76,6 +77,7 @@ add_executable(${PROJECT_NAME}
 	${SRC_DIR}/bacnet/basic/sys/bigend.c
 	${SRC_DIR}/bacnet/basic/sys/debug.c
 	${SRC_DIR}/bacnet/basic/sys/keylist.c
+	${SRC_DIR}/bacnet/basic/sys/linear.c
 	${SRC_DIR}/bacnet/basic/tsm/tsm.c
 	${SRC_DIR}/bacnet/datalink/bvlc.c
 	${SRC_DIR}/bacnet/cov.c

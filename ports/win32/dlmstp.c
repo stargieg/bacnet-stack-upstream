@@ -281,6 +281,20 @@ uint16_t MSTP_Get_Send(
     return pdu_len;
 }
 
+/**
+ * @brief Send an MSTP frame
+ * @param mstp_port - port specific data
+ * @param buffer - data to send
+ * @param nbytes - number of bytes of data to send
+ */
+void MSTP_Send_Frame(
+    volatile struct mstp_port_struct_t *mstp_port,
+    uint8_t * buffer,
+    uint16_t nbytes)
+{
+    RS485_Send_Frame(mstp_port, buffer, nbytes);
+}
+
 static bool dlmstp_compare_data_expecting_reply(uint8_t *request_pdu,
     uint16_t request_pdu_len,
     uint8_t src_address,
@@ -308,8 +322,8 @@ static bool dlmstp_compare_data_expecting_reply(uint8_t *request_pdu,
     /* decode the request data */
     request.address.mac[0] = src_address;
     request.address.mac_len = 1;
-    offset = (uint16_t)npdu_decode(
-        &request_pdu[0], NULL, &request.address, &request.npdu_data);
+    offset = (uint16_t)bacnet_npdu_decode(request_pdu, request_pdu_len, NULL,
+        &request.address, &request.npdu_data);
     if (request.npdu_data.network_layer_message) {
         return false;
     }
@@ -325,8 +339,8 @@ static bool dlmstp_compare_data_expecting_reply(uint8_t *request_pdu,
         request.service_choice = request_pdu[offset + 3];
     /* decode the reply data */
     bacnet_address_copy(&reply.address, dest_address);
-    offset = (uint16_t)npdu_decode(
-        &reply_pdu[0], &reply.address, NULL, &reply.npdu_data);
+    offset = (uint16_t)bacnet_npdu_decode(
+        reply_pdu, reply_pdu_len, &reply.address, NULL, &reply.npdu_data);
     if (reply.npdu_data.network_layer_message) {
         return false;
     }

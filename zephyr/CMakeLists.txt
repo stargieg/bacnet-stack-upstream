@@ -65,6 +65,8 @@ set(BACNETSTACK_SRCS
     ${BACNETSTACK_SRC}/bacnet/bacdcode.c
     ${BACNETSTACK_SRC}/bacnet/bacdcode.h
     ${BACNETSTACK_SRC}/bacnet/bacdef.h
+    ${BACNETSTACK_SRC}/bacnet/bacdest.c
+    ${BACNETSTACK_SRC}/bacnet/bacdest.h
     ${BACNETSTACK_SRC}/bacnet/bacdevobjpropref.c
     ${BACNETSTACK_SRC}/bacnet/bacdevobjpropref.h
     ${BACNETSTACK_SRC}/bacnet/bacenum.h
@@ -191,6 +193,8 @@ set(BACNETSTACK_SRCS
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_iam.h
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_ihave.c
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_ihave.h
+    ${BACNETSTACK_SRC}/bacnet/basic/service/s_list_element.c
+    ${BACNETSTACK_SRC}/bacnet/basic/service/s_list_element.h
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_lso.h
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_rd.h
     ${BACNETSTACK_SRC}/bacnet/basic/service/s_readrange.h
@@ -219,6 +223,8 @@ set(BACNETSTACK_SRCS
     ${BACNETSTACK_SRC}/bacnet/basic/sys/key.h
     ${BACNETSTACK_SRC}/bacnet/basic/sys/keylist.c
     ${BACNETSTACK_SRC}/bacnet/basic/sys/keylist.h
+    ${BACNETSTACK_SRC}/bacnet/basic/sys/linear.c
+    ${BACNETSTACK_SRC}/bacnet/basic/sys/linear.h
     ${BACNETSTACK_SRC}/bacnet/basic/sys/mstimer.c
     ${BACNETSTACK_SRC}/bacnet/basic/sys/mstimer.h
     ${BACNETSTACK_SRC}/bacnet/basic/sys/ringbuf.c
@@ -273,6 +279,8 @@ set(BACNETSTACK_SRCS
     ${BACNETSTACK_SRC}/bacnet/indtext.h
     ${BACNETSTACK_SRC}/bacnet/lighting.c
     ${BACNETSTACK_SRC}/bacnet/lighting.h
+    ${BACNETSTACK_SRC}/bacnet/list_element.c
+    ${BACNETSTACK_SRC}/bacnet/list_element.h
     ${BACNETSTACK_SRC}/bacnet/lso.c
     ${BACNETSTACK_SRC}/bacnet/lso.h
     ${BACNETSTACK_SRC}/bacnet/memcopy.c
@@ -362,6 +370,8 @@ set(BACNETSTACK_BASIC_SRCS
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_get_alarm_sum.c
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_getevent_a.c
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_getevent.c
+    ${BACNETSTACK_SRC}/bacnet/basic/service/h_list_element.c
+    ${BACNETSTACK_SRC}/bacnet/basic/service/h_list_element.h
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_lso.c
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_rr_a.c
     ${BACNETSTACK_SRC}/bacnet/basic/service/h_rr.c

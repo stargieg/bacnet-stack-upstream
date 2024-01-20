@@ -70,9 +70,30 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+option(
+  BACNET_STACK_DEPRECATED_DISABLE 
+  "Disable deprecation compile warnings" 
+  ON)
+
+if(BACNET_STACK_DEPRECATED_DISABLE)
+  add_definitions(-DBACNET_STACK_DEPRECATED_DISABLE)
+endif()
+
+if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "AppleClang" OR CMAKE_C_COMPILER_ID MATCHES "GNU")
+  add_compile_options(-Wall -Wextra -pedantic)
+  add_compile_options(-Wfloat-equal -Wconversion -Wparentheses)
+  add_compile_options(-Wunused-value -Wreturn-type -Wswitch-default)
+  add_compile_options(-Wuninitialized -Winit-self)
+  add_compile_options(-Wno-sign-conversion -Wno-conversion)
+  add_compile_options(-Wno-sign-compare -Wno-long-long)
+  add_compile_options(-Wno-implicit-fallthrough -Wno-attributes)
+  add_compile_options(-Wunused-variable -Wunused-function)
+  add_compile_options(-Wunused-parameter)
+endif()
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "AppleClang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  add_compile_options(-Wall -Wextra -pedantic -g -O3)
+endif()
 
 #
 # library
@@ -105,6 +126,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/bacdcode.c
     src/bacnet/bacdcode.h
     src/bacnet/bacdef.h
+    src/bacnet/bacdest.c
+    src/bacnet/bacdest.h
     src/bacnet/bacdevobjpropref.c
     src/bacnet/bacdevobjpropref.h
     src/bacnet/bacenum.h
@@ -225,10 +248,14 @@ add_library(${PROJECT_NAME}
     src/bacnet/basic/service/h_awf.h
     src/bacnet/basic/service/h_ccov.c
     src/bacnet/basic/service/h_ccov.h
+    src/bacnet/basic/service/h_create_object.c
+    src/bacnet/basic/service/h_create_object.h
     src/bacnet/basic/service/h_cov.c
     src/bacnet/basic/service/h_cov.h
     src/bacnet/basic/service/h_dcc.c
     src/bacnet/basic/service/h_dcc.h
+    src/bacnet/basic/service/h_delete_object.c
+    src/bacnet/basic/service/h_delete_object.h
     src/bacnet/basic/service/h_gas_a.c
     src/bacnet/basic/service/h_gas_a.h
     src/bacnet/basic/service/h_get_alarm_sum.c
@@ -243,6 +270,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/basic/service/h_ihave.h
     src/bacnet/basic/service/h_lso.c
     src/bacnet/basic/service/h_lso.h
+    src/bacnet/basic/service/h_list_element.c
+    src/bacnet/basic/service/h_list_element.h
     src/bacnet/basic/service/h_noserv.c
     src/bacnet/basic/service/h_noserv.h
     src/bacnet/basic/service/h_rd.c
@@ -283,10 +312,14 @@ add_library(${PROJECT_NAME}
     src/bacnet/basic/service/s_awfs.h
     src/bacnet/basic/service/s_cevent.c
     src/bacnet/basic/service/s_cevent.h
+    src/bacnet/basic/service/s_create_object.c
+    src/bacnet/basic/service/s_create_object.h
     src/bacnet/basic/service/s_cov.c
     src/bacnet/basic/service/s_cov.h
     src/bacnet/basic/service/s_dcc.c
     src/bacnet/basic/service/s_dcc.h
+    src/bacnet/basic/service/s_delete_object.c
+    src/bacnet/basic/service/s_delete_object.h
     src/bacnet/basic/service/s_error.c
     src/bacnet/basic/service/s_error.h
     src/bacnet/basic/service/s_get_alarm_sum.c
@@ -299,6 +332,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/basic/service/s_iam.h
     src/bacnet/basic/service/s_ihave.c
     src/bacnet/basic/service/s_ihave.h
+    src/bacnet/basic/service/s_list_element.c
+    src/bacnet/basic/service/s_list_element.h
     src/bacnet/basic/service/s_lso.c
     src/bacnet/basic/service/s_lso.h
     src/bacnet/basic/service/s_rd.c
@@ -339,6 +374,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/basic/sys/key.h
     src/bacnet/basic/sys/keylist.c
     src/bacnet/basic/sys/keylist.h
+    src/bacnet/basic/sys/linear.c
+    src/bacnet/basic/sys/linear.h
     src/bacnet/basic/sys/mstimer.c
     src/bacnet/basic/sys/mstimer.h
     src/bacnet/basic/sys/ringbuf.c
@@ -352,6 +389,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/config.h
     src/bacnet/cov.c
     src/bacnet/cov.h
+    src/bacnet/create_object.c
+    src/bacnet/create_object.h
     src/bacnet/credential_authentication_factor.c
     src/bacnet/credential_authentication_factor.h
     src/bacnet/datalink/arcnet.h
@@ -365,6 +404,7 @@ add_library(${PROJECT_NAME}
     $<$<BOOL:${BACDL_BIP}>:src/bacnet/datalink/bvlc.c>
     $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/crc.h>
     $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/crc.c>
+    $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/cobs.h>
     $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/cobs.c>
     src/bacnet/datalink/datalink.c
     src/bacnet/datalink/datalink.h
@@ -381,6 +421,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/datetime.h
     src/bacnet/dcc.c
     src/bacnet/dcc.h
+    src/bacnet/delete_object.c
+    src/bacnet/delete_object.h
     src/bacnet/event.c
     src/bacnet/event.h
     src/bacnet/get_alarm_sum.c
@@ -397,6 +439,8 @@ add_library(${PROJECT_NAME}
     src/bacnet/indtext.h
     src/bacnet/lighting.c
     src/bacnet/lighting.h
+    src/bacnet/list_element.c
+    src/bacnet/list_element.h
     src/bacnet/lso.c
     src/bacnet/lso.h
     src/bacnet/memcopy.c
@@ -492,7 +536,6 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp_linux.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp_linux.h>
-    # ports/linux/rx_fsm.c
     $<$<BOOL:${BACDL_ETHERNET}>:ports/linux/ethernet.c>
     ports/linux/mstimer-init.c)
 
@@ -507,13 +550,14 @@ elseif(WIN32)
     $<$<BOOL:${BACDL_BIP}>:ws2_32>
     $<$<BOOL:${BACDL_BIP}>:iphlpapi>)
 
-  add_definitions("/W3 /D_CRT_SECURE_NO_WARNINGS /wd4244 /wd4018 /wd4267")
+  if(MSVC)
+    add_definitions("/W3 /D_CRT_SECURE_NO_WARNINGS /wd4244 /wd4018 /wd4267")
+  endif()
 
   target_sources(${PROJECT_NAME} PRIVATE
     ports/win32/bacport.h
     $<$<BOOL:${BACDL_BIP6}>:ports/win32/bip6.c>
     $<$<BOOL:${BACDL_BIP}>:ports/win32/bip-init.c>
-    # ports/win32/rx_fsm.c
     ports/win32/datetime-init.c
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/dlmstp.c>
     #  ports/win32/dlmstp-mm.c
@@ -523,6 +567,16 @@ elseif(WIN32)
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/rs485.h>)
 elseif(APPLE)
   message(STATUS "BACNET: building for APPLE")
+  set(BACNET_PORT_DIRECTORY_PATH ${CMAKE_CURRENT_LIST_DIR}/ports/bsd)
+
+  target_sources(${PROJECT_NAME} PRIVATE
+    ports/bsd/bacport.h
+    ports/bsd/bip-init.c
+    ports/bsd/datetime-init.c
+    ports/bsd/mstimer-init.c
+    ports/bsd/stdbool.h)
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
+  message(STATUS "BACNET: building for FreeBSD")
   set(BACNET_PORT_DIRECTORY_PATH ${CMAKE_CURRENT_LIST_DIR}/ports/bsd)
 
   target_sources(${PROJECT_NAME} PRIVATE
@@ -549,8 +603,17 @@ if(BACNET_STACK_BUILD_APPS)
   add_executable(ack-alarm apps/ack-alarm/main.c)
   target_link_libraries(ack-alarm PRIVATE ${PROJECT_NAME})
 
+  add_executable(add-list-element apps/add-list-element/main.c)
+  target_link_libraries(add-list-element PRIVATE ${PROJECT_NAME})
+
+  add_executable(create-object apps/create-object/main.c)
+  target_link_libraries(create-object PRIVATE ${PROJECT_NAME})
+
   add_executable(dcc apps/dcc/main.c)
   target_link_libraries(dcc PRIVATE ${PROJECT_NAME})
+
+  add_executable(delete-object apps/delete-object/main.c)
+  target_link_libraries(delete-object PRIVATE ${PROJECT_NAME})
 
   add_executable(epics apps/epics/main.c)
   target_link_libraries(epics PRIVATE ${PROJECT_NAME})
@@ -614,6 +677,9 @@ if(BACNET_STACK_BUILD_APPS)
 
   add_executable(readrange apps/readrange/main.c)
   target_link_libraries(readrange PRIVATE ${PROJECT_NAME})
+
+  add_executable(remove-list-element apps/remove-list-element/main.c)
+  target_link_libraries(remove-list-element PRIVATE ${PROJECT_NAME})
 
   add_executable(reinit apps/reinit/main.c)
   target_link_libraries(reinit PRIVATE ${PROJECT_NAME})
