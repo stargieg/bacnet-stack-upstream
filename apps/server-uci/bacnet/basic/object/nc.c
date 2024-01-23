@@ -31,7 +31,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bacnet/basic/binding/address.h"
@@ -39,13 +38,16 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacenum.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacdest.h"
 #include "bacnet/basic/services.h"
-#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/config.h"
+#include "bacnet/datetime.h"
 #include "bacnet/basic/object/device.h"
 #include "bacnet/event.h"
+#include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/tsm/tsm.h"
 #include "bacnet/wp.h"
 #include "bacnet/basic/object/nc.h"
@@ -54,6 +56,8 @@
 #define PRINTF debug_perror
 
 #if defined(INTRINSIC_REPORTING)
+/* buffer for sending event messages */
+//static uint8_t Event_Buffer[MAX_APDU];
 static const char *sec = "bacnet_nc";
 static const char *type = "nc";
 
@@ -393,46 +397,46 @@ bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DEST
             BACNET_ADDRESS src = { 0 };
             unsigned max_apdu = 0;
             uint32_t DeviceID = 0;
-            if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) &&
-            (value[idx].Recipient._.DeviceIdentifier > 0)) {
+            if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) &&
+            (value[idx].Recipient.type.device.instance > 0)) {
                 pObject->Recipient_List[idx] = value[idx];
-                DeviceID = pObject->Recipient_List[idx].Recipient._.DeviceIdentifier;
+                DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
                 address_bind_request(DeviceID, &max_apdu, &src);
                 ret = true;
-            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
-            (value[idx].Recipient._.Address.net == 0) &&
-            (value[idx].Recipient._.Address.mac_len > 0)) {
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net == 0) &&
+            (value[idx].Recipient.type.address.mac_len > 0)) {
                 pObject->Recipient_List[idx] = value[idx];
                 /* copy Address */
-                src = pObject->Recipient_List[idx].Recipient._.Address;
+                src = pObject->Recipient_List[idx].Recipient.type.address;
                 address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
                 ret = true;
-            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
-            (value[idx].Recipient._.Address.net != 65535) &&
-            (value[idx].Recipient._.Address.len > 0)) {
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net != 65535) &&
+            (value[idx].Recipient.type.address.len > 0)) {
                 pObject->Recipient_List[idx] = value[idx];
                 /* copy Address */
-                src = pObject->Recipient_List[idx].Recipient._.Address;
+                src = pObject->Recipient_List[idx].Recipient.type.address;
                 address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
                 ret = true;
-            } else if ((value[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
-            (value[idx].Recipient._.Address.net == 65535)) {
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net == 65535)) {
                 pObject->Recipient_List[idx] = value[idx];
                 ret = true;
             } else {
-                if (pObject->Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
+                if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                     /* remove Device_ID */
-                    DeviceID = pObject->Recipient_List[idx].Recipient._.DeviceIdentifier;
+                    DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
                     address_remove_device(DeviceID);
-                } else if (pObject->Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) {
+                } else if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
                     /* remove Address if not broadcast */
-                    if (pObject->Recipient_List[idx].Recipient._.Address.net != 65535) {
-                        src = pObject->Recipient_List[idx].Recipient._.Address;
+                    if (pObject->Recipient_List[idx].Recipient.type.address.net != 65535) {
+                        src = pObject->Recipient_List[idx].Recipient.type.address;
                         if (address_get_device_id(&src, &DeviceID))
                             address_remove_device(DeviceID);
                     }
                 }
-                pObject->Recipient_List[idx].Recipient.RecipientType = RECIPIENT_TYPE_NOTINITIALIZED;
+                pObject->Recipient_List[idx].Recipient.tag = BACNET_RECIPIENT_TAG_MAX;
                 ret = true;
             }
         }
@@ -531,27 +535,17 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_RECIPIENT_LIST:
             /* encode all entry of Recipient_List */
             for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
-                int i = 0;
 
                 /* get pointer of current element for Recipient_List  - easier
                  * for use */
                 RecipientEntry = Notification_Class_Recipient_List(rpdata->object_instance, idx);
-                if (RecipientEntry->Recipient.RecipientType !=
-                    RECIPIENT_TYPE_NOTINITIALIZED) {
+                if (RecipientEntry->Recipient.tag !=
+                    BACNET_RECIPIENT_TAG_MAX) {
                     /* Valid Days - BACnetDaysOfWeek - [bitstring] monday-sunday
                      */
-                    u8Val = 0x01;
-                    bitstring_init(&bit_string);
 
-                    for (i = 0; i < MAX_BACNET_DAYS_OF_WEEK; i++) {
-                        if (RecipientEntry->ValidDays & u8Val)
-                            bitstring_set_bit(&bit_string, i, true);
-                        else
-                            bitstring_set_bit(&bit_string, i, false);
-                        u8Val <<= 1; /* next day */
-                    }
                     apdu_len += encode_application_bitstring(
-                        &apdu[apdu_len], &bit_string);
+                        &apdu[apdu_len], &RecipientEntry->ValidDays);
 
                     /* From Time */
                     apdu_len += encode_application_time(
@@ -568,30 +562,30 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                        } */
 
                     /* CHOICE - device [0] BACnetObjectIdentifier */
-                    if (RecipientEntry->Recipient.RecipientType ==
-                        RECIPIENT_TYPE_DEVICE) {
+                    if (RecipientEntry->Recipient.tag ==
+                        BACNET_RECIPIENT_TAG_DEVICE) {
                         apdu_len += encode_context_object_id(&apdu[apdu_len], 0,
                             OBJECT_DEVICE,
-                            RecipientEntry->Recipient._.DeviceIdentifier);
+                            RecipientEntry->Recipient.type.device.instance);
                     }
                     /* CHOICE - address [1] BACnetAddress */
-                    else if (RecipientEntry->Recipient.RecipientType ==
-                        RECIPIENT_TYPE_ADDRESS) {
+                    else if (RecipientEntry->Recipient.tag ==
+                        BACNET_RECIPIENT_TAG_ADDRESS) {
                         /* opening tag 1 */
                         apdu_len += encode_opening_tag(&apdu[apdu_len], 1);
                         /* network-number Unsigned16, */
                         apdu_len += encode_application_unsigned(&apdu[apdu_len],
-                            RecipientEntry->Recipient._.Address.net);
+                            RecipientEntry->Recipient.type.address.net);
 
                         /* mac-address OCTET STRING */
-                        if (RecipientEntry->Recipient._.Address.len > 0) {
+                        if (RecipientEntry->Recipient.type.address.len > 0) {
                             octetstring_init(&octet_string,
-                                RecipientEntry->Recipient._.Address.adr,
-                                RecipientEntry->Recipient._.Address.len);
-                        } else if (RecipientEntry->Recipient._.Address.mac_len > 0) {
+                                RecipientEntry->Recipient.type.address.adr,
+                                RecipientEntry->Recipient.type.address.len);
+                        } else if (RecipientEntry->Recipient.type.address.mac_len > 0) {
                             octetstring_init(&octet_string,
-                                RecipientEntry->Recipient._.Address.mac,
-                                RecipientEntry->Recipient._.Address.mac_len);
+                                RecipientEntry->Recipient.type.address.mac,
+                                RecipientEntry->Recipient.type.address.mac_len);
                         } else {
                             octetstring_init(&octet_string, 0, 0);
                         }
@@ -614,19 +608,10 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                         &apdu[apdu_len], RecipientEntry->ConfirmedNotify);
 
                     /* Transitions - BACnet Event Transition Bits [bitstring] */
-                    u8Val = RecipientEntry->Transitions;
 
-                    bitstring_init(&bit_string);
-                    bitstring_set_bit(&bit_string, TRANSITION_TO_OFFNORMAL,
-                        (u8Val & TRANSITION_TO_OFFNORMAL_MASKED) ? true
-                                                                 : false);
-                    bitstring_set_bit(&bit_string, TRANSITION_TO_FAULT,
-                        (u8Val & TRANSITION_TO_FAULT_MASKED) ? true : false);
-                    bitstring_set_bit(&bit_string, TRANSITION_TO_NORMAL,
-                        (u8Val & TRANSITION_TO_NORMAL_MASKED) ? true : false);
 
                     apdu_len += encode_application_bitstring(
-                        &apdu[apdu_len], &bit_string);
+                        &apdu[apdu_len], &RecipientEntry->Transitions);
                 }
             }
             break;
@@ -804,7 +789,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (value.type.Bit_String.bits_used == MAX_BACNET_DAYS_OF_WEEK)
                     /* store value */
                     TmpNotify.Recipient_List[idx].ValidDays =
-                        value.type.Bit_String.value[0];
+                        value.type.Bit_String;
                 else {
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_OTHER;
@@ -847,8 +832,8 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 /* context tag [0] - Device */
                 if (decode_is_context_tag(
                         &wp_data->application_data[iOffset], 0)) {
-                    TmpNotify.Recipient_List[idx].Recipient.RecipientType =
-                        RECIPIENT_TYPE_DEVICE;
+                    TmpNotify.Recipient_List[idx].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_DEVICE;
                     /* Decode Network Number */
                     len = bacapp_decode_context_data(
                         &wp_data->application_data[iOffset],
@@ -864,7 +849,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         return false;
                     }
                     /* store value */
-                    TmpNotify.Recipient_List[idx].Recipient._.DeviceIdentifier =
+                    TmpNotify.Recipient_List[idx].Recipient.type.device.instance =
                         value.type.Object_Id.instance;
 
                     iOffset += len;
@@ -873,8 +858,8 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 else if (decode_is_opening_tag_number(
                              &wp_data->application_data[iOffset], 1)) {
                     iOffset++;
-                    TmpNotify.Recipient_List[idx].Recipient.RecipientType =
-                        RECIPIENT_TYPE_ADDRESS;
+                    TmpNotify.Recipient_List[idx].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_ADDRESS;
                     /* Decode Network Number */
                     len = bacapp_decode_application_data(
                         &wp_data->application_data[iOffset],
@@ -889,7 +874,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         return false;
                     }
                     /* store value */
-                    TmpNotify.Recipient_List[idx].Recipient._.Address.net =
+                    TmpNotify.Recipient_List[idx].Recipient.type.address.net =
                         value.type.Unsigned_Int;
 
                     iOffset += len;
@@ -907,21 +892,21 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         return false;
                     }
                     /* store value */
-                    if (TmpNotify.Recipient_List[idx].Recipient._.Address.net ==
+                    if (TmpNotify.Recipient_List[idx].Recipient.type.address.net ==
                         0) {
                         memcpy(TmpNotify.Recipient_List[idx]
-                                   .Recipient._.Address.mac,
+                                   .Recipient.type.address.mac,
                             value.type.Octet_String.value,
                             value.type.Octet_String.length);
                         TmpNotify.Recipient_List[idx]
-                            .Recipient._.Address.mac_len =
+                            .Recipient.type.address.mac_len =
                             value.type.Octet_String.length;
                     } else {
                         memcpy(TmpNotify.Recipient_List[idx]
-                                   .Recipient._.Address.adr,
+                            .Recipient.type.address.adr,
                             value.type.Octet_String.value,
                             value.type.Octet_String.length);
-                        TmpNotify.Recipient_List[idx].Recipient._.Address.len =
+                        TmpNotify.Recipient_List[idx].Recipient.type.address.len =
                             value.type.Octet_String.length;
                     }
 
@@ -999,7 +984,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     MAX_BACNET_EVENT_TRANSITION)
                     /* store value */
                     TmpNotify.Recipient_List[idx].Transitions =
-                        value.type.Bit_String.value[0];
+                        value.type.Bit_String;
                 else {
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_OTHER;
@@ -1020,56 +1005,43 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (Notification_Class_Recipient_List_Set(wp_data->object_instance, TmpNotify.Recipient_List)) {
                 for (idx = 0; idx < len; idx++) {
                     unsigned src_port,src_port1,src_port2;
-                    if (TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
+                    if (TmpNotify.Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                         sprintf(ucirecp[ucirecp_n], "d,%i", TmpNotify.
-                            Recipient_List[idx].Recipient._.DeviceIdentifier);
+                            Recipient_List[idx].Recipient.type.device.instance);
                         ucirecp_n++;
-                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
-                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net == 0)) {
-                        src_port1 = TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.mac[4];
-                        src_port2 = TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.mac[5];
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+                    (TmpNotify.Recipient_List[idx].Recipient.type.address.net == 0)) {
+                        src_port1 = TmpNotify.Recipient_List[idx].Recipient.type.address.mac[4];
+                        src_port2 = TmpNotify.Recipient_List[idx].Recipient.type.address.mac[5];
                         src_port = ( src_port1 * 256 ) + src_port2;
                         sprintf(ucirecp[ucirecp_n], "n,%i,%i.%i.%i.%i:%i", TmpNotify.
-                            Recipient_List[idx].Recipient._.Address.net,
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                                Address.mac[0],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                                Address.mac[1],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                                Address.mac[2],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                                Address.mac[3],
+                            Recipient_List[idx].Recipient.type.address.net,
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.mac[0],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.mac[1],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.mac[2],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.mac[3],
                             src_port);
                         ucirecp_n++;
-                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) &&
-                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net != 65535)) {
-                        memcpy(TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr, value.type.Octet_String.value,
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+                    (TmpNotify.Recipient_List[idx].Recipient.type.address.net != 65535)) {
+                        memcpy(TmpNotify.Recipient_List[idx].Recipient.type.address.adr, value.type.Octet_String.value,
                             value.type.Octet_String.length);
-                        TmpNotify.Recipient_List[idx].Recipient._.Address.len =
+                        TmpNotify.Recipient_List[idx].Recipient.type.address.len =
                             value.type.Octet_String.length;
-                        src_port1 = TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[4];
-                        src_port2 = TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[5];
+                        src_port1 = TmpNotify.Recipient_List[idx].Recipient.type.address.adr[4];
+                        src_port2 = TmpNotify.Recipient_List[idx].Recipient.type.address.adr[5];
                         src_port = ( src_port1 * 256 ) + src_port2;
                         sprintf(ucirecp[ucirecp_n], "n,%i,%i.%i.%i.%i:%i", TmpNotify.
-                            Recipient_List[idx].Recipient._.Address.net,
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[0],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[1],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[2],
-                            TmpNotify.Recipient_List[idx].Recipient._.
-                            Address.adr[3], src_port);
+                            Recipient_List[idx].Recipient.type.address.net,
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.adr[0],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.adr[1],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.adr[2],
+                            TmpNotify.Recipient_List[idx].Recipient.type.address.adr[3], src_port);
                         ucirecp_n++;
-                    } else if ((TmpNotify.Recipient_List[idx].Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) &&
-                    (TmpNotify.Recipient_List[idx].Recipient._.Address.net == 65535)) {
+                    } else if ((TmpNotify.Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) &&
+                    (TmpNotify.Recipient_List[idx].Recipient.type.address.net == 65535)) {
                         sprintf(ucirecp[ucirecp_n], "n,%i", TmpNotify.
-                            Recipient_List[idx].Recipient._.Address.net);
+                            Recipient_List[idx].Recipient.type.address.net);
                         ucirecp_n++;
                     }
                 }
@@ -1149,17 +1121,17 @@ static bool IsRecipientActive(
         case EVENT_STATE_OFFNORMAL:
         case EVENT_STATE_HIGH_LIMIT:
         case EVENT_STATE_LOW_LIMIT:
-            if (!(pBacDest->Transitions & TRANSITION_TO_OFFNORMAL_MASKED))
+            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_OFFNORMAL_MASKED)))
                 return false;
             break;
 
         case EVENT_STATE_FAULT:
-            if (!(pBacDest->Transitions & TRANSITION_TO_FAULT_MASKED))
+            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_FAULT_MASKED)))
                 return false;
             break;
 
         case EVENT_STATE_NORMAL:
-            if (!(pBacDest->Transitions & TRANSITION_TO_NORMAL_MASKED))
+            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_NORMAL_MASKED)))
                 return false;
             break;
 
@@ -1168,12 +1140,12 @@ static bool IsRecipientActive(
     }
 
     /* get actual date and time */
-    Device_getCurrentDateTime(&DateTime);
+    datetime_local(&DateTime.date, &DateTime.time, NULL, NULL);
 
     /* valid Days */
-    if (!((0x01 << (DateTime.date.wday - 1)) & pBacDest->ValidDays))
+    if (!(bitstring_bit(&pBacDest->ValidDays, (DateTime.date.wday - 1)))) {
         return false;
-
+    }
     /* valid FromTime */
     if (datetime_compare_time(&DateTime.time, &pBacDest->FromTime) < 0)
         return false;
@@ -1244,7 +1216,7 @@ void Notification_Class_common_reporting_function(
     pBacDest = &pObject->Recipient_List[0];
     for (index = 0; index < NC_MAX_RECIPIENTS; index++, pBacDest++) {
         /* check if recipient is defined */
-        if (pBacDest->Recipient.RecipientType == RECIPIENT_TYPE_NOTINITIALIZED)
+        if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_MAX)
             break; /* recipient doesn't defined - end of list */
 
         if (IsRecipientActive(pBacDest, event_data->toState)) {
@@ -1256,9 +1228,9 @@ void Notification_Class_common_reporting_function(
             event_data->processIdentifier = pBacDest->ProcessIdentifier;
 
             /* send notification */
-            if (pBacDest->Recipient.RecipientType == RECIPIENT_TYPE_DEVICE) {
+            if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                 /* send notification to the specified device */
-                device_id = pBacDest->Recipient._.DeviceIdentifier;
+                device_id = pBacDest->Recipient.type.device.instance;
                 PRINTF("Notification Class[%u]: send notification to %u\n",
                     event_data->notificationClass, (unsigned)device_id);
                 if (pBacDest->ConfirmedNotify == true)
@@ -1266,8 +1238,8 @@ void Notification_Class_common_reporting_function(
                 else if (address_get_by_device(device_id, &max_apdu, &dest))
                     Send_UEvent_Notify(
                         Handler_Transmit_Buffer, event_data, &dest);
-            } else if (pBacDest->Recipient.RecipientType ==
-                RECIPIENT_TYPE_ADDRESS) {
+            } else if (pBacDest->Recipient.tag ==
+                BACNET_RECIPIENT_TAG_ADDRESS) {
                 PRINTF("Notification Class[%u]: send notification to ADDR\n",
                     event_data->notificationClass);
                 /* send notification to the address indicated */
@@ -1275,7 +1247,7 @@ void Notification_Class_common_reporting_function(
                     if (address_get_device_id(&dest, &device_id))
                         Send_CEvent_Notify(device_id, event_data);
                 } else {
-                    dest = pBacDest->Recipient._.Address;
+                    dest = pBacDest->Recipient.type.address;
                     Send_UEvent_Notify(
                         Handler_Transmit_Buffer, event_data, &dest);
                 }
@@ -1304,11 +1276,11 @@ void Notification_Class_find_recipient(void)
         /* pointer to first recipient */
         pBacDest = &pObject->Recipient_List[0];
         for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++, pBacDest++) {
-            if (pObject->Recipient_List[idx].Recipient.RecipientType ==
-                RECIPIENT_TYPE_DEVICE) {
+            if (pObject->Recipient_List[idx].Recipient.tag ==
+                BACNET_RECIPIENT_TAG_DEVICE) {
                 /* Device ID */
                 DeviceID = pObject->Recipient_List[idx]
-                               .Recipient._.DeviceIdentifier;
+                               .Recipient.type.device.instance;
                 /* Send who_ is request only when address of device is unknown.
                  */
                 if (DeviceID < BACNET_MAX_INSTANCE) {
@@ -1318,7 +1290,7 @@ void Notification_Class_find_recipient(void)
                     }
                 }
             } else if (pObject->Recipient_List[idx]
-                           .Recipient.RecipientType == RECIPIENT_TYPE_ADDRESS) {
+                           .Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
             }
         }
     }
@@ -1372,13 +1344,17 @@ static void uci_list(const char *sec_idx,
     const char *src_net;
     unsigned net;
     unsigned src_port;
+    unsigned i;
 
     ucirecp_n = ucix_get_list(ucirecp, ictx->ctx, ictx->section, sec_idx,
         "recipient");
 
     for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
         BACNET_ADDRESS src = { 0 };
-        recplist[ucirecp_i].ValidDays = 127; //TODO uci bit string 1,1,1,1,1,1,1 Mo,Di,Mi,Do,Fr,Sa,So
+        /* configure for every day, all day long */
+        for (i = 0; i < MAX_BACNET_DAYS_OF_WEEK; i++) {
+            bitstring_set_bit(&recplist[ucirecp_i].ValidDays, i, true);
+        }
         recplist[ucirecp_i].FromTime.hour = 0;
         recplist[ucirecp_i].FromTime.min = 0;
         recplist[ucirecp_i].FromTime.sec = 0;
@@ -1389,13 +1365,16 @@ static void uci_list(const char *sec_idx,
         recplist[ucirecp_i].ToTime.hundredths = 99;
         recplist[ucirecp_i].ConfirmedNotify = false;
         recplist[ucirecp_i].ProcessIdentifier = ucirecp_i;
-        recplist[ucirecp_i].Transitions = 7; //bit string 1,1,1 To Alarm,To Fault,To Normal
+        bitstring_set_bit(
+            &recplist[ucirecp_i].Transitions, TRANSITION_TO_OFFNORMAL, true);
+        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_FAULT, true);
+        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_NORMAL, true);
         uci_ptr = strtok(ucirecp[ucirecp_i], ",");
 	    if (strcmp(uci_ptr,"d") == 0) {
             uci_ptr = strtok(NULL, "\0");
-            recplist[ucirecp_i].Recipient._.DeviceIdentifier = atoi(uci_ptr);
-            recplist[ucirecp_i].Recipient.RecipientType =
-                RECIPIENT_TYPE_DEVICE;
+            recplist[ucirecp_i].Recipient.type.device.instance = atoi(uci_ptr);
+            recplist[ucirecp_i].Recipient.tag =
+                BACNET_RECIPIENT_TAG_DEVICE;
         } else if ((strcmp(uci_ptr,"n") == 0)) {
             uci_ptr = strtok(NULL, "\0");
             uci_ptr = strtok(uci_ptr, ",");
@@ -1426,20 +1405,20 @@ static void uci_list(const char *sec_idx,
                     src.mac_len = 7;
                     src.net = net;
                     src.len = 0;
-                    recplist[ucirecp_i].Recipient._.Address = src;
-                    recplist[ucirecp_i].Recipient.RecipientType =
-                        RECIPIENT_TYPE_ADDRESS;
+                    recplist[ucirecp_i].Recipient.type.address = src;
+                    recplist[ucirecp_i].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_ADDRESS;
                 }
             } else if (net == 65535) {
-                recplist[ucirecp_i].Recipient._.Address.net = net;
-                recplist[ucirecp_i].Recipient.RecipientType =
-                        RECIPIENT_TYPE_ADDRESS;
-                recplist[ucirecp_i].Recipient._.Address.len = 0;
-                recplist[ucirecp_i].Recipient._.Address.mac_len = 0;
+                recplist[ucirecp_i].Recipient.type.address.net = net;
+                recplist[ucirecp_i].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_ADDRESS;
+                recplist[ucirecp_i].Recipient.type.address.len = 0;
+                recplist[ucirecp_i].Recipient.type.address.mac_len = 0;
             }
         } else {
-            recplist[ucirecp_i].Recipient.RecipientType =
-                RECIPIENT_TYPE_NOTINITIALIZED;
+            recplist[ucirecp_i].Recipient.tag =
+                BACNET_RECIPIENT_TAG_MAX;
         }
     }
     for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
@@ -1451,17 +1430,16 @@ static void uci_list(const char *sec_idx,
             recplist[ucirecp_i];
 
         if (pObject->Recipient_List[ucirecp_i].Recipient.
-            RecipientType == RECIPIENT_TYPE_DEVICE) {
+            tag == BACNET_RECIPIENT_TAG_DEVICE) {
             /* copy Device_ID */
             DeviceID =
-                pObject->Recipient_List[ucirecp_i].Recipient._.
-                DeviceIdentifier;
+                pObject->Recipient_List[ucirecp_i].Recipient.type.device.instance;
             address_bind_request(DeviceID, &max_apdu, &src);
 
         } else if (pObject->Recipient_List[ucirecp_i].Recipient.
-            RecipientType == RECIPIENT_TYPE_ADDRESS) {
+            tag == BACNET_RECIPIENT_TAG_ADDRESS) {
             /* copy Address */
-            src = pObject->Recipient_List[ucirecp_i].Recipient._.Address;
+            src = pObject->Recipient_List[ucirecp_i].Recipient.type.address;
             address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
         }
     }
