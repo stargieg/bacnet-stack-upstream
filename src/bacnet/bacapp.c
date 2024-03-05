@@ -2176,62 +2176,6 @@ int bacapp_snprintf_value(
                     (unsigned) value->type.Time_Stamp.value.dateTime.time.hundredths);
                 ret_val += slen;
                 break;
-            case BACNET_APPLICATION_TAG_DEVICE_OBJECT_PROPERTY_REFERENCE:
-                slen = snprintf(str, str_len, "%i ",
-                        value->type.Device_Object_Property_Reference.deviceIdentifier.instance);
-                if (str) {
-                    str += slen;
-                    if (str_len >= slen) {
-                        str_len -= slen;
-                    } else {
-                        str_len = 0;
-                    }
-                }
-                ret_val += slen;
-                if (value->type.Device_Object_Property_Reference.objectIdentifier.type <= BACNET_OBJECT_TYPE_LAST) {
-                    slen = snprintf(str, str_len, "%s ",
-                        bactext_object_type_name(value->type.Device_Object_Property_Reference.objectIdentifier.type));
-                } else {
-                    slen = snprintf(str, str_len, "%u ",
-                        (unsigned)value->type.Device_Object_Property_Reference.objectIdentifier.type);
-                }
-                if (str) {
-                    str += slen;
-                    if (str_len >= slen) {
-                        str_len -= slen;
-                    } else {
-                        str_len = 0;
-                    }
-                }
-                ret_val += slen;
-                slen = snprintf(str, str_len, "%i ",
-                        value->type.Device_Object_Property_Reference.objectIdentifier.instance);
-                if (str) {
-                    str += slen;
-                    if (str_len >= slen) {
-                        str_len -= slen;
-                    } else {
-                        str_len = 0;
-                    }
-                }
-                ret_val += slen;
-                if (value->type.Device_Object_Property_Reference.objectIdentifier.type <= MAX_BACNET_PROPERTY_ID) {
-                    slen = snprintf(str, str_len, "%s",
-                        bactext_property_name(value->type.Device_Object_Property_Reference.propertyIdentifier));
-                } else {
-                    slen = snprintf(str, str_len, "%u",
-                        (unsigned)value->type.Device_Object_Property_Reference.propertyIdentifier);
-                }
-                if (str) {
-                    str += slen;
-                    if (str_len >= slen) {
-                        str_len -= slen;
-                    } else {
-                        str_len = 0;
-                    }
-                }
-                ret_val += slen;
-                break;
             case BACNET_APPLICATION_TAG_LIGHTING_COMMAND:
                 slen = snprintf(str, str_len, "(");
                 if (str) {
