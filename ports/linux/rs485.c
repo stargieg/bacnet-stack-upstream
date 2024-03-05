@@ -217,7 +217,7 @@ uint32_t RS485_Get_Baud_Rate(void)
  * ALGORITHM:   none
  * NOTES:       none
  *****************************************************************************/
-uint32_t RS485_Get_Port_Baud_Rate(volatile struct mstp_port_struct_t *mstp_port)
+uint32_t RS485_Get_Port_Baud_Rate(struct mstp_port_struct_t *mstp_port)
 {
     uint32_t baud = 0;
     SHARED_MSTP_DATA *poSharedData = (SHARED_MSTP_DATA *)mstp_port->UserData;
@@ -382,7 +382,7 @@ bool RS485_Set_Baud_Rate(uint32_t baud)
  * NOTES:       none
  *****************************************************************************/
 void RS485_Send_Frame(
-    volatile struct mstp_port_struct_t *mstp_port, /* port specific data */
+    struct mstp_port_struct_t *mstp_port, /* port specific data */
     uint8_t *buffer, /* frame to send (up to 501 bytes of data) */
     uint16_t nbytes)
 { /* number of bytes of data (up to 501) */
@@ -458,7 +458,7 @@ void RS485_Send_Frame(
  * ALGORITHM:   none
  * NOTES:       none
  *****************************************************************************/
-void RS485_Check_UART_Data(volatile struct mstp_port_struct_t *mstp_port)
+void RS485_Check_UART_Data(struct mstp_port_struct_t *mstp_port)
 {
     fd_set input;
     struct timeval waiter;
@@ -547,7 +547,9 @@ void RS485_Initialize(void)
     struct serial_struct newserial;
     float baud_error = 0.0;
 
-    printf("RS485: Initializing %s", RS485_Port_Name);
+#if PRINT_ENABLED
+    fprintf(stdout, "RS485 Interface: %s\n", RS485_Port_Name);
+#endif
     /*
        Open device for reading and writing.
        Blocking mode - more CPU effecient
@@ -600,14 +602,17 @@ void RS485_Initialize(void)
                 76800);
         if ((newserial.custom_divisor == 0) || (baud_error > 0.02)) {
             /* bad divisor */
-            fprintf(stderr, "bad custom divisor %d, base baud %d\n",
+            fprintf(stderr, "RS485 bad custom divisor %d, base baud %d\n",
                 newserial.custom_divisor, newserial.baud_base);
             exit(EXIT_FAILURE);
         }
         /* if all goes well, set new divisor */
         ioctl(RS485_Handle, TIOCSSERIAL, &newserial);
     }
-    printf(" at Baud Rate %u", RS485_Get_Baud_Rate());
+#if PRINT_ENABLED
+    fprintf(stdout, "RS485 Baud Rate %u\n", RS485_Get_Baud_Rate());
+    fflush(stdout);
+#endif
     /* destructor */
     atexit(RS485_Cleanup);
     /* flush any data waiting */
@@ -615,7 +620,6 @@ void RS485_Initialize(void)
     tcflush(RS485_Handle, TCIOFLUSH);
     /* ringbuffer */
     FIFO_Init(&Rx_FIFO, Rx_Buffer, sizeof(Rx_Buffer));
-    printf("=success!\n");
 }
 
 /* Print in a format for Wireshark ExtCap */
@@ -632,7 +636,7 @@ void RS485_Print_Ports(void)
     bool valid_port = false;
     struct serial_struct serinfo;
 
-    /* Scan through /sys/class/tty - 
+    /* Scan through /sys/class/tty -
        it contains all tty-devices in the system */
     n = scandir(sysdir, &namelist, NULL, NULL);
     if (n < 0) {
@@ -690,7 +694,7 @@ void RS485_Print_Ports(void)
 #include <string.h>
 int main(int argc, char *argv[])
 {
-    volatile struct mstp_port_struct_t mstp_port = { 0 };
+    struct mstp_port_struct_t mstp_port = { 0 };
     uint8_t token_buf[8] = { 0x55, 0xFF, 0x00, 0x7E, 0x07, 0x00, 0x00, 0xFD };
     uint8_t pfm_buf[8] = { 0x55, 0xFF, 0x01, 0x67, 0x07, 0x00, 0x00, 0x3E };
     long baud = 38400;

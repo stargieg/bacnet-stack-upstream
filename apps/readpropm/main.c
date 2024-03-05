@@ -35,6 +35,10 @@
 
 #define PRINT_ENABLED 1
 
+#if BACNET_SVC_SERVER
+#error "App requires server-only features disabled! Set BACNET_SVC_SERVER=0"
+#endif
+
 #include "bacnet/bacdef.h"
 #include "bacnet/config.h"
 #include "bacnet/bactext.h"
@@ -384,7 +388,7 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[argi], "--mac") == 0) {
             if (++argi < argc) {
-                if (address_mac_from_ascii(&mac, argv[argi])) {
+                if (bacnet_address_mac_from_ascii(&mac, argv[argi])) {
                     specific_address = true;
                 }
             }
@@ -397,7 +401,7 @@ int main(int argc, char *argv[])
             }
         } else if (strcmp(argv[argi], "--dadr") == 0) {
             if (++argi < argc) {
-                if (address_mac_from_ascii(&adr, argv[argi])) {
+                if (bacnet_address_mac_from_ascii(&adr, argv[argi])) {
                     specific_address = true;
                 }
             }

@@ -45,7 +45,6 @@
 #include "bacnet/basic/sys/mstimer.h"
 #include "bacnet/basic/sys/filename.h"
 #include "bacnet/basic/services.h"
-#include "bacnet/basic/services.h"
 #include "bacnet/basic/tsm/tsm.h"
 #if defined(BACDL_MSTP)
 #include "rs485.h"
@@ -365,7 +364,6 @@ int main(int argc, char *argv[])
     if (getenv("BACNET_DEBUG")) {
         BACnet_Debug_Enabled = true;
     }
-    timeout_milliseconds = apdu_timeout();
     /* decode any command line parameters */
     filename = filename_remove_path(argv[0]);
     for (argi = 1; argi < argc; argi++) {
@@ -385,7 +383,7 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[argi], "--mac") == 0) {
             if (++argi < argc) {
-                if (address_mac_from_ascii(&mac, argv[argi])) {
+                if (bacnet_address_mac_from_ascii(&mac, argv[argi])) {
                     global_broadcast = false;
                 }
             }
@@ -398,7 +396,7 @@ int main(int argc, char *argv[])
             }
         } else if (strcmp(argv[argi], "--dadr") == 0) {
             if (++argi < argc) {
-                if (address_mac_from_ascii(&adr, argv[argi])) {
+                if (bacnet_address_mac_from_ascii(&adr, argv[argi])) {
                     global_broadcast = false;
                 }
             }
@@ -481,6 +479,9 @@ int main(int argc, char *argv[])
     address_init();
     dlenv_init();
     atexit(datalink_cleanup);
+    if (timeout_milliseconds == 0) {
+        timeout_milliseconds = apdu_timeout() * apdu_retries();
+    }
     mstimer_set(&apdu_timer, timeout_milliseconds);
     mstimer_set(&datalink_timer, 1000);
     /* send the request */
