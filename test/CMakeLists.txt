@@ -21,6 +21,7 @@ if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Wno-sign-conversion -Wno-conversion)
     add_compile_options(-Wno-sign-compare -Wno-long-long)
     add_compile_options(-Wno-implicit-fallthrough -Wno-attributes)
+    add_compile_options(-Wno-missing-braces)
     # ignore some warnings that occur during unit testing
     add_compile_options(-Wno-unused-variable -Wno-unused-function)
     add_compile_options(-Wno-unused-parameter)
@@ -87,6 +88,7 @@ list(APPEND testdirs
   bacnet/reject
   bacnet/rp
   bacnet/rpm
+  bacnet/specialevent
   bacnet/timestamp
   bacnet/timesync
   bacnet/whohas
@@ -113,9 +115,11 @@ list(APPEND testdirs
   bacnet/basic/object/av
   bacnet/basic/object/bacfile
   bacnet/basic/object/bi
+  bacnet/basic/object/blo
   bacnet/basic/object/bo
   bacnet/basic/object/bv
   bacnet/basic/object/channel
+  bacnet/basic/object/calendar
   bacnet/basic/object/color_object
   bacnet/basic/object/color_temperature
   bacnet/basic/object/command
@@ -135,6 +139,7 @@ list(APPEND testdirs
   bacnet/basic/object/osv
   bacnet/basic/object/piv
   bacnet/basic/object/schedule
+  bacnet/basic/object/time_value
   bacnet/basic/object/trendlog
   # basic/sys
   bacnet/basic/sys/color_rgb
@@ -153,6 +158,7 @@ list(APPEND testdirs
   bacnet/datalink/cobs
   bacnet/datalink/crc
   bacnet/datalink/bvlc
+  bacnet/datalink/mstp
   )
 
 enable_testing()

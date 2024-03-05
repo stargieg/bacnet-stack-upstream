@@ -22,7 +22,6 @@ PLATFORM_SRC = \
 	$(PLATFORM_DIR)/main.c \
 	$(PLATFORM_DIR)/bacnet.c \
 	$(PLATFORM_DIR)/device.c \
-	$(PLATFORM_DIR)/dlmstp.c \
 	$(PLATFORM_DIR)/led.c \
 	$(PLATFORM_DIR)/netport.c \
 	$(PLATFORM_DIR)/rs485.c \
@@ -31,9 +30,9 @@ PLATFORM_SRC = \
 	$(PLATFORM_DIR)/system_stm32f4xx.c
 
 BASIC_SRC = \
-	$(BACNET_BASIC)/service/h_dcc.c \
-	$(BACNET_BASIC)/service/h_apdu.c \
 	$(BACNET_BASIC)/npdu/h_npdu.c \
+	$(BACNET_BASIC)/service/h_apdu.c \
+	$(BACNET_BASIC)/service/h_dcc.c \
 	$(BACNET_BASIC)/service/h_rd.c \
 	$(BACNET_BASIC)/service/h_rp.c \
 	$(BACNET_BASIC)/service/h_rpm.c \
@@ -43,11 +42,11 @@ BASIC_SRC = \
 	$(BACNET_BASIC)/service/h_noserv.c \
 	$(BACNET_BASIC)/service/s_iam.c \
 	$(BACNET_BASIC)/service/s_ihave.c \
-	$(BACNET_BASIC)/tsm/tsm.c \
 	$(BACNET_BASIC)/sys/debug.c \
 	$(BACNET_BASIC)/sys/ringbuf.c \
 	$(BACNET_BASIC)/sys/fifo.c \
-	$(BACNET_BASIC)/sys/mstimer.c
+	$(BACNET_BASIC)/sys/mstimer.c \
+	$(BACNET_BASIC)/tsm/tsm.c
 
 BACNET_SRC = \
 	$(BACNET_CORE)/abort.c \
@@ -62,8 +61,12 @@ BACNET_SRC = \
 	$(BACNET_CORE)/bacstr.c \
 	$(BACNET_CORE)/datalink/cobs.c \
 	$(BACNET_CORE)/datalink/crc.c \
+	$(BACNET_CORE)/datalink/dlmstp.c \
+	$(BACNET_CORE)/datalink/mstp.c \
+	$(BACNET_CORE)/datalink/mstptext.c \
 	$(BACNET_CORE)/datetime.c \
 	$(BACNET_CORE)/dcc.c \
+	$(BACNET_CORE)/indtext.c \
 	$(BACNET_CORE)/iam.c \
 	$(BACNET_CORE)/ihave.c \
 	$(BACNET_CORE)/hostnport.c \
@@ -78,6 +81,8 @@ BACNET_SRC = \
 	$(BACNET_CORE)/timestamp.c \
 	$(BACNET_CORE)/weeklyschedule.c \
 	$(BACNET_CORE)/dailyschedule.c \
+	$(BACNET_CORE)/calendar_entry.c \
+	$(BACNET_CORE)/special_event.c \
 	$(BACNET_CORE)/bactimevalue.c \
 	$(BACNET_CORE)/whohas.c \
 	$(BACNET_CORE)/whois.c \
@@ -148,6 +153,15 @@ BACNET_FLAGS += -DMAX_OCTET_STRING_BYTES=64
 # if called from root Makefile, PRINT was already defined
 BACNET_FLAGS += -UPRINT_ENABLED
 BACNET_FLAGS += -DPRINT_ENABLED=0
+ifeq (${SHIELD},)
+BACNET_FLAGS += -DRS485_DFR0259_ENABLED=1
+endif
+ifeq (${SHIELD},dfr0259)
+BACNET_FLAGS += -DRS485_DFR0259_ENABLED=1
+endif
+ifeq (${SHIELD},linksprite)
+BACNET_FLAGS += -DRS485_LINKSPRITE_ENABLED=1
+endif
 ifeq (${LEGACY},true)
 # disable deprecated function warnings for legacy builds
 BACNET_FLAGS += -DBACNET_STACK_DEPRECATED_DISABLE
@@ -210,11 +224,16 @@ GDB_PORT = 3333
 debug:
 	st-util --listen $(GDB_PORT)
 
+# Note: STLink is built into Nucleo board
+OPENOCD_FLAGS = -f interface/stlink.cfg -f target/stm32f4x.cfg
 # GDB using openocd (GDB server for ST Link)
 # sudo apt install openocd
 .PHONY: openocd
 openocd:
-	openocd -f interface/stlink.cfg -f target/stm32f4x.cfg
+	openocd $(OPENOCD_FLAGS)
+
+flash: $(TARGET).elf
+	openocd $(OPENOCD_FLAGS) -c "program $< verify reset" -c "shutdown"
 
 # graphical GDB debugging tool
 # note: relies on .gdbinit containing:
