@@ -1609,18 +1609,21 @@ int rr_decode_trendlog_entries(
                 return -1;
             }
         } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
+            decode_is_opening_tag_number(apdu, 2) &&
             !tag2) {
             tag2 = true;
             // context tag 2 is a status bitstring.
             // we don't do anything with this other than decode it.
-            len = decode_context_bitstring(&apdu[0], 2, &rec->status);
-            if (len > 0) {
-                status = 1;
-                apdu += len;
-                apdu_len -= len;
+            len = decode_context_bitstring(apdu, 2, &rec->status);
+            if (len <= 0) {
+                return -1;
             }
+            status = 1;
+            apdu += len;
+            apdu_len -= len;
         } else {
             if (apdu_len > 0) {
+                // each context tag may occur only once.
                 tag0 = false;
                 tag1 = false;
                 tag2 = false;
