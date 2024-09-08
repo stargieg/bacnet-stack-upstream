@@ -25,7 +25,7 @@
 #ifndef NC_H
 #define NC_H
 
-#include "bacnet/bacnet_stack_exports.h"
+#include "bacnet/basic/sys/bacnet_stack_exports.h"
 #include "bacnet/bacdest.h"
 #include "bacnet/event.h"
 #include "bacnet/list_element.h"

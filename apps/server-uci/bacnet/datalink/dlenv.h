@@ -27,7 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdint.h>
-#include "bacnet/bacnet_stack_exports.h"
+#include "bacnet/basic/sys/bacnet_stack_exports.h"
 #include "bacnet/datalink/datalink.h"
 #include "bacnet/npdu.h"
 

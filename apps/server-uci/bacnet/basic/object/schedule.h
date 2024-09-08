@@ -28,7 +28,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "bacnet/bacnet_stack_exports.h"
+#include "bacnet/basic/sys/bacnet_stack_exports.h"
 #include "bacnet/bacdef.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/datetime.h"

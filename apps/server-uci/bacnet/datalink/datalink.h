@@ -24,7 +24,7 @@
 *********************************************************************/
 #define DATALINK_H
 
-#include "bacnet/bacnet_stack_exports.h"
+#include "bacnet/basic/sys/bacnet_stack_exports.h"
 #include "bacnet/config.h"
 #include "bacnet/bacdef.h"
 
