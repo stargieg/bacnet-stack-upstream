@@ -55,6 +55,7 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
             printf(" [\"");
             object_value.value = &value;
             value.tag = BACNET_APPLICATION_TAG_TIMESTAMP;
+            value.type.Time_Stamp.tag = TIME_STAMP_DATETIME;
             value.type.Time_Stamp.value.dateTime = p->timestamp;
             bacapp_print_value(stdout, &object_value);
             printf("\",\"");
