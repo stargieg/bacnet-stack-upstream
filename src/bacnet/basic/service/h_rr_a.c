@@ -43,32 +43,46 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
 
         /* FIXME: what if application_data_len is bigger than 255? */
         /* value? need to loop until all of the len is gone... */
-
         status = rr_decode_trendlog_entries(
             data->application_data, data->application_data_len, &entry);
 #ifdef BACAPP_PRINT_ENABLED
         if (status < 1) {
             return;
         }
-        printf("{\"list\": [\n");
+        //json open list
+        printf("{\n \"list\": [\n");
         for (p = &entry; p != NULL; p = p->next) {
-            printf(" [\"");
+            //json open array
+            printf("  [");
+            //print timestamp
             object_value.value = &value;
             value.tag = BACNET_APPLICATION_TAG_TIMESTAMP;
             value.type.Time_Stamp.tag = TIME_STAMP_DATETIME;
             value.type.Time_Stamp.value.dateTime = p->timestamp;
+            printf("\"");
             bacapp_print_value(stdout, &object_value);
-            printf("\",\"");
+            printf("\",");
 
+            //print log value or status bits [log-disabled, buffer-purged, log-interrupted]
             object_value.value = &p->value;
+            bacapp_print_value(stdout, &object_value);
+            printf(",");
+
+            //print log status bits [in-alarm, fault, overriden, out-of-service]
+            object_value.value = &value;
+            value.tag = BACNET_APPLICATION_TAG_BIT_STRING;
+            value.type.Bit_String = p->status;
+            //TODO replace {} with [] in bacapp_snprintf_value #BACNET_APPLICATION_TAG_BIT_STRING
             bacapp_print_value(stdout, &object_value);
 
             if (p->next)
-                printf("\"],\n");
+                printf("],\n");
             else
-                printf("\"]\n");
+                //json last element
+                printf("]\n");
         }
-        printf("]}\n");
+        //json close list
+        printf(" ]\n}\n");
 #endif
     }
 }

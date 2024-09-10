@@ -1514,17 +1514,17 @@ int rr_decode_trendlog_entries(
 {
     int len;
     int status = -1;
-    bool tag0 = false;
-    bool tag1 = false;
-    bool tag2 = false;
-    uint8_t tag_number = 0;
+    bool timestamp = false;
+    bool log_value = false;
+    bool status_flags = false;
+    BACNET_TAG tag;
     rec->next = NULL;
+    rec->status.bits_used = NULL;
     while (apdu_len > 0) {
         if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            bacnet_is_opening_tag_number(apdu, apdu_len, 0, NULL) &&
-            !tag0) {
-            tag0 = true;
-
+            bacnet_is_opening_tag_number(&apdu[0], apdu_len, 0, NULL) &&
+            !timestamp) { 
+            timestamp=true;
             len = bacnet_datetime_context_decode(apdu, apdu_len, 0, &rec->timestamp);
             if (len <= 0) {
                 return -1;
@@ -1533,55 +1533,63 @@ int rr_decode_trendlog_entries(
             apdu_len -= len;
             status = 1;
         } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            bacnet_is_opening_tag_number(apdu, apdu_len, 1, NULL) &&
-            !tag1) {
-            tag1 = true;
+            bacnet_is_opening_tag_number(&apdu[0], apdu_len, 1, &len) &&
+            !log_value) {
+            log_value = true;
             // skip the opening tag
-            apdu++;
-            apdu_len--;
+            apdu += len;
+            apdu_len -= len;
 
             // decode the next context tag which has th value type
             len =
-                bacnet_tag_decode(apdu, apdu_len, &tag_number);
+                bacnet_tag_decode(apdu, apdu_len, &tag);
             if (len <= 0) {
                 return -1;
             }
             status = 1;
-            switch (tag_number) {
+            switch (tag.number) {
                 case TL_TYPE_BOOL:
                     rec->value.tag = BACNET_APPLICATION_TAG_BOOLEAN;
                     len = bacnet_boolean_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Boolean);
+                        apdu, apdu_len, tag.number, &rec->value.type.Boolean);
                     break;
                 case TL_TYPE_REAL:
                     rec->value.tag = BACNET_APPLICATION_TAG_REAL;
                     len = bacnet_real_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Real);
+                        apdu, apdu_len, tag.number, &rec->value.type.Real);
                     break;
                 case TL_TYPE_ENUM:
                     rec->value.tag = BACNET_APPLICATION_TAG_ENUMERATED;
                     len = bacnet_enumerated_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Enumerated);
+                        apdu, apdu_len, tag.number, &rec->value.type.Enumerated);
                     break;
                 case TL_TYPE_UNSIGN:
                     rec->value.tag = BACNET_APPLICATION_TAG_UNSIGNED_INT;
                     len = bacnet_unsigned_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Unsigned_Int);
+                        apdu, apdu_len, tag.number, &rec->value.type.Unsigned_Int);
                     break;
                 case TL_TYPE_SIGN:
                     rec->value.tag = BACNET_APPLICATION_TAG_SIGNED_INT;
                     len = bacnet_signed_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Signed_Int);
+                        apdu, apdu_len, tag.number, &rec->value.type.Signed_Int);
                     break;
                 case TL_TYPE_BITS:
                     rec->value.tag = BACNET_APPLICATION_TAG_BIT_STRING;
                     len = bacnet_bitstring_context_decode(
-                        apdu, apdu_len, tag_number, &rec->value.type.Bit_String);
+                        apdu, apdu_len, tag.number, &rec->value.type.Bit_String);
                     break;
                 case TL_TYPE_NULL:
                     rec->value.tag = BACNET_APPLICATION_TAG_NULL;
                     break;
+                case TL_TYPE_STATUS:
+                    //print log status bits [log-disabled, buffer-purged, log-interrupted]
+                    //should be copy to rec->status?
+                    rec->value.tag = BACNET_APPLICATION_TAG_BIT_STRING;
+                    len = bacnet_bitstring_context_decode(
+                        apdu, apdu_len, tag.number, &rec->value.type.Bit_String);
+                    break;
                 default:
+                    // anything to do here?
                     // skip over the value if we don't suppord decoding it
             }
             if (len <= 0) {
@@ -1592,18 +1600,18 @@ int rr_decode_trendlog_entries(
 
             // skip over the closing tag [1]
             if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-                bacnet_is_closing_tag_number(apdu, apdu_len, 1, NULL)) {
-                apdu++;
-                apdu_len--;
+                bacnet_is_closing_tag_number(&apdu[0], apdu_len, 1, &len)) {
+                    apdu += len;
+                    apdu_len -= len;
             } else {
                 return -1;
             }
-        } else if (IS_CONTEXT_SPECIFIC(apdu[0]) &&
-            !tag2) {
-            tag2 = true;
-            // context tag 2 is a status bitstring.
-            // we don't do anything with this other than decode it.
-            len = bacnet_bitstring_context_decode(apdu[0], apdu_len, 2, &rec->status);
+        } else if (IS_CONTEXT_SPECIFIC(apdu[0]) && !status_flags) {
+            //TODO Check for Context Tag: 2
+            status_flags = true;
+
+            //print log status bits [in-alarm, fault, overriden, out-of-service]
+            len = bacnet_bitstring_context_decode(apdu, apdu_len, 2, &rec->status);
             if (len > 0) {
                 status = 1;
                 apdu += len;
@@ -1611,12 +1619,13 @@ int rr_decode_trendlog_entries(
             }
         } else {
             if (apdu_len > 0) {
-                tag0 = false;
-                tag1 = false;
-                tag2 = false;
+                timestamp = false;
+                log_value = false;
+                status_flags = false;
                 rec->next = calloc(sizeof(BACNET_TRENDLOG_RECORD), 1);
                 rec = rec->next;
                 rec->next = NULL;
+                rec->status.bits_used = NULL;
             }
         }
     }

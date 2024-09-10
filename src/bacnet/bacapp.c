@@ -3093,7 +3093,7 @@ int bacapp_snprintf_value(
 #if defined(BACAPP_BIT_STRING)
             case BACNET_APPLICATION_TAG_BIT_STRING:
                 len = bitstring_bits_used(&value->type.Bit_String);
-                slen = bacapp_snprintf(str, str_len, "{");
+                slen = bacapp_snprintf(str, str_len, "[");
                 ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
                 for (i = 0; i < len; i++) {
                     bool bit;
@@ -3106,7 +3106,7 @@ int bacapp_snprintf_value(
                         ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
                     }
                 }
-                slen = bacapp_snprintf(str, str_len, "}");
+                slen = bacapp_snprintf(str, str_len, "]");
                 ret_val += slen;
                 break;
 #endif
