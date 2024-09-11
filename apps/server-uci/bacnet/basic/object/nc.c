@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "bacnet/basic/binding/address.h"
@@ -54,7 +55,7 @@
 #include "bacnet/datalink/datalink.h"
 
 #define PRINTF debug_perror
-
+#define INTRINSIC_REPORTING
 #if defined(INTRINSIC_REPORTING)
 /* buffer for sending event messages */
 //static uint8_t Event_Buffer[MAX_APDU];
