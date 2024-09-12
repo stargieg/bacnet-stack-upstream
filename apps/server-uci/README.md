@@ -1,46 +1,110 @@
-# Dep
+# Install dependencies
+
+## json-c
+```
+wget https://s3.amazonaws.com/json-c_releases/releases/json-c-0.17-nodoc.tar.gz
+tar -xf ./json-c-0.17-nodoc.tar.gz
+mkdir json-c-0.17/build
+cd json-c-0.17/build
+```
+### Linux configure
+```
+cmake ..
+```
+### MAC OS X configure
+```
+cmake -DCMAKE_INSTALL_RPATH=/usr/local/lib ..
+```
+### Build
+```
+cmake --build .
+```
+### Linux install
+```
+sudo cmake --install .
+sudo ldconfig
+```
+### MAC OS X install
+```
+cmake --install .
+```
 
 ## libubox
 ```
-cmake --help-policy CMP0042
 git clone git://git.openwrt.org/project/libubox.git
-mkdir libubox/build;cd libubox/build; cmake -D BUILD_LUA:BOOL=OFF -D BUILD_EXAMPLES:BOOL=OFF ..;cmake --build .
+mkdir libubox/build
+cd libubox/build
+```
+### Linux configure
+```
+cmake -DBUILD_LUA:BOOL=OFF ..
+```
+### MAC OS X configure
+```
+cmake -DBUILD_LUA:BOOL=OFF -DCMAKE_INSTALL_RPATH=/usr/local/lib ..
+```
+### Build
+```
+cmake --build .
+```
+### Linux install
+```
 sudo cmake --install .
 sudo ldconfig
+```
+### MAC OS X install
+```
+cmake --install .
 ```
 
 ## uci
 ```
 git clone git://git.openwrt.org/project/uci.git
-mkdir uci/build;cd uci/build; cmake -D BUILD_LUA:BOOL=OFF ..;cmake --build .
+mkdir uci/build
+cd uci/build
+```
+### Linux configure
+```
+cmake -DBUILD_LUA:BOOL=OFF ..
+```
+### MAC OS X configure
+```
+cmake -DBUILD_LUA:BOOL=OFF -DCMAKE_INSTALL_RPATH=/usr/local/lib -DCMAKE_MACOSX_RPATH=TRUE ..
+```
+### Build
+```
+cmake --build .
+```
+### Linux install
+```
 sudo cmake --install .
 sudo ldconfig
 ```
+### MAC OS X install
+```
+cmake --install .
+```
 
-## bacnet-stack
+# Build bacnet-stack
 ```
 git clone https://github.com/stargieg/bacnet-stack-upstream.git
-cd bacnet-stack-upstream ; git checkout server-uci
+cd bacnet-stack-upstream
+git checkout server-uci
 ```
 
-## Linux
+## Linux build
 ```
-BACNET_PORT=linux CSTANDARD=" -std=gnu17" UCI=1 UCI_LIB_DIR="/usr/local/lib" BACNET_SRC_DIR=../../src BACNET_PORT_DIR=../../ports/linux make -C apps/server-uci all
-```
-
-## MAC OS X
-```
-BACNET_PORT=bsd CSTANDARD=" -std=gnu17" UCI=1 UCI_LIB_DIR="/usr/local/lib" BACNET_SRC_DIR=../../src BACNET_PORT_DIR=../../ports/bsd make -C apps/server-uci all
+BACNET_PORT=linux CSTANDARD=" -std=gnu17" UCI=1 UCI_LIB_DIR="/usr/local/lib" make -C apps/server-uci all
 ```
 
-## Run
+## MAC OS X build
 ```
-bin/bacserv
+BACNET_PORT=bsd CSTANDARD=" -std=gnu17" UCI=1 UCI_LIB_DIR="/usr/local/lib" make -C apps/server-uci all
 ```
 
-### uci config files
+## uci config files
 
-#### /etc/config/bacnet_dev
+### /etc/config/bacnet_dev
 ```
 config dev '0'
         option Modelname 'Openwrt Router'
@@ -58,7 +122,7 @@ config dev '0'
         option iface 'enp0s3'
         option enable '1'
 ```
-#### /etc/config/bacnet_ai
+### /etc/config/bacnet_ai
 ```
 config ai 'default'
         option si_unit '98'
@@ -88,9 +152,14 @@ config ai '0'
         option value '23.3'
 ```
 
-### uci cmd
+## uci cmd
 
 ```
 uci show bacnet_dev
 uci show bacnet_ai
+```
+
+## Run
+```
+bin/bacserv
 ```
