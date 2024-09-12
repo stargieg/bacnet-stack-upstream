@@ -163,3 +163,51 @@ uci show bacnet_ai
 ```
 bin/bacserv
 ```
+
+## Section Device
+
+|Name|Type|Required|Default|Description|
+|----|----|--------|-------|-----------|
+|enable|boolean|yes|1|Enabled
+|debug|boolean|no|0|debug
+|Id|number|yes|4712|ID
+|Name|string|yes|SimpleServer|Name
+|Description|string|no|Openwrt Router|Description
+|Location|string|no|Europe|Location
+|bacdl|string|yes|bip|Data link 'arcnet' 'Arcnet' 'bip' 'bip6' 'ethernet' 'mstp'
+|iface|string|yes(*)|eth0|Device name 'eth0' required if bacdl is arcnet, bip, bip6 or ethernet
+|serial|string|yes(*)|/dev/ttyUSB0|Serial Port required if bacdl is mstp
+|port|number|yes(*)|47808|"IP Port" required if bacdl is bip or bip6
+|broadcast|number|no|(none)|Broadcast addr 65294 for ff0e or 65282 for ff02 if bacdl is bip or bip6
+|bbmd_addr|hostname|no|(none)|BBMD IP Adresse if bacdl is bip or bip6
+|bbmd_port|number|no|47808|BBMD IP Port if bacdl is bip or bip6
+|bdt_addr_1|host|no|(none)|BDT IP Adresse 1
+|bdt_port_1|number|no|47808|BDT IP Port 1
+|bdt_mask_1|ip4addr|no|(none)|Broadcast mask 192.168.1.255 if bacdl is bip
+|bdt_addr_2|host|no|(none)|BDT IP Adresse 2
+|bdt_port_2|number|no|47808|BDT IP Port 2
+|bdt_mask_2|ip4addr|no|(none)|Broadcast mask 192.168.1.255 if bacdl is bip
+|bdt_addr_3|host|no|(none)|BDT IP Adresse 3
+|bdt_port_3|number|no|47808|BDT IP Port 3
+|bdt_mask_3|ip4addr|no|(none)|Broadcast mask 192.168.1.255 if bacdl is bip
+|mac|number|yes(*)|1|MAC for MSTP 0-128 if bacdl is mstp
+|max_master|number|no|128|MAX Master for MSTP 0-128 if bacdl is mstp
+|max_frames|number|no|1|MAX Frames for MSTP 0-128 if bacdl is mstp
+|baud|number|yes(*)|38400|Datarate 9600 19200 38400 57600 115200 if bacdl is mstp
+|parity_bit|string|yes(*)|N|Parity Bit N, O, E if bacdl is mstp
+|data_bit|number|yes(*)|8|Data Bit 5, 6, 7, 8 if bacdl is mstp
+|stop_bit|number|yes(*)|1|Stop Bit 1, 2 if bacdl is mstp
+|apdu_timeout|number|no|0|APDU timeout in ms
+|apdu_retries|number|no|3|APDU retries
+|invoke_id|number|no|(none)|Invoke ID
+|net|number|no|0|NET|Number 0 or 6661
+
+
+## mstp sample
+```
+uci set bacnet_dev.0.iface='/dev/cu.usbserial-14320'
+uci set bacnet_dev.0.baud='9600'
+uci set bacnet_dev.0.mac='42'
+uci commit bacnet_dev
+bin/bacserv
+```
