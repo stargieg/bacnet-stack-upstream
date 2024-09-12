@@ -148,6 +148,9 @@ LFLAGS += -Wl,$(SYSTEM_LIB)
 CFLAGS += -ffunction-sections -fdata-sections
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-dead_strip
+ifeq (${UCI},1)
+LFLAGS += -Wl,-rpath,$(UCI_LIB_DIR) $(UCI_LIB_DIR)/libuci.dylib
+endif
 else
 LFLAGS += -Wl,--gc-sections
 endif
