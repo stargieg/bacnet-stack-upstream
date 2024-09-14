@@ -1999,7 +1999,8 @@ void Device_Init(object_functions_t *object_table)
     option = ucix_get_option(ctx, sec, sec_idx, "Description");
     if (option && characterstring_init_ansi(&option_str, option))
         characterstring_ansi_copy(Description,sizeof(Description),&option_str);
-    ucix_cleanup(ctx);
+    if (ctx)
+        ucix_cleanup(ctx);
     datetime_init();
     if (object_table) {
         Object_Table = object_table;
