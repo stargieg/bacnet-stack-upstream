@@ -19,8 +19,10 @@
 #include "bacnet/datalink/bvlc.h"
 
 /* specific defines for BACnet/IP over Ethernet */
+#define BIP_APDU_MAX 1476 //MAX_APDU
 #define BIP_HEADER_MAX (1 + 1 + 2)
-#define BIP_MPDU_MAX (BIP_HEADER_MAX + MAX_PDU)
+#define BIP_PDU_MAX (BIP_APDU_MAX + MAX_NPDU) //MAX_PDU
+#define BIP_MPDU_MAX (BIP_HEADER_MAX + BIP_PDU_MAX)
 
 #ifdef __cplusplus
 extern "C" {
