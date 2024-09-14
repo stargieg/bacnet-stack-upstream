@@ -12,8 +12,6 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
-#include <time.h>
-#include "bacnet/config.h"
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
@@ -216,7 +214,6 @@ int main(int argc, char *argv[])
     unsigned timeout = 1; /* milliseconds */
     uint32_t elapsed_milliseconds = 0;
     uint32_t elapsed_seconds = 0;
-    uint32_t address_binding_tmr = 0;
 #if defined(BACNET_TIME_MASTER)
     BACNET_DATE_TIME bdatetime;
 #endif
@@ -245,15 +242,44 @@ int main(int argc, char *argv[])
     Init_Service_Handlers();
     printf("BACnet Server Demo\n"
            "BACnet Stack Version %s\n"
-           "BACnet Device ID: %u\n"
-           "Max APDU: %d\n",
-        BACnet_Version, Device_Object_Instance_Number(), MAX_APDU);
+           "BACnet Device ID: %u\n",
+        BACnet_Version, Device_Object_Instance_Number());
     BACNET_CHARACTER_STRING DeviceName;
     if (Device_Object_Name(Device_Object_Instance_Number(), &DeviceName)) {
         printf("BACnet Device Name: %s\n", DeviceName.value);
     }
 
     Datalink_Transport = dlenv_init();
+    switch (Datalink_Transport) {
+        case DATALINK_ARCNET:
+#if defined(BACDL_ARCNET)
+            printf("Datalink Arcnet Max APDU: %d\n", ARCNET_MPDU_MAX);
+#endif
+            break;
+        case DATALINK_ETHERNET:
+#if defined(BACDL_ETHERNET)
+            printf("Datalink Ethernet Max APDU: %d\n", ETHERNET_MPDU_MAX);
+#endif
+            break;
+        case DATALINK_BIP:
+#if defined(BACDL_BIP)
+            printf("Datalink IPv4 Max APDU: %d\n", BIP_MPDU_MAX);
+#endif
+            break;
+        case DATALINK_BIP6:
+#if defined(BACDL_BIP6)
+            printf("Datalink IPv6 Max APDU: %d\n", BIP6_MPDU_MAX);
+#endif
+            break;
+        case DATALINK_MSTP:
+#if defined(BACDL_MSTP)
+            printf("Datalink MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
+#endif
+            break;
+        default:
+            break;
+        }
+
     atexit(datalink_cleanup);
     /* broadcast an I-Am on startup */
     Send_I_Am(&Handler_Transmit_Buffer[0]);
@@ -353,13 +379,7 @@ int main(int argc, char *argv[])
             address_cache_timer(elapsed_seconds);
         }
         handler_cov_task();
-        /* scan cache address */
-        address_binding_tmr += elapsed_seconds;
-        if (address_binding_tmr >= 60) {
-            address_cache_timer(address_binding_tmr);
-            address_binding_tmr = 0;
-        }
-#if defined(INTRINSIC_REPORTING)
+        #if defined(INTRINSIC_REPORTING)
         if (mstimer_expired(&BACnet_Notification_Timer)) {
             mstimer_reset(&BACnet_Notification_Timer);
             Notification_Class_find_recipient();
