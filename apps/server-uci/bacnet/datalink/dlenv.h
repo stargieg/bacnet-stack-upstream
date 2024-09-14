@@ -6,6 +6,7 @@
  * @copyright SPDX-License-Identifier: MIT
  * @ingroup DataLink
  */
+#ifndef BACNET_DLENV_H
 #define BACNET_DLENV_H
 #include <stddef.h>
 #include <stdint.h>
@@ -51,8 +52,31 @@ void bip_dl_debug_disable(void);
 BACNET_STACK_EXPORT
 int dlenv_register_as_foreign_device(void);
 
+#if 0
 BACNET_STACK_EXPORT
 void dlenv_network_port_init(void);
+#endif
+#if defined(BACDL_ARCNET)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_arcnet(void);
+#endif
+#if defined(BACDL_ETHERNET)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_ethernet(void);
+#endif
+#if defined(BACDL_BIP)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bip(void);
+#endif
+#if defined(BACDL_BIP6)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bip6(void);
+#endif
+#if defined(BACDL_MSTP)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_mstp(void);
+#endif
+
 
 BACNET_STACK_EXPORT
 void dlenv_maintenance_timer(uint16_t elapsed_seconds);
@@ -69,3 +93,4 @@ int dlenv_bbmd_result(void);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+#endif

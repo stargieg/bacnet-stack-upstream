@@ -10,11 +10,9 @@
 #define BACNET_BASIC_OBJECT_DEVICE_H
 #include <stdbool.h>
 #include <stdint.h>
-#include "bacnet/basic/sys/bacnet_stack_exports.h"
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/bacenum.h"
 #include "bacnet/create_object.h"
 #include "bacnet/delete_object.h"
 #include "bacnet/list_element.h"
@@ -98,7 +96,7 @@ typedef bool (*object_cov_function)(uint32_t object_instance);
  */
 typedef void (*object_cov_clear_function)(uint32_t object_instance);
 
-/** Intrinsic Reporting funcionality.
+/** Intrinsic Reporting functionality.
  * @ingroup ObjHelpers
  * @param [in] Object instance.
  */
@@ -243,6 +241,12 @@ void Device_Objects_Property_List(
     BACNET_OBJECT_TYPE object_type,
     uint32_t object_instance,
     struct special_property_list_t *pPropertyList);
+BACNET_STACK_EXPORT
+bool Device_Objects_Property_List_Member(
+    BACNET_OBJECT_TYPE object_type,
+    uint32_t object_instance,
+    BACNET_PROPERTY_ID object_property);
+
 /* functions to support COV */
 BACNET_STACK_EXPORT
 bool Device_Encode_Value_List(
@@ -266,6 +270,10 @@ unsigned Device_Object_List_Count(void);
 BACNET_STACK_EXPORT
 bool Device_Object_List_Identifier(
     uint32_t array_index, BACNET_OBJECT_TYPE *object_type, uint32_t *instance);
+BACNET_STACK_EXPORT
+int Device_Object_List_Element_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu);
+
 BACNET_STACK_EXPORT
 bool Device_Create_Object(BACNET_CREATE_OBJECT_DATA *data);
 BACNET_STACK_EXPORT
@@ -372,6 +380,8 @@ BACNET_STACK_EXPORT
 int Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata);
 BACNET_STACK_EXPORT
 bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data);
+BACNET_STACK_EXPORT
+void Device_Write_Property_Store_Callback_Set(write_property_function cb);
 
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT

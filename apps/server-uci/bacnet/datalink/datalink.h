@@ -6,6 +6,7 @@
  * @copyright SPDX-License-Identifier: MIT
  * @ingroup DataLink
  */
+#ifndef BACNET_DATALINK_H
 #define BACNET_DATALINK_H
 
 #include "bacnet/basic/sys/bacnet_stack_exports.h"
@@ -111,4 +112,4 @@ void datalink_maintenance_timer(uint16_t seconds);
  * to a specific DataLink network layer implementation either at compile time or
  * at runtime.
  */
-
+#endif

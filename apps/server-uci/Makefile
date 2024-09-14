@@ -183,6 +183,7 @@ BACNET_SRC = \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/*.c) \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/*.c) \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/binding/*.c) \
+	$(BACNET_SRC_DIR)/bacnet/basic/object/netport.c \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/service/*.c) \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/sys/*.c) \
 	$(wildcard $(BACNET_SRC_DIR)/bacnet/basic/ucix/*.c) \

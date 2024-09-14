@@ -353,7 +353,7 @@ int dlenv_register_as_foreign_device(void)
 }
 
 #if (BACNET_PROTOCOL_REVISION >= 17)
-#if defined(NO_BACDL_BIP)
+#if defined(BACDL_BIP)
 /**
  * Datalink network port object settings
  */
@@ -398,14 +398,14 @@ void dlenv_network_port_init_bip(void)
     Network_Port_Reliability_Set(instance, RELIABILITY_NO_FAULT_DETECTED);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+    Network_Port_APDU_Length_Set(instance, BIP_APDU_MAX);
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
     Network_Port_Changes_Pending_Set(instance, false);
 }
 #endif
-#if defined(NO_BACDL_MSTP)
+#if defined(BACDL_MSTP)
 /**
  * Datalink network port object settings
  */
@@ -433,7 +433,7 @@ void dlenv_network_port_init_mstp(void)
     Network_Port_Changes_Pending_Set(instance, false);
 }
 #endif
-#if defined(NO_BACDL_BIP6)
+#if defined(BACDL_BIP6)
 /**
  * Datalink network port object settings
  */
@@ -460,7 +460,7 @@ void dlenv_network_port_init_bip6(void)
     Network_Port_Link_Speed_Set(instance, 0.0);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+    Network_Port_APDU_Length_Set(instance, BIP6_APDU_MAX);
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -692,6 +692,37 @@ int dlenv_init(void)
 #endif
     if (!ctx)
         ucix_cleanup(ctx);
+
+    switch (Datalink_Transport) {
+#if defined(BACDL_ARCNET)
+        case DATALINK_ARCNET:
+            dlenv_network_port_init_arcnet();
+            break;
+#endif
+#if defined(BACDL_ETHERNET)
+        case DATALINK_ETHERNET:
+            dlenv_network_port_init_ethernet();
+            break;
+#endif
+#if defined(BACDL_BIP)
+        case DATALINK_BIP:
+            dlenv_network_port_init_bip();
+            break;
+#endif
+#if defined(BACDL_BIP6)
+        case DATALINK_BIP6:
+            dlenv_network_port_init_bip6();
+            break;
+#endif
+#if defined(BACDL_MSTP)
+        case DATALINK_MSTP:
+            dlenv_network_port_init_mstp();
+            break;
+#endif
+        default:
+            break;
+    }
+
 #if 0
     dlenv_network_port_init();
     dlenv_register_as_foreign_device();
