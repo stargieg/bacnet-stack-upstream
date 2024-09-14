@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "bacnet/config.h"
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
@@ -19,19 +18,18 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/datalink/dlenv.h"
 #include "bacnet/basic/tsm/tsm.h"
-#if (BACNET_PROTOCOL_REVISION >= 17)
-#include "bacnet/basic/object/netport.h"
-#endif
-#include <strings.h>
-#include "bacnet/basic/ucix/ucix.h"
-
-#if defined(BACDL_ARCNET)
-#include "bacnet/datalink/arcnet.h"
-#endif
 #if defined(BACDL_BIP)
 #include "bacnet/datalink/bip.h"
 #include "bacnet/datalink/bvlc.h"
 #include "bacnet/basic/bbmd/h_bbmd.h"
+#endif
+
+#if (BACNET_PROTOCOL_REVISION >= 17)
+#include "bacnet/basic/object/netport.h"
+#endif
+
+#if defined(BACDL_ARCNET)
+#include "bacnet/datalink/arcnet.h"
 #endif
 #if defined(BACDL_BIP6)
 #include "bacnet/datalink/bip6.h"
@@ -45,7 +43,16 @@
 #include "bacnet/datalink/dlmstp.h"
 #endif
 
+//#include <strings.h>
+#include "bacnet/basic/ucix/ucix.h"
+
+
 /** @file dlenv.c  Initialize the DataLink configuration. */
+/* timer used to renew Foreign Device Registration */
+#if defined(BACDL_BIP) || defined(BACDL_BIP6)
+static uint16_t BBMD_Timer_Seconds;
+static uint16_t BBMD_TTL_Seconds = 60000;
+#endif
 
 static enum {
     DATALINK_NONE = 0,
@@ -58,12 +65,10 @@ static enum {
 
 
 #if defined(BACDL_BIP)
-//#ifndef BBMD_ENABLED
-//#define BBMD_ENABLED 1
-/* timer used to renew Foreign Device Registration */
-static uint16_t BBMD_Timer_Seconds;
+#ifndef BBMD_ENABLED
+#define BBMD_ENABLED 1
+#endif
 /* BBMD variables */
-static uint16_t BBMD_TTL_Seconds = 60000;
 static BACNET_IP_ADDRESS BBMD_Address;
 static bool BBMD_Address_Valid;
 static uint16_t BBMD_Result = 0;
@@ -163,8 +168,10 @@ static int bbmd_register_as_foreign_device(void)
     struct uci_context *ctx;
 
     ctx = ucix_init("bacnet_dev");
-    if (!ctx)
+    if (!ctx) {
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
+        exit(1);
+    }
     BBMD_Address.port = ucix_get_option_int(ctx, "bacnet_dev", "0", "bbmd_port", 47808);
     BBMD_TTL_Seconds = ucix_get_option_int(ctx, "bacnet_dev", "0", "bbmd_ttl", 65535);
     option = ucix_get_option(ctx, "bacnet_dev", "0", "bbmd_addr");
@@ -274,6 +281,7 @@ static int bbmd_register_as_foreign_device(void)
  *         0 if no registration request is sent, or
  *         -1 if registration fails.
  */
+//TODO uci support
 static int bbmd6_register_as_foreign_device(void)
 {
     int retval = 0;
@@ -418,7 +426,7 @@ void dlenv_network_port_init_mstp(void)
     Network_Port_Reliability_Set(instance, RELIABILITY_NO_FAULT_DETECTED);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+    Network_Port_APDU_Length_Set(instance, DLMSTP_APDU_MAX);
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -562,8 +570,10 @@ int dlenv_init(void)
 #endif
     char option_chr[16];
     ctx = ucix_init("bacnet_dev");
-    if (!ctx)
+    if (!ctx) {
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
+        exit(1);
+    }
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "bacdl");
     if (option != 0) {
@@ -661,11 +671,15 @@ int dlenv_init(void)
         snprintf(ifname,sizeof(ifname),"%s",option);
         /* === Initialize the Datalink Here === */
         if (!datalink_init(ifname)) {
+            if (!ctx)
+                ucix_cleanup(ctx);
             exit(1);
         }
     } else {
         /* === Initialize the Datalink Here === */
         if (!datalink_init(NULL)) {
+            if (!ctx)
+                ucix_cleanup(ctx);
             exit(1);
         }
     }
@@ -676,7 +690,8 @@ int dlenv_init(void)
         tsm_invokeID_set(option_int);
     }
 #endif
-    ucix_cleanup(ctx);
+    if (!ctx)
+        ucix_cleanup(ctx);
 #if 0
     dlenv_network_port_init();
     dlenv_register_as_foreign_device();
