@@ -1286,8 +1286,11 @@ void Notification_Class_find_recipient(void)
                  */
                 if (DeviceID < BACNET_MAX_INSTANCE) {
                     /* note: BACNET_MAX_INSTANCE = wildcard, not valid */
-                    if (!address_bind_request(DeviceID, &max_apdu, &src)) {
-                        Send_WhoIs(DeviceID, DeviceID);
+                    /* note: BUG not on MSTP */
+                    if ( datalink_get() == 3 || datalink_get() == 4 ) {
+                        if (!address_bind_request(DeviceID, &max_apdu, &src)) {
+                            Send_WhoIs(DeviceID, DeviceID);
+                        }
                     }
                 }
             } else if (pObject->Recipient_List[idx]

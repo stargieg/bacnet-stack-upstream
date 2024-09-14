@@ -59,6 +59,11 @@ int datalink_set(char *datalink_string)
     return Datalink_Transport;
 }
 
+int datalink_get(void)
+{
+    return Datalink_Transport;
+}
+
 bool datalink_init(char *ifname)
 {
     bool status = false;
