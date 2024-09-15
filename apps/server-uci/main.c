@@ -196,6 +196,12 @@ static void print_usage(const char *filename)
     printf("       [--version]\n");
 }
 
+static void print_help(const char *filename)
+{
+    printf("Simulate a BACnet server device\n"
+            );
+}
+
 /** Main function of server demo.
  *
  * @see Device_Set_Object_Instance_Number, dlenv_init, Send_I_Am,
@@ -214,6 +220,7 @@ int main(int argc, char *argv[])
     unsigned timeout = 1; /* milliseconds */
     uint32_t elapsed_milliseconds = 0;
     uint32_t elapsed_seconds = 0;
+    BACNET_CHARACTER_STRING DeviceName;
 #if defined(BACNET_TIME_MASTER)
     BACNET_DATE_TIME bdatetime;
 #endif
@@ -224,6 +231,7 @@ int main(int argc, char *argv[])
     for (argi = 1; argi < argc; argi++) {
         if (strcmp(argv[argi], "--help") == 0) {
             print_usage(filename);
+            print_help(filename);
             return 0;
         }
         if (strcmp(argv[argi], "--version") == 0) {
@@ -236,15 +244,17 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
+    printf(
+        "BACnet Server Demo\n"
+        "BACnet Stack Version %s\n"
+        "BACnet Device ID: %u\n",
+        BACnet_Version, Device_Object_Instance_Number());
     /* load any static address bindings to show up
        in our device bindings list */
     address_init();
     Init_Service_Handlers();
-    printf("BACnet Server Demo\n"
-           "BACnet Stack Version %s\n"
-           "BACnet Device ID: %u\n",
-        BACnet_Version, Device_Object_Instance_Number());
-    BACNET_CHARACTER_STRING DeviceName;
+    /* initialize timesync callback function. */
+    handler_timesync_set_callback_set(&datetime_timesync);
     if (Device_Object_Name(Device_Object_Instance_Number(), &DeviceName)) {
         printf("BACnet Device Name: %s\n", DeviceName.value);
     }
