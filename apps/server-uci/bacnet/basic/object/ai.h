@@ -46,19 +46,51 @@ BACNET_STACK_EXPORT
 bool Analog_Input_Object_Instance_Add(uint32_t instance);
 
 BACNET_STACK_EXPORT
+bool Analog_Input_Object_Name(
+    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
+BACNET_STACK_EXPORT
+bool Analog_Input_Name_Set(uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
+const char *Analog_Input_Name_ASCII(uint32_t object_instance);
+
+BACNET_STACK_EXPORT
+const char *Analog_Input_Description(uint32_t instance);
+BACNET_STACK_EXPORT
+bool Analog_Input_Description_Set(uint32_t instance, const char *new_name);
+
+BACNET_STACK_EXPORT
+BACNET_RELIABILITY Analog_Input_Reliability(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Analog_Input_Reliability_Set(
+    uint32_t object_instance, BACNET_RELIABILITY value);
+
+BACNET_STACK_EXPORT
+bool Analog_Input_Units_Set(uint32_t instance, uint16_t units);
+BACNET_STACK_EXPORT
+uint16_t Analog_Input_Units(uint32_t instance);
+
+BACNET_STACK_EXPORT
+int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
+BACNET_STACK_EXPORT
+bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+
+BACNET_STACK_EXPORT
 float Analog_Input_Present_Value(uint32_t object_instance);
 BACNET_STACK_EXPORT
-bool Analog_Input_Present_Value_Set(
-    uint32_t object_instance, float value, unsigned priority);
+bool Analog_Input_Present_Value_Set(uint32_t object_instance, float value, unsigned priority);
+
 BACNET_STACK_EXPORT
-bool Analog_Input_Present_Value_Relinquish(
-    uint32_t object_instance, unsigned priority);
+bool Analog_Input_Out_Of_Service(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Analog_Input_Out_Of_Service_Set(uint32_t object_instance, bool oos_flag);
+
+BACNET_STACK_EXPORT
+bool Analog_Input_Present_Value_Relinquish(uint32_t object_instance, unsigned priority);
 BACNET_STACK_EXPORT
 unsigned Analog_Input_Present_Value_Priority(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
-void Analog_Input_Write_Present_Value_Callback_Set(
-    analog_input_write_present_value_callback cb);
+void Analog_Input_Write_Present_Value_Callback_Set(analog_input_write_present_value_callback cb);
 
 BACNET_STACK_EXPORT
 float Analog_Input_Relinquish_Default(uint32_t object_instance);
@@ -87,35 +119,9 @@ BACNET_STACK_EXPORT
 bool Analog_Input_Resolution_Set(uint32_t object_instance, float value);
 
 BACNET_STACK_EXPORT
-bool Analog_Input_Object_Name(
-    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
-BACNET_STACK_EXPORT
-bool Analog_Input_Name_Set(uint32_t object_instance, char *new_name);
-
-BACNET_STACK_EXPORT
-char *Analog_Input_Description(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Analog_Input_Description_Set(uint32_t instance, char *new_name);
-
-BACNET_STACK_EXPORT
-bool Analog_Input_Units_Set(uint32_t instance, uint16_t units);
-BACNET_STACK_EXPORT
-uint16_t Analog_Input_Units(uint32_t instance);
-
-BACNET_STACK_EXPORT
-bool Analog_Input_Out_Of_Service(uint32_t instance);
-BACNET_STACK_EXPORT
-void Analog_Input_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
-
-BACNET_STACK_EXPORT
 bool Analog_Input_Overridden(uint32_t instance);
 BACNET_STACK_EXPORT
 void Analog_Input_Overridden_Set(uint32_t instance, bool oos_flag);
-
-BACNET_STACK_EXPORT
-BACNET_RELIABILITY Analog_Input_Reliability(uint32_t object_instance);
-BACNET_STACK_EXPORT
-bool Analog_Input_Reliability_Set(uint32_t object_instance, BACNET_RELIABILITY value);
 
 BACNET_STACK_EXPORT
 float Analog_Input_Min_Pres_Value(uint32_t object_instance);
@@ -125,11 +131,6 @@ BACNET_STACK_EXPORT
 float Analog_Input_Max_Pres_Value(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Analog_Input_Max_Pres_Value_Set(uint32_t object_instance, float value);
-
-BACNET_STACK_EXPORT
-int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
-BACNET_STACK_EXPORT
-bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
 
 /* note: header of Intrinsic_Reporting function is required
     even when INTRINSIC_REPORTING is not defined */

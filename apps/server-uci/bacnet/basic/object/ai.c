@@ -252,7 +252,7 @@ unsigned Analog_Input_Instance_To_Index(uint32_t object_instance)
  */
 float Analog_Input_Present_Value(uint32_t object_instance)
 {
-    float value = 0.0;
+    float value = 0.0f;
     uint8_t priority = 0; /* loop counter */
     struct object_data *pObject;
 
@@ -268,6 +268,471 @@ float Analog_Input_Present_Value(uint32_t object_instance)
     }
 
     return value;
+}
+
+/**
+ * This function is used to detect a value change,
+ * using the new value compared against the prior
+ * value, using a delta as threshold.
+ *
+ * This method will update the COV-changed attribute.
+ *
+ * @param index  Object index
+ * @param value  Given present value.
+ */
+static void 
+Analog_Input_COV_Detect(struct object_data *pObject, float value)
+{
+    float prior_value = 0.0f;
+    float cov_increment = 0.0f;
+    float cov_delta = 0.0f;
+
+    if (pObject) {
+        prior_value = pObject->Prior_Value;
+        cov_increment = pObject->COV_Increment;
+        if (prior_value > value) {
+            cov_delta = prior_value - value;
+        } else {
+            cov_delta = value - prior_value;
+        }
+        if (cov_delta >= cov_increment) {
+            pObject->Changed = true;
+            pObject->Prior_Value = value;
+        }
+    }
+}
+
+/**
+ * For a given object instance-number, sets the present-value
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - floating point analog value
+ * @param  priority - priority-array index value 1..16
+ * @return  true if values are within range and present-value is set.
+ */
+bool Analog_Input_Present_Value_Set(
+    uint32_t object_instance, float value, unsigned priority)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
+            (value >= pObject->Min_Pres_Value) &&
+            (value <= pObject->Max_Pres_Value)) {
+            pObject->Relinquished[priority - 1] = false;
+            pObject->Priority_Array[priority - 1] = value;
+            Analog_Input_COV_Detect(
+                pObject, Analog_Input_Present_Value(object_instance));
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, loads the object-name into
+ * a characterstring. Note that the object name must be unique
+ * within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  object_name - holds the object-name retrieved
+ *
+ * @return  true if object-name was retrieved
+ */
+bool Analog_Input_Object_Name(
+    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+    char name_text[32];
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (pObject->Object_Name) {
+            status = characterstring_init_ansi(object_name,
+                pObject->Object_Name);
+        } else {
+            snprintf(name_text, sizeof(name_text), "ANALOG OUTPUT %u",
+                object_instance);
+            status = characterstring_init_ansi(object_name, name_text);
+        }
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ * Note that the object name must be unique within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Analog_Input_Name_Set(uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
+    BACNET_CHARACTER_STRING object_name;
+    BACNET_OBJECT_TYPE found_type = 0;
+    uint32_t found_instance = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        /* All the object names in a device must be unique */
+        characterstring_init_ansi(&object_name, new_name);
+        if (Device_Valid_Object_Name(
+                &object_name, &found_type, &found_instance)) {
+            if ((found_type == Object_Type) &&
+                (found_instance == object_instance)) {
+                /* writing same name to same object */
+                status = true;
+            } else {
+                /* duplicate name! */
+                status = false;
+            }
+        } else {
+            status = true;
+            pObject->Object_Name = new_name;
+            Device_Inc_Database_Revision();
+        }
+    }
+
+    return status;
+}
+
+/**
+ * @brief Return the object name C string
+ * @param object_instance [in] BACnet object instance number
+ * @return object name or NULL if not found
+ */
+const char *Analog_Input_Name_ASCII(uint32_t object_instance)
+{
+    const char *name = NULL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = pObject->Object_Name;
+    }
+
+    return name;
+}
+
+/**
+ * For a given object instance-number, gets the event-state property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-state property value
+ */
+unsigned Analog_Input_Event_State(uint32_t object_instance)
+{
+    unsigned state = EVENT_STATE_NORMAL;
+#if defined(INTRINSIC_REPORTING)
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        state = pObject->Event_State;
+    }
+#else
+    (void)object_instance;
+#endif
+
+    return state;
+}
+
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param  object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+const char *Analog_Input_Description(uint32_t object_instance)
+{
+    const char *name = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = pObject->Description;
+    }
+
+    return name;
+}
+
+/**
+ * @brief For a given object instance-number, sets the description
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ * @return  true if object-name was set
+ */
+bool Analog_Input_Description_Set(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Description = new_name;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the reliability
+ * @param  object_instance - object-instance number of the object
+ * @return reliability property value
+ */
+BACNET_RELIABILITY Analog_Input_Reliability(uint32_t object_instance)
+{
+    BACNET_RELIABILITY value = RELIABILITY_NO_FAULT_DETECTED;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Reliability;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, gets the Fault status flag
+ * @param  object_instance - object-instance number of the object
+ * @return  true the status flag is in Fault
+ */
+static bool Analog_Input_Object_Fault(struct object_data *pObject)
+{
+    bool fault = false;
+
+    if (pObject) {
+        if (pObject->Reliability != RELIABILITY_NO_FAULT_DETECTED) {
+            fault = true;
+        }
+    }
+
+    return fault;
+}
+
+/**
+ * @brief For a given object instance-number, sets the reliability
+ * @param  object_instance - object-instance number of the object
+ * @param  value - reliability property value
+ * @return  true if the reliability property value was set
+ */
+bool Analog_Input_Reliability_Set(
+    uint32_t object_instance, BACNET_RELIABILITY value)
+{
+    struct object_data *pObject;
+    bool status = false;
+    bool fault = false;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (value <= 255) {
+            fault = Analog_Input_Object_Fault(pObject);
+            pObject->Reliability = value;
+            if (fault != Analog_Input_Object_Fault(pObject)) {
+                pObject->Changed = true;
+            }
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, determines the COV status
+ * @param  object_instance - object-instance number of the object
+ * @return  true if the COV flag is set
+ */
+bool Analog_Input_Change_Of_Value(uint32_t object_instance)
+{
+    bool changed = false;
+
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        changed = pObject->Changed;
+    }
+
+    return changed;
+}
+
+/**
+ * @brief For a given object instance-number, clears the COV flag
+ * @param  object_instance - object-instance number of the object
+ */
+void Analog_Input_Change_Of_Value_Clear(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Changed = false;
+    }
+}
+
+/**
+ * For a given object instance-number, loads the value_list with the COV data.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value_list - list of COV data
+ *
+ * @return  true if the value list is encoded
+ */
+bool Analog_Input_Encode_Value_List(
+    uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
+{
+    bool status = false;
+    bool in_alarm = true;
+    bool out_of_service = false;
+    bool fault = false;
+    bool overridden = false;
+    float present_value = 0.0f;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (Analog_Input_Event_State(object_instance) == EVENT_STATE_NORMAL) 
+            in_alarm = false;
+        if (Analog_Input_Object_Fault(pObject))
+            fault = true;
+        overridden = pObject->Overridden;
+        out_of_service = pObject->Out_Of_Service;
+        present_value = pObject->Prior_Value;
+        status = cov_value_list_encode_real(
+            value_list, present_value, in_alarm, fault, overridden,
+            out_of_service);
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the COV-Increment value
+ * @param  object_instance - object-instance number of the object
+ * @return  COV-Increment value
+ */
+float Analog_Input_COV_Increment(uint32_t object_instance)
+{
+    float value = 0.0f;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->COV_Increment;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the COV-Increment value
+ * @param  object_instance - object-instance number of the object
+ * @param  value - COV-Increment value
+ */
+void Analog_Input_COV_Increment_Set(uint32_t object_instance, float value)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = limit_value_by_resolution(value, pObject->Resolution);
+        pObject->COV_Increment = value;
+        Analog_Input_COV_Detect(pObject, pObject->Prior_Value);
+    }
+}
+
+/**
+ * For a given object instance-number, returns the units property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  units property value
+ */
+uint16_t Analog_Input_Units(uint32_t object_instance)
+{
+    uint16_t units = UNITS_NO_UNITS;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        units = pObject->Units;
+    }
+
+    return units;
+}
+
+/**
+ * For a given object instance-number, sets the units property value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param units - units property value
+ *
+ * @return true if the units property value was set
+ */
+bool Analog_Input_Units_Set(uint32_t object_instance, uint16_t units)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Units = units;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the out-of-service
+ * property value
+ * @param object_instance - object-instance number of the object
+ * @return out-of-service property value
+ */
+bool Analog_Input_Out_Of_Service(uint32_t object_instance)
+{
+    bool value = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Out_Of_Service;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the out-of-service property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @param value - boolean out-of-service value
+ * @return true if the out-of-service property value was set
+ */
+void Analog_Input_Out_Of_Service_Set(uint32_t object_instance, bool value)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (pObject->Out_Of_Service != value) {
+            pObject->Changed = true;
+        }
+        pObject->Out_Of_Service = value;
+    }
 }
 
 #if defined(INTRINSIC_REPORTING)
@@ -623,27 +1088,52 @@ bool Analog_Input_Notify_Type_Set(uint32_t object_instance, uint8_t value)
 
 
 /**
- * For a given object instance-number, returns the Acked Transitions
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - acked_info struct
- *
- * @return true
+ * @brief Encode a EventTimeStamps property element
+ * @param object_instance [in] BACnet network port object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-bool Analog_Input_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION])
+static int Analog_Input_Event_Time_Stamps_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
 {
+    int apdu_len = 0, len = 0;
     struct object_data *pObject;
-    uint8_t b = 0;
+
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
-            value[b] = &pObject->Event_Time_Stamps[b];
+        if (index < MAX_BACNET_EVENT_TRANSITION) {
+            len = encode_opening_tag(apdu, TIME_STAMP_DATETIME);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_application_date(
+                apdu, &pObject->Event_Time_Stamps[index].date);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_application_time(
+                apdu, &pObject->Event_Time_Stamps[index].time);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_closing_tag(apdu, TIME_STAMP_DATETIME);
+            apdu_len += len;
+        } else {
+            apdu_len = BACNET_STATUS_ERROR;
         }
-        return true;
-    } else
-        return false;
-}
+    } else {
+        apdu_len = BACNET_STATUS_ERROR;
+    }
 
+    return apdu_len;
+}
 #endif
 
 /**
@@ -767,62 +1257,6 @@ bool Analog_Input_Relinquish_Default_Set(uint32_t object_instance, float value)
 }
 
 /**
- * For a given object instance-number, checks the present-value for COV
- *
- * @param  pObject - specific object with valid data
- * @param  value - floating point analog value
- */
-static void Analog_Input_Present_Value_COV_Detect(
-    struct object_data *pObject, float value)
-{
-    float prior_value = 0.0;
-    float cov_increment = 0.0;
-    float cov_delta = 0.0;
-
-    if (pObject) {
-        prior_value = pObject->Prior_Value;
-        cov_increment = pObject->COV_Increment;
-        if (prior_value > value) {
-            cov_delta = prior_value - value;
-        } else {
-            cov_delta = value - prior_value;
-        }
-        if (cov_delta >= cov_increment) {
-            pObject->Changed = true;
-            pObject->Prior_Value = value;
-        }
-    }
-}
-
-/**
- * For a given object instance-number, sets the present-value
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog value
- * @param  priority - priority-array index value 1..16
- * @return  true if values are within range and present-value is set.
- */
-bool Analog_Input_Present_Value_Set(
-    uint32_t object_instance, float value, unsigned priority)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            pObject->Relinquished[priority - 1] = false;
-            pObject->Priority_Array[priority - 1] = value;
-            Analog_Input_Present_Value_COV_Detect(
-                pObject, Analog_Input_Present_Value(object_instance));
-            status = true;
-        }
-    }
-
-    return status;
-}
-
-/**
  * @brief For a given object instance-number, relinquishes the present-value
  * @param  object_instance - object-instance number of the object
  * @param  priority - priority-array index value 1..16
@@ -839,7 +1273,7 @@ bool Analog_Input_Present_Value_Relinquish(
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
             pObject->Relinquished[priority - 1] = true;
             pObject->Priority_Array[priority - 1] = 0.0;
-            Analog_Input_Present_Value_COV_Detect(
+            Analog_Input_COV_Detect(
                 pObject, Analog_Input_Present_Value(object_instance));
             status = true;
         }
@@ -958,160 +1392,6 @@ static bool Analog_Input_Present_Value_Relinquish_Write(
 }
 
 /**
- * For a given object instance-number, loads the object-name into
- * a characterstring. Note that the object name must be unique
- * within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  object_name - holds the object-name retrieved
- *
- * @return  true if object-name was retrieved
- */
-bool Analog_Input_Object_Name(
-    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
-{
-    bool status = false;
-    struct object_data *pObject;
-    char name_text[32];
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Object_Name) {
-            status = characterstring_init_ansi(object_name,
-                pObject->Object_Name);
-        } else {
-            snprintf(name_text, sizeof(name_text), "ANALOG OUTPUT %u",
-                object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
-        }
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, sets the object-name
- * Note that the object name must be unique within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
- */
-bool Analog_Input_Name_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    BACNET_CHARACTER_STRING object_name;
-    BACNET_OBJECT_TYPE found_type = 0;
-    uint32_t found_instance = 0;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        /* All the object names in a device must be unique */
-        characterstring_init_ansi(&object_name, new_name);
-        if (Device_Valid_Object_Name(
-                &object_name, &found_type, &found_instance)) {
-            if ((found_type == Object_Type) &&
-                (found_instance == object_instance)) {
-                /* writing same name to same object */
-                status = true;
-            } else {
-                /* duplicate name! */
-                status = false;
-            }
-        } else {
-            status = true;
-            pObject->Object_Name = new_name;
-            Device_Inc_Database_Revision();
-        }
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the units property value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  units property value
- */
-uint16_t Analog_Input_Units(uint32_t object_instance)
-{
-    uint16_t units = UNITS_NO_UNITS;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        units = pObject->Units;
-    }
-
-    return units;
-}
-
-/**
- * For a given object instance-number, sets the units property value
- *
- * @param object_instance - object-instance number of the object
- * @param units - units property value
- *
- * @return true if the units property value was set
- */
-bool Analog_Input_Units_Set(uint32_t object_instance, uint16_t units)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        pObject->Units = units;
-        status = true;
-    }
-
-    return status;
-}
-
-/**
- * @brief For a given object instance-number, returns the out-of-service
- * property value
- * @param object_instance - object-instance number of the object
- * @return out-of-service property value
- */
-bool Analog_Input_Out_Of_Service(uint32_t object_instance)
-{
-    bool value = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = pObject->Out_Of_Service;
-    }
-
-    return value;
-}
-
-/**
- * @brief For a given object instance-number, sets the out-of-service property
- * value
- * @param object_instance - object-instance number of the object
- * @param value - boolean out-of-service value
- * @return true if the out-of-service property value was set
- */
-void Analog_Input_Out_Of_Service_Set(uint32_t object_instance, bool value)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Out_Of_Service != value) {
-            pObject->Changed = true;
-        }
-        pObject->Out_Of_Service = value;
-    }
-}
-
-/**
  * @brief For a given object instance-number, returns the overridden
  * status flag value
  * @param  object_instance - object-instance number of the object
@@ -1150,70 +1430,6 @@ void Analog_Input_Overridden_Set(uint32_t object_instance, bool value)
 }
 
 /**
- * @brief For a given object instance-number, gets the reliability.
- * @param  object_instance - object-instance number of the object
- * @return reliability value
- */
-BACNET_RELIABILITY Analog_Input_Reliability(uint32_t object_instance)
-{
-    BACNET_RELIABILITY reliability = RELIABILITY_NO_FAULT_DETECTED;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        reliability = (BACNET_RELIABILITY)pObject->Reliability;
-    }
-
-    return reliability;
-}
-
-/**
- * @brief For a given object instance-number, gets the Fault status flag
- * @param  object_instance - object-instance number of the object
- * @return  true the status flag is in Fault
- */
-static bool Analog_Input_Object_Fault(struct object_data *pObject)
-{
-    bool fault = false;
-
-    if (pObject) {
-        if (pObject->Reliability != RELIABILITY_NO_FAULT_DETECTED) {
-            fault = true;
-        }
-    }
-
-    return fault;
-}
-
-/**
- * @brief For a given object instance-number, sets the reliability
- * @param  object_instance - object-instance number of the object
- * @param  value - reliability enumerated value
- * @return  true if values are within range and property is set.
- */
-bool Analog_Input_Reliability_Set(
-    uint32_t object_instance, BACNET_RELIABILITY value)
-{
-    struct object_data *pObject;
-    bool status = false;
-    bool fault = false;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (value <= 255) {
-            fault = Analog_Input_Object_Fault(pObject);
-            pObject->Reliability = value;
-            if (fault != Analog_Input_Object_Fault(pObject)) {
-                pObject->Changed = true;
-            }
-            status = true;
-        }
-    }
-
-    return status;
-}
-
-/**
  * @brief For a given object instance-number, gets the Fault status flag
  * @param  object_instance - object-instance number of the object
  * @return  true the status flag is in Fault
@@ -1225,44 +1441,6 @@ static bool Analog_Input_Fault(uint32_t object_instance)
     pObject = Keylist_Data(Object_List, object_instance);
 
     return Analog_Input_Object_Fault(pObject);
-}
-
-/**
- * @brief For a given object instance-number, returns the description
- * @param  object_instance - object-instance number of the object
- * @return description text or NULL if not found
- */
-char *Analog_Input_Description(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = (char *)pObject->Description;
-    }
-
-    return name;
-}
-
-/**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if object-name was set
- */
-bool Analog_Input_Description_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        status = true;
-        pObject->Description = new_name;
-    }
-
-    return status;
 }
 
 /**
@@ -1342,122 +1520,6 @@ bool Analog_Input_Max_Pres_Value_Set(uint32_t object_instance, float value)
 
     return status;
 }
-/**
- * For a given object instance-number, gets the event-state property value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-state property value
- */
-unsigned Analog_Input_Event_State(uint32_t object_instance)
-{
-    unsigned state = EVENT_STATE_NORMAL;
-#if defined(INTRINSIC_REPORTING)
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        state = pObject->Event_State;
-    }
-#endif
-
-    return state;
-}
-
-
-/**
- * @brief Get the COV change flag status
- * @param object_instance - object-instance number of the object
- * @return the COV change flag status
- */
-bool Analog_Input_Change_Of_Value(uint32_t object_instance)
-{
-    bool changed = false;
-
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        changed = pObject->Changed;
-    }
-
-    return changed;
-}
-
-/**
- * @brief Clear the COV change flag
- * @param object_instance - object-instance number of the object
- */
-void Analog_Input_Change_Of_Value_Clear(uint32_t object_instance)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        pObject->Changed = false;
-    }
-}
-
-/**
- * @brief Encode the Value List for Present-Value and Status-Flags
- * @param object_instance - object-instance number of the object
- * @param  value_list - #BACNET_PROPERTY_VALUE with at least 2 entries
- * @return true if values were encoded
- */
-bool Analog_Input_Encode_Value_List(
-    uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
-{
-    bool status = false;
-    struct object_data *pObject;
-    bool in_alarm = true;
-    bool fault = false;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (Analog_Input_Event_State(object_instance) == EVENT_STATE_NORMAL) 
-            in_alarm = false;
-        if (Analog_Input_Object_Fault(pObject))
-            fault = true;
-        status = cov_value_list_encode_real(value_list, pObject->Prior_Value,
-            in_alarm, fault, pObject->Overridden, pObject->Out_Of_Service);
-    }
-    return status;
-}
-
-/**
- * @brief Get the COV change flag status
- * @param object_instance - object-instance number of the object
- * @return the COV change flag status
- */
-float Analog_Input_COV_Increment(uint32_t object_instance)
-{
-    float value = 0.0;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = pObject->COV_Increment;
-    }
-
-    return value;
-}
-
-/**
- * @brief Get the COV change flag status
- * @param object_instance - object-instance number of the object
- * @param value - COV Increment value to set
- * @return the COV change flag status
- */
-void Analog_Input_COV_Increment_Set(uint32_t object_instance, float value)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = limit_value_by_resolution(value, pObject->Resolution);
-        pObject->COV_Increment = value;
-    }
-}
 
 /**
  * @brief Get the Resolution
@@ -1509,19 +1571,22 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     uint32_t units = 0;
-    float real_value = (float)0.0;
+    float real_value = (float)1.414;
+#if defined(INTRINSIC_REPORTING)
+    int apdu_size = 0;
+#endif
     unsigned i = 0;
     bool state = false;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
-    BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
-    uint16_t apdu_max = 0;
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
     }
     apdu = rpdata->application_data;
-    apdu_max = rpdata->application_data_len;
+//#if defined(INTRINSIC_REPORTING)
+    apdu_size = rpdata->application_data_len;
+//#endif
     switch ((int)rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -1604,7 +1669,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                             &apdu[apdu_len], real_value);
                     }
                     /* add it if we have room */
-                    if ((apdu_len + len) < apdu_max) {
+                    if ((apdu_len + len) < apdu_size) {
                         apdu_len += len;
                     } else {
                         /* Abort response */
@@ -1707,13 +1772,11 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                                 : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_FAULT,
-                (i & EVENT_ENABLE_TO_FAULT) ? true
-                                            : false);
+                (i & EVENT_ENABLE_TO_FAULT) ? true : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_NORMAL,
                 (i & EVENT_ENABLE_TO_NORMAL) ? true
                                              : false);
-
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
         case PROP_ACKED_TRANSITIONS:
@@ -1736,48 +1799,16 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], i ? NOTIFY_EVENT : NOTIFY_ALARM);
             break;
         case PROP_EVENT_TIME_STAMPS:
-            /* Array element zero is the number of elements in the array */
-            if (rpdata->array_index == 0)
-                apdu_len = encode_application_unsigned(
-                    &apdu[0], MAX_BACNET_EVENT_TRANSITION);
-            /* if no index was specified, then try to encode the entire list */
-            /* into one packet. */
-            else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                state = Analog_Input_Event_Time_Stamps(rpdata->object_instance, timestamp);
-                for (i = 0; i < MAX_BACNET_EVENT_TRANSITION; i++) {
-                    len = encode_opening_tag(
-                        &apdu[apdu_len], TIME_STAMP_DATETIME);
-                    len += encode_application_date(&apdu[apdu_len + len],
-                        &timestamp[i]->date);
-                    len += encode_application_time(&apdu[apdu_len + len],
-                        &timestamp[i]->time);
-                    len += encode_closing_tag(
-                        &apdu[apdu_len + len], TIME_STAMP_DATETIME);
-
-                    /* add it if we have room */
-                    if ((apdu_len + len) < apdu_max)
-                        apdu_len += len;
-                    else {
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Analog_Input_Event_Time_Stamps_Encode,
+                MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
                         rpdata->error_code =
                             ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-                        apdu_len = BACNET_STATUS_ABORT;
-                        break;
-                    }
-                }
-            } else if (rpdata->array_index <= MAX_BACNET_EVENT_TRANSITION) {
-                state = Analog_Input_Event_Time_Stamps(rpdata->object_instance, timestamp);
-                apdu_len =
-                    encode_opening_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
-                apdu_len += encode_application_date(&apdu[apdu_len],
-                    &timestamp[rpdata->array_index-1]->date);
-                apdu_len += encode_application_time(&apdu[apdu_len],
-                    &timestamp[rpdata->array_index-1]->time);
-                apdu_len +=
-                    encode_closing_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
-            } else {
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                 rpdata->error_class = ERROR_CLASS_PROPERTY;
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                apdu_len = BACNET_STATUS_ERROR;
             }
             break;
 #endif
@@ -2717,7 +2748,6 @@ int Analog_Input_Alarm_Summary(
     struct object_data *pObject;
     
     pObject = Keylist_Data(Object_List, Analog_Input_Index_To_Instance(index));
-
     if (pObject) {
         /* Event_State is not equal to NORMAL  and
            Notify_Type property value is ALARM */
