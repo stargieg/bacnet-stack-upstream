@@ -663,27 +663,52 @@ bool Analog_Output_Notify_Type_Set(uint32_t object_instance, uint8_t value)
 
 
 /**
- * For a given object instance-number, returns the Acked Transitions
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - acked_info struct
- *
- * @return true
+ * @brief Encode a EventTimeStamps property element
+ * @param object_instance [in] BACnet network port object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-bool Analog_Output_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION])
+static int Analog_Output_Event_Time_Stamps_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
 {
+    int apdu_len = 0, len = 0;
     struct object_data *pObject;
-    uint8_t b = 0;
+
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
-            value[b] = &pObject->Event_Time_Stamps[b];
+        if (index < MAX_BACNET_EVENT_TRANSITION) {
+            len = encode_opening_tag(apdu, TIME_STAMP_DATETIME);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_application_date(
+                apdu, &pObject->Event_Time_Stamps[index].date);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_application_time(
+                apdu, &pObject->Event_Time_Stamps[index].time);
+            apdu_len += len;
+            if (apdu) {
+                apdu += len;
+            }
+            len = encode_closing_tag(apdu, TIME_STAMP_DATETIME);
+            apdu_len += len;
+        } else {
+            apdu_len = BACNET_STATUS_ERROR;
         }
-        return true;
-    } else
-        return false;
-}
+    } else {
+        apdu_len = BACNET_STATUS_ERROR;
+    }
 
+    return apdu_len;
+}
 #endif
 
 /**
@@ -1554,7 +1579,6 @@ bool Analog_Output_Resolution_Set(uint32_t object_instance, float value)
  */
 int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
-    int len = 0;
     int apdu_len = 0; /* return value */
     int apdu_size = 0;
     BACNET_BIT_STRING bit_string;
@@ -1565,7 +1589,6 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     unsigned i = 0;
     bool state = false;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
-    BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
@@ -1758,48 +1781,16 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_EVENT_TIME_STAMPS:
-            /* Array element zero is the number of elements in the array */
-            if (rpdata->array_index == 0)
-                apdu_len = encode_application_unsigned(
-                    &apdu[0], MAX_BACNET_EVENT_TRANSITION);
-            /* if no index was specified, then try to encode the entire list */
-            /* into one packet. */
-            else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                state = Analog_Output_Event_Time_Stamps(rpdata->object_instance, timestamp);
-                for (i = 0; i < MAX_BACNET_EVENT_TRANSITION; i++) {
-                    len = encode_opening_tag(
-                        &apdu[apdu_len], TIME_STAMP_DATETIME);
-                    len += encode_application_date(&apdu[apdu_len + len],
-                        &timestamp[i]->date);
-                    len += encode_application_time(&apdu[apdu_len + len],
-                        &timestamp[i]->time);
-                    len += encode_closing_tag(
-                        &apdu[apdu_len + len], TIME_STAMP_DATETIME);
-
-                    /* add it if we have room */
-                    if ((apdu_len + len) < MAX_APDU)
-                        apdu_len += len;
-                    else {
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Analog_Output_Event_Time_Stamps_Encode,
+                MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
                         rpdata->error_code =
                             ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-                        apdu_len = BACNET_STATUS_ABORT;
-                        break;
-                    }
-                }
-            } else if (rpdata->array_index <= MAX_BACNET_EVENT_TRANSITION) {
-                state = Analog_Output_Event_Time_Stamps(rpdata->object_instance, timestamp);
-                apdu_len =
-                    encode_opening_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
-                apdu_len += encode_application_date(&apdu[apdu_len],
-                    &timestamp[rpdata->array_index-1]->date);
-                apdu_len += encode_application_time(&apdu[apdu_len],
-                    &timestamp[rpdata->array_index-1]->time);
-                apdu_len +=
-                    encode_closing_tag(&apdu[apdu_len], TIME_STAMP_DATETIME);
-            } else {
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                 rpdata->error_class = ERROR_CLASS_PROPERTY;
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                apdu_len = BACNET_STATUS_ERROR;
             }
             break;
 #endif
