@@ -2989,7 +2989,7 @@ void Analog_Input_Init(void)
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.Description = strndup(option,option_str.length);
     else
-        tObject.Description = "Analog Value";
+        tObject.Description = "Analog Input";
     option = ucix_get_option(ctx, sec, "default", "cov_increment");
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.COV_Increment = strndup(option,option_str.length);
