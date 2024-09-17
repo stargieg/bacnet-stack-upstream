@@ -1810,7 +1810,6 @@ static void uci_list(const char *sec_idx,
 		return;
 	if (disable)
 		return;
-    fprintf(stderr, "BI load config %s\n",sec_idx);
     idx = atoi(sec_idx);
     struct object_data *pObject = NULL;
     int index = 0;
