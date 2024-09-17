@@ -1,45 +1,22 @@
 /**
  * @file
- * @author Steve Karg
+ * @author Steve Karg <skarg@users.sourceforge.net>
  * @date 2005
- * @brief Binary Output objects, customize for your use
- *
- * @section DESCRIPTION
- *
- * The Binary Output object is a command object, and the present-value
- * property uses a priority array and an enumerated 2-state data type.
- *
- *
- * @section LICENSE
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
- * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @brief A basic BACnet Binary Output object implementation.
+ * The Binary Lighting Output object is a commandable object, and the
+ * present-value property uses a priority array and an enumerated 2-state
+ * data type.
+ * @copyright SPDX-License-Identifier: MIT
  */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "bacnet/config.h"
+/* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
+/* BACnet Stack API */
 #include "bacnet/bacdcode.h"
-#include "bacnet/bacenum.h"
 #include "bacnet/bacerror.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/bactext.h"
@@ -61,7 +38,7 @@
 #include "bacnet/get_alarm_sum.h"
 #endif
 /* me! */
-#include "bacnet/basic/object/bo.h"
+#include "bo.h"
 
 static const char *sec = "bacnet_bo";
 static const char *type = "bo";
@@ -97,10 +74,6 @@ struct object_data {
 #endif /* INTRINSIC_REPORTING */
 };
 
-
-
-
-
 struct object_data_t {
     bool Out_Of_Service : 1;
     const char *Prior_Value;
@@ -130,25 +103,32 @@ static binary_output_write_present_value_callback
     Binary_Output_Write_Present_Value_Callback;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Binary_Output_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
-    PROP_OBJECT_NAME, PROP_OBJECT_TYPE, PROP_PRESENT_VALUE, PROP_STATUS_FLAGS,
-    PROP_EVENT_STATE, PROP_OUT_OF_SERVICE, PROP_POLARITY, PROP_PRIORITY_ARRAY,
-    PROP_RELINQUISH_DEFAULT,
+static const int Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
+                                           PROP_OBJECT_NAME,
+                                           PROP_OBJECT_TYPE,
+                                           PROP_PRESENT_VALUE,
+                                           PROP_STATUS_FLAGS,
+                                           PROP_EVENT_STATE,
+                                           PROP_OUT_OF_SERVICE,
+                                           PROP_POLARITY,
+                                           PROP_PRIORITY_ARRAY,
+                                           PROP_RELINQUISH_DEFAULT,
 #if (BACNET_PROTOCOL_REVISION >= 17)
-    PROP_CURRENT_COMMAND_PRIORITY,
+                                           PROP_CURRENT_COMMAND_PRIORITY,
 #endif
     -1 };
 
-static const int Binary_Output_Properties_Optional[] = { PROP_RELIABILITY,
-    PROP_DESCRIPTION, PROP_ACTIVE_TEXT, PROP_INACTIVE_TEXT,
+static const int Properties_Optional[] = { PROP_RELIABILITY, PROP_DESCRIPTION,
+                                           PROP_ACTIVE_TEXT, PROP_INACTIVE_TEXT,
 #if defined(INTRINSIC_REPORTING)
-    PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS, PROP_ALARM_VALUE, PROP_EVENT_ENABLE,
-    PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE, PROP_EVENT_TIME_STAMPS,
-    PROP_FEEDBACK_VALUE,
+                                           PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS,
+                                           PROP_ALARM_VALUE, PROP_EVENT_ENABLE,
+                                           PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE,
+                                           PROP_EVENT_TIME_STAMPS, PROP_FEEDBACK_VALUE,
 #endif
     -1 };
 
-static const int Binary_Output_Properties_Proprietary[] = { -1 };
+static const int Properties_Proprietary[] = { -1 };
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -165,13 +145,13 @@ void Binary_Output_Property_Lists(
     const int **pRequired, const int **pOptional, const int **pProprietary)
 {
     if (pRequired) {
-        *pRequired = Binary_Output_Properties_Required;
+        *pRequired = Properties_Required;
     }
     if (pOptional) {
-        *pOptional = Binary_Output_Properties_Optional;
+        *pOptional = Properties_Optional;
     }
     if (pProprietary) {
-        *pProprietary = Binary_Output_Properties_Proprietary;
+        *pProprietary = Properties_Proprietary;
     }
 
     return;
@@ -216,7 +196,11 @@ unsigned Binary_Output_Count(void)
  */
 uint32_t Binary_Output_Index_To_Instance(unsigned index)
 {
-    return Keylist_Key(Object_List, index);
+    KEY key = UINT32_MAX;
+
+    Keylist_Index_Key(Object_List, index, &key);
+
+    return key;
 }
 
 /**
@@ -234,19 +218,19 @@ unsigned Binary_Output_Instance_To_Index(uint32_t object_instance)
 }
 
 /**
- * @brief For a given object instance-number, determines the present-value
- * @param  object_instance - object-instance number of the object
- * @return  present-value of the object
+ * @brief Calculated the present-value property from the priority array.
+ * @param pObject - pointer to the object data
+ * @return The present-value of the object
  */
-BACNET_BINARY_PV Binary_Output_Present_Value(uint32_t object_instance)
+static BACNET_BINARY_PV Object_Present_Value(struct object_data *pObject)
 {
     BACNET_BINARY_PV value = BINARY_INACTIVE;
     uint8_t priority = 0; /* loop counter */
-    struct object_data *pObject;
 
-    pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        value = Binary_Output_Relinquish_Default(object_instance);
+        if (pObject->Relinquish_Default) {
+            value = BINARY_ACTIVE;
+        }
         for (priority = 0; priority < BACNET_MAX_PRIORITY; priority++) {
             if (!pObject->Relinquished[priority]) {
                 value = pObject->Priority_Array[priority];
@@ -256,6 +240,68 @@ BACNET_BINARY_PV Binary_Output_Present_Value(uint32_t object_instance)
     }
 
     return value;
+}
+
+/**
+ * For a given object instance-number, determines the present-value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  present-value of the object
+ */
+BACNET_BINARY_PV Binary_Output_Present_Value(uint32_t object_instance)
+{
+    BACNET_BINARY_PV value = BINARY_INACTIVE;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = Object_Present_Value(pObject);
+    }
+
+    return value;
+}
+
+/**
+ * For a given object instance-number, gets the event-state property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-state property value
+ */
+static unsigned Binary_Output_Event_State(uint32_t object_instance)
+{
+    unsigned state = EVENT_STATE_NORMAL;
+#if defined(INTRINSIC_REPORTING)
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        state = pObject->Event_State;
+    }
+#endif
+
+    return state;
+}
+
+/**
+ * For a given object instance-number, checks the present-value for COV
+ *
+ * @param  pObject - specific object with valid data
+ * @param  value - floating point analog value
+ */
+static void Binary_Output_Present_Value_COV_Detect(
+    struct object_data *pObject, BACNET_BINARY_PV value)
+{
+    BACNET_BINARY_PV prior_value = false;
+
+    if (pObject) {
+        prior_value = pObject->Prior_Value;
+        if (prior_value != value) {
+            pObject->Changed = true;
+            pObject->Prior_Value = value;
+        }
+    }
 }
 
 #if defined(INTRINSIC_REPORTING)
@@ -536,12 +582,43 @@ bool Binary_Output_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME 
 #endif
 
 /**
- * @brief For a given object instance-number, determines the priority
+ * @brief Encode a BACnetARRAY property element
+ * @param object_instance [in] BACnet network port object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
+ */
+static int Binary_Output_Priority_Array_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
+{
+    int apdu_len = BACNET_STATUS_ERROR;
+    struct object_data *pObject;
+    BACNET_BINARY_PV value = BINARY_INACTIVE;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && (index < BACNET_MAX_PRIORITY)) {
+        if (!pObject->Relinquished[index]) {
+            value = pObject->Priority_Array[index];
+            apdu_len = encode_application_enumerated(apdu, value);
+        } else {
+            apdu_len = encode_application_null(apdu);
+        }
+    }
+
+    return apdu_len;
+}
+
+/**
+ * For a given object instance-number, determines the active priority
+ *
  * @param  object_instance - object-instance number of the object
+ *
  * @return  active priority 1..16, or 0 if no priority is active
  */
-unsigned Binary_Output_Present_Value_Priority(
-    uint32_t object_instance)
+unsigned Binary_Output_Present_Value_Priority(uint32_t object_instance)
 {
     unsigned p = 0; /* loop counter */
     unsigned priority = 0; /* return value */
@@ -561,54 +638,359 @@ unsigned Binary_Output_Present_Value_Priority(
 }
 
 /**
- * @brief For a given object instance-number and priority 1..16, determines the
- *  priority-array value
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
+ * For a given object instance-number, sets the present-value at a given
+ * priority 1..16.
  *
- * @return priority-array value of the object
+ * @param  object_instance - object-instance number of the object
+ * @param  value - enumerated 2-state active or inactive value
+ * @param  priority - priority 1..16
+ *
+ * @return  true if values are within range and present-value is set.
  */
-static BACNET_BINARY_PV Binary_Output_Priority_Array(
-    uint32_t object_instance, unsigned priority)
+bool Binary_Output_Present_Value_Set(
+    uint32_t object_instance, BACNET_BINARY_PV binary_value, unsigned priority)
 {
-    BACNET_BINARY_PV value = BINARY_INACTIVE;
+    bool status = false;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if ((priority >= BACNET_MIN_PRIORITY) &&
-            (priority <= BACNET_MAX_PRIORITY)) {
-            value = pObject->Priority_Array[priority - 1];
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+            pObject->Relinquished[priority - 1] = false;
+            pObject->Priority_Array[priority - 1] = binary_value;
+            Binary_Output_Present_Value_COV_Detect(
+                pObject, Binary_Output_Present_Value(object_instance));
+            status = true;
         }
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, relinquishes the present-value
+ * at a given priority 1..16.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  priority - priority 1..16
+ *
+ * @return  true if values are within range and present-value is set.
+ */
+bool Binary_Output_Present_Value_Relinquish(
+    uint32_t object_instance, unsigned priority)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+            pObject->Relinquished[priority - 1] = true;
+            pObject->Priority_Array[priority - 1] = false;
+            Binary_Output_Present_Value_COV_Detect(
+                pObject, Binary_Output_Present_Value(object_instance));
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, writes the present-value to the
+ * remote node
+ * @param  object_instance - object-instance number of the object
+ * @param  value - present-value
+ * @param  priority - priority-array index value 1..16
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ * @return  true if values are within range and present-value is set.
+ */
+static bool Binary_Output_Present_Value_Write(
+    uint32_t object_instance,
+    BACNET_BINARY_PV value,
+    uint8_t priority,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    struct object_data *pObject;
+    BACNET_BINARY_PV old_value = BINARY_INACTIVE;
+    BACNET_BINARY_PV new_value = BINARY_INACTIVE;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
+            (value <= MAX_BINARY_PV)) {
+            if (priority != 6) {
+                old_value = Binary_Output_Present_Value(object_instance);
+                Binary_Output_Present_Value_Set(object_instance, value,
+                    priority);
+                if (pObject->Out_Of_Service) {
+                    /* The physical point that the object represents
+                        is not in service. This means that changes to the
+                        Present_Value property are decoupled from the
+                        physical output when the value of Out_Of_Service
+                        is true. */
+                } else if (Binary_Output_Write_Present_Value_Callback) {
+                    new_value = Binary_Output_Present_Value(object_instance);
+                    Binary_Output_Write_Present_Value_Callback(
+                        object_instance, old_value, new_value);
+                }
+                status = true;
+            } else {
+                *error_class = ERROR_CLASS_PROPERTY;
+                *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            }
+        } else {
+            *error_class = ERROR_CLASS_PROPERTY;
+            *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        *error_class = ERROR_CLASS_OBJECT;
+        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, writes the present-value to the
+ * remote node
+ * @param  object_instance - object-instance number of the object
+ * @param  priority - priority-array index value 1..16
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ * @return  true if values are within range and write is requested
+ */
+static bool Binary_Output_Present_Value_Relinquish_Write(
+    uint32_t object_instance,
+    uint8_t priority,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    struct object_data *pObject;
+    BACNET_BINARY_PV old_value = BINARY_INACTIVE;
+    BACNET_BINARY_PV new_value = BINARY_INACTIVE;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+            if (priority != 6) {
+                old_value = Binary_Output_Present_Value(object_instance);
+                Binary_Output_Present_Value_Relinquish(object_instance, priority);
+                if (pObject->Out_Of_Service) {
+                    /* The physical point that the object represents
+                        is not in service. This means that changes to the
+                        Present_Value property are decoupled from the
+                        physical output when the value of Out_Of_Service
+                        is true. */
+                } else if (Binary_Output_Write_Present_Value_Callback) {
+                    new_value = Binary_Output_Present_Value(object_instance);
+                    Binary_Output_Write_Present_Value_Callback(
+                        object_instance, old_value, new_value);
+                }
+                status = true;
+            } else {
+                *error_class = ERROR_CLASS_PROPERTY;
+                *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            }
+        } else {
+            *error_class = ERROR_CLASS_PROPERTY;
+            *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        *error_class = ERROR_CLASS_OBJECT;
+        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the out-of-service
+ * property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  out-of-service property value
+ */
+bool Binary_Output_Out_Of_Service(uint32_t object_instance)
+{
+    bool value = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Out_Of_Service;
     }
 
     return value;
 }
 
 /**
- * @brief For a given object instance-number and priority 1..16, determines
- *  if the priority-array slot is NULL
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @return true if the priority array slot is NULL
+ * For a given object instance-number, sets the out-of-service property value
+ *
+ * @param object_instance - object-instance number of the object
+ * @param value - boolean out-of-service value
+ *
+ * @return true if the out-of-service property value was set
  */
-static bool Binary_Output_Priority_Array_Null(
-    uint32_t object_instance, unsigned priority)
+void Binary_Output_Out_Of_Service_Set(uint32_t object_instance, bool value)
 {
-    bool null_value = false;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if ((priority >= BACNET_MIN_PRIORITY) &&
-            (priority <= BACNET_MAX_PRIORITY)) {
-            if (pObject->Relinquished[priority - 1]) {
-                null_value = true;
-            }
+        if (pObject->Out_Of_Service != value) {
+            pObject->Out_Of_Service = value;
+            pObject->Changed = true;
+        }
+    }
+}
+
+/**
+ * For a given object instance-number, loads the object-name into
+ * a characterstring. Note that the object name must be unique
+ * within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  object_name - holds the object-name retrieved
+ *
+ * @return  true if object-name was retrieved
+ */
+bool Binary_Output_Object_Name(
+    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
+{
+    bool status = false;
+    struct object_data *pObject;
+    char name_text[32];
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (pObject->Object_Name) {
+            status =
+                characterstring_init_ansi(object_name, pObject->Object_Name);
+        } else {
+            snprintf(
+                name_text, sizeof(name_text), "BINARY OUTPUT %lu",
+                (unsigned long)object_instance);
+            status = characterstring_init_ansi(object_name, name_text);
         }
     }
 
-    return null_value;
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the object-name
+ * Note that the object name must be unique within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Binary_Output_Name_Set(uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
+    BACNET_CHARACTER_STRING object_name;
+    BACNET_OBJECT_TYPE found_type = OBJECT_NONE;
+    uint32_t found_instance = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        /* All the object names in a device must be unique */
+        characterstring_init_ansi(&object_name, new_name);
+        if (Device_Valid_Object_Name(
+                &object_name, &found_type, &found_instance)) {
+            if ((found_type == Object_Type) &&
+                (found_instance == object_instance)) {
+                /* writing same name to same object */
+                status = true;
+            } else {
+                /* duplicate name! */
+                status = false;
+            }
+        } else {
+            status = true;
+            pObject->Object_Name = new_name;
+            Device_Inc_Database_Revision();
+        }
+    }
+
+    return status;
+}
+
+/**
+ * @brief Return the object name C string
+ * @param object_instance [in] BACnet object instance number
+ * @return object name or NULL if not found
+ */
+const char *Binary_Output_Name_ASCII(uint32_t object_instance)
+{
+    const char *name = NULL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = pObject->Object_Name;
+    }
+
+    return name;
+}
+
+/**
+ * For a given object instance-number, returns the polarity property.
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  the polarity property of the object.
+ */
+BACNET_POLARITY Binary_Output_Polarity(uint32_t object_instance)
+{
+    BACNET_POLARITY polarity = POLARITY_NORMAL;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (pObject->Polarity) {
+            polarity = POLARITY_REVERSE;
+        }
+    }
+
+    return polarity;
+}
+
+/**
+ * For a given object instance-number, sets the polarity property.
+ *
+ * @param object_instance - object-instance number of the object
+ * @param polarity - enumerated polarity property value
+ *
+ * @return true if the polarity property value was set
+ */
+bool Binary_Output_Polarity_Set(
+    uint32_t object_instance, BACNET_POLARITY polarity)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (polarity < MAX_POLARITY) {
+            if (polarity == POLARITY_NORMAL) {
+                pObject->Polarity = false;
+            } else {
+                pObject->Polarity = true;
+            }
+            status = true;
+        }
+    }
+
+    return status;
 }
 
 /**
@@ -666,477 +1048,6 @@ bool Binary_Output_Relinquish_Default_Set(
 }
 
 /**
- * For a given object instance-number, checks the present-value for COV
- *
- * @param  pObject - specific object with valid data
- * @param  value - floating point analog value
- */
-static void Binary_Output_Present_Value_COV_Detect(
-    struct object_data *pObject, BACNET_BINARY_PV value)
-{
-    BACNET_BINARY_PV prior_value = false;
-
-    if (pObject) {
-        prior_value = pObject->Prior_Value;
-        if (prior_value != value) {
-            pObject->Changed = true;
-            pObject->Prior_Value = value;
-        }
-    }
-}
-
-/**
- * For a given object instance-number, sets the present-value at a given
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - enumerated 2-state active or inactive value
- * @param  priority - priority 1..16
- * @return  true if values are within range and present-value is set.
- */
-bool Binary_Output_Present_Value_Set(
-    uint32_t object_instance, BACNET_BINARY_PV value, unsigned priority)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            pObject->Relinquished[priority - 1] = false;
-            pObject->Priority_Array[priority - 1] = value;
-            Binary_Output_Present_Value_COV_Detect(
-                pObject, Binary_Output_Present_Value(object_instance));
-            status = true;
-        }
-    }
-
-    return status;
-}
-
-/**
- * @brief For a given object instance-number, relinquishes the present-value
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @return  true if values are within range and present-value is relinquished.
- */
-bool Binary_Output_Present_Value_Relinquish(
-    uint32_t object_instance, unsigned priority)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            pObject->Relinquished[priority - 1] = true;
-            pObject->Priority_Array[priority - 1] = false;
-            Binary_Output_Present_Value_COV_Detect(
-                pObject, Binary_Output_Present_Value(object_instance));
-            status = true;
-        }
-    }
-
-    return status;
-}
-
-/**
- * @brief For a given object instance-number, writes the present-value to the
- * remote node
- * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog value
- * @param  priority - priority-array index value 1..16
- * @param  error_class - the BACnet error class
- * @param  error_code - BACnet Error code
- * @return  true if values are within range and present-value is set.
- */
-static bool Binary_Output_Present_Value_Write(
-    uint32_t object_instance, BACNET_BINARY_PV value, uint8_t priority,
-    BACNET_ERROR_CLASS *error_class,
-    BACNET_ERROR_CODE *error_code)
-{
-    bool status = false;
-    struct object_data *pObject;
-    BACNET_BINARY_PV old_value = BINARY_INACTIVE;
-    BACNET_BINARY_PV new_value = BINARY_INACTIVE;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= 0.0) && (value <= 100.0)) {
-            if (priority != 6) {
-                old_value = Binary_Output_Present_Value(object_instance);
-                Binary_Output_Present_Value_Set(object_instance, value,
-                    priority);
-                if (pObject->Out_Of_Service) {
-                    /* The physical point that the object represents
-                        is not in service. This means that changes to the
-                        Present_Value property are decoupled from the
-                        physical output when the value of Out_Of_Service
-                        is true. */
-                } else if (Binary_Output_Write_Present_Value_Callback) {
-                    new_value = Binary_Output_Present_Value(object_instance);
-                    Binary_Output_Write_Present_Value_Callback(
-                        object_instance, old_value, new_value);
-                }
-                status = true;
-            } else {
-                *error_class = ERROR_CLASS_PROPERTY;
-                *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-            }
-        } else {
-            *error_class = ERROR_CLASS_PROPERTY;
-            *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        }
-    } else {
-        *error_class = ERROR_CLASS_OBJECT;
-        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
-    }
-
-    return status;
-}
-
-/**
- * @brief For a given object instance-number, writes the present-value to the
- * remote node
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @param  error_class - the BACnet error class
- * @param  error_code - BACnet Error code
- * @return  true if values are within range and write is requested
- */
-static bool Binary_Output_Present_Value_Relinquish_Write(
-    uint32_t object_instance, uint8_t priority,
-    BACNET_ERROR_CLASS *error_class,
-    BACNET_ERROR_CODE *error_code)
-{
-    bool status = false;
-    struct object_data *pObject;
-    BACNET_BINARY_PV old_value = BINARY_INACTIVE;
-    BACNET_BINARY_PV new_value = BINARY_INACTIVE;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            if (priority != 6) {
-                old_value = Binary_Output_Present_Value(object_instance);
-                Binary_Output_Present_Value_Relinquish(object_instance, priority);
-                if (pObject->Out_Of_Service) {
-                    /* The physical point that the object represents
-                        is not in service. This means that changes to the
-                        Present_Value property are decoupled from the
-                        physical output when the value of Out_Of_Service
-                        is true. */
-                } else if (Binary_Output_Write_Present_Value_Callback) {
-                    new_value = Binary_Output_Present_Value(object_instance);
-                    Binary_Output_Write_Present_Value_Callback(
-                        object_instance, old_value, new_value);
-                }
-                status = true;
-            } else {
-                *error_class = ERROR_CLASS_PROPERTY;
-                *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-            }
-        } else {
-            *error_class = ERROR_CLASS_PROPERTY;
-            *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        }
-    } else {
-        *error_class = ERROR_CLASS_OBJECT;
-        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, loads the object-name into
- * a characterstring. Note that the object name must be unique
- * within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  object_name - holds the object-name retrieved
- *
- * @return  true if object-name was retrieved
- */
-bool Binary_Output_Object_Name(
-    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
-{
-    bool status = false;
-    struct object_data *pObject;
-    char name_text[32];
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Object_Name) {
-            status = characterstring_init_ansi(object_name,
-                pObject->Object_Name);
-        } else {
-            snprintf(name_text, sizeof(name_text), "BINARY OUTPUT %u",
-                object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
-        }
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, sets the object-name
- * Note that the object name must be unique within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
- */
-bool Binary_Output_Name_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    BACNET_CHARACTER_STRING object_name;
-    BACNET_OBJECT_TYPE found_type = OBJECT_NONE;
-    uint32_t found_instance = 0;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        /* All the object names in a device must be unique */
-        characterstring_init_ansi(&object_name, new_name);
-        if (Device_Valid_Object_Name(
-                &object_name, &found_type, &found_instance)) {
-            if ((found_type == Object_Type) &&
-                (found_instance == object_instance)) {
-                /* writing same name to same object */
-                status = true;
-            } else {
-                /* duplicate name! */
-                status = false;
-            }
-        } else {
-            status = true;
-            pObject->Object_Name = new_name;
-            Device_Inc_Database_Revision();
-        }
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the active text value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return active text or NULL if not found
- */
-char *Binary_Output_Active_Text(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = (char *)pObject->Active_Text;
-    }
-
-    return name;
-}
-
-/**
- * For a given object instance-number, sets the description
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- *
- * @return  true if object-name was set
- */
-bool Binary_Output_Active_Text_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        status = true;
-        pObject->Active_Text = new_name;
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the active text value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return active text or NULL if not found
- */
-char *Binary_Output_Inactive_Text(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = (char *)pObject->Inactive_Text;
-    }
-
-    return name;
-}
-
-/**
- * For a given object instance-number, sets the description
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- *
- * @return  true if object-name was set
- */
-bool Binary_Output_Inactive_Text_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        status = true;
-        pObject->Inactive_Text = new_name;
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the polarity property.
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  the polarity property of the object.
- */
-BACNET_POLARITY Binary_Output_Polarity(uint32_t object_instance)
-{
-    BACNET_POLARITY polarity = POLARITY_NORMAL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Polarity) {
-            polarity = POLARITY_REVERSE;
-        }
-    }
-
-    return polarity;
-}
-
-/**
- * For a given object instance-number, sets the polarity property.
- *
- * @param object_instance - object-instance number of the object
- * @param polarity - enumerated polarity property value
- *
- * @return true if the polarity property value was set
- */
-bool Binary_Output_Polarity_Set(
-    uint32_t object_instance, BACNET_POLARITY polarity)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (polarity < MAX_POLARITY) {
-            if (polarity == POLARITY_NORMAL) {
-                pObject->Polarity = false;
-            } else {
-                pObject->Polarity = true;
-            }
-            status = true;
-        }
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the out-of-service
- * property value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  out-of-service property value
- */
-bool Binary_Output_Out_Of_Service(uint32_t object_instance)
-{
-    bool value = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = pObject->Out_Of_Service;
-    }
-
-    return value;
-}
-
-/**
- * For a given object instance-number, sets the out-of-service property value
- *
- * @param object_instance - object-instance number of the object
- * @param value - boolean out-of-service value
- *
- * @return true if the out-of-service property value was set
- */
-void Binary_Output_Out_Of_Service_Set(uint32_t object_instance, bool value)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Out_Of_Service != value) {
-            pObject->Out_Of_Service = value;
-            pObject->Changed = true;
-        }
-    }
-}
-
-/**
- * @brief For a given object instance-number, returns the overridden
- * status flag value
- * @param  object_instance - object-instance number of the object
- * @return  out-of-service property value
- */
-bool Binary_Output_Overridden(uint32_t object_instance)
-{
-    bool value = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = pObject->Overridden;
-    }
-
-    return value;
-}
-
-/**
- * @brief For a given object instance-number, sets the overridden status flag
- * @param object_instance - object-instance number of the object
- * @param value - boolean out-of-service value
- * @return true if the overridden status flag was set
- */
-void Binary_Output_Overridden_Set(uint32_t object_instance, bool value)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (pObject->Overridden != value) {
-            pObject->Overridden = value;
-            pObject->Changed = true;
-        }
-    }
-}
-
-/**
  * For a given object instance-number, gets the reliability.
  *
  * @param  object_instance - object-instance number of the object
@@ -1163,7 +1074,7 @@ BACNET_RELIABILITY Binary_Output_Reliability(uint32_t object_instance)
  *
  * @return  true the status flag is in Fault
  */
-static bool Binary_Output_Object_Fault(struct object_data *pObject)
+static bool Binary_Output_Object_Fault(const struct object_data *pObject)
 {
     bool fault = false;
 
@@ -1229,14 +1140,14 @@ static bool Binary_Output_Fault(uint32_t object_instance)
  *
  * @return description text or NULL if not found
  */
-char *Binary_Output_Description(uint32_t object_instance)
+const char *Binary_Output_Description(uint32_t object_instance)
 {
-    char *name = NULL;
-    struct object_data *pObject;
+    const char *name = NULL;
+    const struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = (char *)pObject->Description;
+        name = pObject->Description;
     }
 
     return name;
@@ -1250,13 +1161,14 @@ char *Binary_Output_Description(uint32_t object_instance)
  *
  * @return  true if object-name was set
  */
-bool Binary_Output_Description_Set(uint32_t object_instance, char *new_name)
+bool Binary_Output_Description_Set(
+    uint32_t object_instance, const char *new_name)
 {
     bool status = false; /* return value */
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
+    if (pObject) {
         status = true;
         pObject->Description = new_name;
     }
@@ -1265,27 +1177,90 @@ bool Binary_Output_Description_Set(uint32_t object_instance, char *new_name)
 }
 
 /**
- * For a given object instance-number, gets the event-state property value
+ * For a given object instance-number, returns the active text value
  *
  * @param  object_instance - object-instance number of the object
  *
- * @return  event-state property value
+ * @return active text or NULL if not found
  */
-unsigned Binary_Output_Event_State(uint32_t object_instance)
+const char *Binary_Output_Active_Text(uint32_t object_instance)
 {
-    unsigned state = EVENT_STATE_NORMAL;
-#if defined(INTRINSIC_REPORTING)
+    const char *name = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = pObject->Active_Text;
+    }
+
+    return name;
+}
+
+/**
+ * For a given object instance-number, sets the description
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Binary_Output_Active_Text_Set(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        state = pObject->Event_State;
+        status = true;
+        pObject->Active_Text = new_name;
     }
-#endif
 
-    return state;
+    return status;
 }
 
+/**
+ * For a given object instance-number, returns the active text value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return active text or NULL if not found
+ */
+const char *Binary_Output_Inactive_Text(uint32_t object_instance)
+{
+    const char *name = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = pObject->Inactive_Text;
+    }
+
+    return name;
+}
+
+/**
+ * For a given object instance-number, sets the description
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Binary_Output_Inactive_Text_Set(
+    uint32_t object_instance, const char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        status = true;
+        pObject->Inactive_Text = new_name;
+    }
+
+    return status;
+}
 
 /**
  * Get the COV change flag status
@@ -1323,9 +1298,11 @@ void Binary_Output_Change_Of_Value_Clear(uint32_t object_instance)
 }
 
 /**
- * @brief Encode the Value List for Present-Value and Status-Flags
+ * Encode the Value List for Present-Value and Status-Flags
+ *
  * @param object_instance - object-instance number of the object
  * @param  value_list - #BACNET_PROPERTY_VALUE with at least 2 entries
+ *
  * @return true if values were encoded
  */
 bool Binary_Output_Encode_Value_List(
@@ -1335,6 +1312,8 @@ bool Binary_Output_Encode_Value_List(
     struct object_data *pObject;
     bool in_alarm = false;
     bool fault = false;
+    bool overridden = false;
+    BACNET_BINARY_PV value;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -1342,11 +1321,51 @@ bool Binary_Output_Encode_Value_List(
             in_alarm = false;
         if (Binary_Output_Object_Fault(pObject))
             fault = true;
-        status =
-            cov_value_list_encode_enumerated(value_list, pObject->Prior_Value,
-                in_alarm, fault, pObject->Overridden, pObject->Out_Of_Service);
+        value = pObject->Prior_Value;
+        overridden = pObject->Overridden;
+        status = cov_value_list_encode_enumerated(
+            value_list, value, in_alarm, fault, overridden,
+            pObject->Out_Of_Service);
     }
     return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the overridden
+ * status flag value
+ * @param  object_instance - object-instance number of the object
+ * @return  out-of-service property value
+ */
+bool Binary_Output_Overridden(uint32_t object_instance)
+{
+    bool value = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Overridden;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the overridden status flag
+ * @param object_instance - object-instance number of the object
+ * @param value - boolean out-of-service value
+ * @return true if the overridden status flag was set
+ */
+void Binary_Output_Overridden_Set(uint32_t object_instance, bool value)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (pObject->Overridden != value) {
+            pObject->Overridden = value;
+            pObject->Changed = true;
+        }
+    }
 }
 
 /**
@@ -1370,6 +1389,7 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     unsigned i = 0;
     bool state = false;
     uint8_t *apdu = NULL;
+    int apdu_size = 0;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
 
@@ -1378,6 +1398,7 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
+    apdu_size = rpdata->application_data_len;
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -1389,8 +1410,7 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 encode_application_character_string(&apdu[0], &char_string);
             break;
         case PROP_OBJECT_TYPE:
-            apdu_len =
-                encode_application_enumerated(&apdu[0], Object_Type);
+            apdu_len = encode_application_enumerated(&apdu[0], Object_Type);
             break;
         case PROP_PRESENT_VALUE:
             present_value =
@@ -1437,48 +1457,16 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], polarity);
             break;
         case PROP_PRIORITY_ARRAY:
-            if (rpdata->array_index == 0) {
-                /* Array element zero = the number of elements in the array */
-                apdu_len =
-                    encode_application_unsigned(&apdu[0], BACNET_MAX_PRIORITY);
-            } else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                for (i = 1; i <= BACNET_MAX_PRIORITY; i++) {
-                    if (Binary_Output_Priority_Array_Null(
-                            rpdata->object_instance, i)) {
-                        len = encode_application_null(&apdu[apdu_len]);
-                    } else {
-                        present_value = Binary_Output_Priority_Array(
-                            rpdata->object_instance, i);
-                        len = encode_application_enumerated(
-                            &apdu[apdu_len], present_value);
-                    }
-                    /* add it if we have room */
-                    if ((apdu_len + len) < MAX_APDU) {
-                        apdu_len += len;
-                    } else {
-                        /* Abort response */
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Binary_Output_Priority_Array_Encode, BACNET_MAX_PRIORITY, apdu,
+                apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
                         rpdata->error_code =
                             ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-                        apdu_len = BACNET_STATUS_ERROR;
-                        break;
-                    }
-                }
-            } else {
-                if (rpdata->array_index <= BACNET_MAX_PRIORITY) {
-                    if (Binary_Output_Priority_Array_Null(
-                            rpdata->object_instance, rpdata->array_index)) {
-                        apdu_len = encode_application_null(&apdu[0]);
-                    } else {
-                        present_value = Binary_Output_Priority_Array(
-                            rpdata->object_instance, rpdata->array_index);
-                        apdu_len = encode_application_enumerated(
-                            &apdu[0], present_value);
-                    }
-                } else {
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                     rpdata->error_class = ERROR_CLASS_PROPERTY;
                     rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                    apdu_len = BACNET_STATUS_ERROR;
-                }
             }
             break;
         case PROP_RELINQUISH_DEFAULT:
@@ -1487,19 +1475,22 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], present_value);
             break;
         case PROP_DESCRIPTION:
-            characterstring_init_ansi(&char_string,
+            characterstring_init_ansi(
+                &char_string,
                 Binary_Output_Description(rpdata->object_instance));
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
         case PROP_ACTIVE_TEXT:
-            characterstring_init_ansi(&char_string,
+            characterstring_init_ansi(
+                &char_string,
                 Binary_Output_Active_Text(rpdata->object_instance));
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
         case PROP_INACTIVE_TEXT:
-            characterstring_init_ansi(&char_string,
+            characterstring_init_ansi(
+                &char_string,
                 Binary_Output_Inactive_Text(rpdata->object_instance));
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
@@ -1674,12 +1665,13 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
-            status = write_property_type_valid(wp_data, &value,
-                BACNET_APPLICATION_TAG_ENUMERATED);
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
-                if (Binary_Output_Present_Value_Write(wp_data->object_instance,
-                        value.type.Enumerated, wp_data->priority,
-                        &wp_data->error_class, &wp_data->error_code)) {
+                if (Binary_Output_Present_Value_Write(
+                        wp_data->object_instance, value.type.Enumerated,
+                        wp_data->priority, &wp_data->error_class,
+                        &wp_data->error_code)) {
                     value_b = Binary_Output_Present_Value(wp_data->object_instance);
                     ucix_add_option_int(ctxw, sec, idx_c, "value", value_b);
                     ucix_commit(ctxw,sec);
@@ -1701,8 +1693,8 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         case PROP_OUT_OF_SERVICE:
-            status = write_property_type_valid(wp_data, &value,
-                BACNET_APPLICATION_TAG_BOOLEAN);
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
                 Binary_Output_Out_Of_Service_Set(
                     wp_data->object_instance, value.type.Boolean);
@@ -1870,12 +1862,19 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
 #endif
         default:
-            wp_data->error_class = ERROR_CLASS_PROPERTY;
-            wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+            if (property_lists_member(
+                    Properties_Required, Properties_Optional,
+                    Properties_Proprietary, wp_data->object_property)) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            } else {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+            }
             break;
     }
     /* not using len at this time */
-    //len = len;
+    (void)len;
 
     return status;
 }
@@ -2180,7 +2179,7 @@ int Binary_Output_Event_Information(
     bool IsActiveEvent;
     int i;
 
-    pObject = Keylist_Data(Object_List, Keylist_Key(Object_List, index));
+    pObject = Keylist_Data(Object_List, Binary_Output_Index_To_Instance(index));
 
     /* check index */
     if (pObject) {
@@ -2344,7 +2343,7 @@ int Binary_Output_Alarm_Summary(
 {
     struct object_data *pObject;
 
-    pObject = Keylist_Data(Object_List, Keylist_Key(Object_List, index));
+    pObject = Keylist_Data(Object_List, Binary_Output_Index_To_Instance(index));
 
     /* check index */
     if (pObject) {
@@ -2380,17 +2379,27 @@ int Binary_Output_Alarm_Summary(
 #endif /* defined(INTRINSIC_REPORTING) */
 
 /**
- * @brief Determines a object write-enabled flag state
+ * @brief Creates a Binary Output object
  * @param object_instance - object-instance number of the object
- * @return  write-enabled status flag
+ * @return the object-instance that was created, or BACNET_MAX_INSTANCE
  */
-bool Binary_Output_Create(uint32_t object_instance)
+uint32_t  Binary_Output_Create(uint32_t object_instance)
 {
-    bool status = false;
     struct object_data *pObject = NULL;
     int index = 0;
     unsigned priority = 0;
 
+
+    if (object_instance > BACNET_MAX_INSTANCE) {
+        return BACNET_MAX_INSTANCE;
+    } else if (object_instance == BACNET_MAX_INSTANCE) {
+        /* wildcard instance */
+        /* the Object_Identifier property of the newly created object
+            shall be initialized to a value that is unique within the
+            responding BACnet-user device. The method used to generate
+            the object identifier is a local matter.*/
+        object_instance = Keylist_Next_Empty_Key(Object_List, 1);
+    }
     pObject = Keylist_Data(Object_List, object_instance);
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
@@ -2407,14 +2416,16 @@ bool Binary_Output_Create(uint32_t object_instance)
             pObject->Changed = false;
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
-            if (index >= 0) {
-                status = true;
-                Device_Inc_Database_Revision();
+            if (index < 0) {
+                free(pObject);
+                return BACNET_MAX_INSTANCE;
             }
+        } else {
+            return BACNET_MAX_INSTANCE;
         }
     }
 
-    return status;
+    return object_instance;
 }
 
 /**
@@ -2501,12 +2512,12 @@ static void uci_list(const char *sec_idx,
         pObject->Priority_Array[priority] = false;
     }
     pObject->Relinquish_Default = false;
-    pObject->Prior_Value = false;
     pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
     pObject->Changed = false;
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "value", 0);
     pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_b;
     pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
+    pObject->Prior_Value = value_b;
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "active_text");
     if (option && characterstring_init_ansi(&option_str, option))
         pObject->Active_Text = strndup(option, option_str.length);
@@ -2553,7 +2564,9 @@ static void uci_list(const char *sec_idx,
  */
 void Binary_Output_Init(void)
 {
-    Object_List = Keylist_Create();
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     struct uci_context *ctx;
     ctx = ucix_init(sec);
     if (!ctx)
