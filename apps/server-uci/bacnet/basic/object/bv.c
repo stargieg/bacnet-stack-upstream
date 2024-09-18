@@ -100,6 +100,10 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_BINARY_VALUE;
 /* callback for present value writes */
+typedef void (*binary_value_write_present_value_callback)(
+    uint32_t object_instance,
+    BACNET_BINARY_PV old_value,
+    BACNET_BINARY_PV value);
 static binary_value_write_present_value_callback
     Binary_Value_Write_Present_Value_Callback;
 
@@ -256,55 +260,35 @@ unsigned Binary_Value_Present_Value_Priority(
     return priority;
 }
 
+
 /**
- * @brief For a given object instance-number and priority 1..16, determines the
- *  priority-array value
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- *
- * @return priority-array value of the object
+ * @brief Encode a BACnetARRAY property element
+ * @param object_instance [in] BACnet network port object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-static BACNET_BINARY_PV Binary_Value_Priority_Array(
-    uint32_t object_instance, unsigned priority)
+static int Binary_Value_Priority_Array_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
 {
+    int apdu_len = BACNET_STATUS_ERROR;
+    struct object_data *pObject;
     BACNET_BINARY_PV value = BINARY_INACTIVE;
-    struct object_data *pObject;
 
-    pObject = Binary_Value_Object(object_instance);
-    if (pObject) {
-        if ((priority >= BACNET_MIN_PRIORITY) &&
-            (priority <= BACNET_MAX_PRIORITY)) {
-            value = pObject->Priority_Array[priority - 1];
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && (index < BACNET_MAX_PRIORITY)) {
+        if (!pObject->Relinquished[index]) {
+            value = pObject->Priority_Array[index];
+            apdu_len = encode_application_enumerated(apdu, value);
+        } else {
+            apdu_len = encode_application_null(apdu);
         }
     }
 
-    return value;
-}
-
-/**
- * @brief For a given object instance-number and priority 1..16, determines
- *  if the priority-array slot is NULL
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @return true if the priority array slot is NULL
- */
-static bool Binary_Value_Priority_Array_Null(
-    uint32_t object_instance, unsigned priority)
-{
-    bool null_value = false;
-    struct object_data *pObject;
-
-    pObject = Binary_Value_Object(object_instance);
-    if (pObject) {
-        if ((priority >= BACNET_MIN_PRIORITY) &&
-            (priority <= BACNET_MAX_PRIORITY)) {
-            if (pObject->Relinquished[priority - 1]) {
-                null_value = true;
-            }
-        }
-    }
-
-    return null_value;
+    return apdu_len;
 }
 
 /**
@@ -361,6 +345,7 @@ static BACNET_BINARY_PV Binary_Present_Value(bool value)
     return binary_value;
 }
 
+#if 0
 /**
  * @brief Convert from BACNET_BINARY_PV enumeration to boolean
  * @param binary_value BACNET_BINARY_PV enumeration
@@ -376,6 +361,7 @@ static bool Binary_Present_Value_Boolean(BACNET_BINARY_PV binary_value)
 
     return boolean_value;
 }
+#endif
 
 /**
  * @brief Convert from boolean to BACNET_POLARITY enumeration
@@ -393,6 +379,7 @@ static BACNET_POLARITY Binary_Polarity(bool value)
     return polarity;
 }
 
+#if 0
 /**
  * @brief Convert from BACNET_POLARITY enumeration to boolean
  * @param binary_value BACNET_POLARITY enumeration
@@ -408,6 +395,7 @@ static bool Binary_Polarity_Boolean(BACNET_POLARITY polarity)
 
     return boolean_value;
 }
+#endif
 
 /**
  * For a given object instance-number, return the present value.
@@ -1231,7 +1219,6 @@ static int Binary_Value_Event_Time_Stamps_Encode(
  */
 int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
-    int len = 0;
     int apdu_len = 0; /* return value */
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
@@ -1305,48 +1292,16 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], polarity);
             break;
         case PROP_PRIORITY_ARRAY:
-            if (rpdata->array_index == 0) {
-                /* Array element zero = the number of elements in the array */
-                apdu_len =
-                    encode_application_unsigned(&apdu[0], BACNET_MAX_PRIORITY);
-            } else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                for (i = 1; i <= BACNET_MAX_PRIORITY; i++) {
-                    if (Binary_Value_Priority_Array_Null(
-                            rpdata->object_instance, i)) {
-                        len = encode_application_null(&apdu[apdu_len]);
-                    } else {
-                        present_value = Binary_Value_Priority_Array(
-                            rpdata->object_instance, i);
-                        len = encode_application_enumerated(
-                            &apdu[apdu_len], present_value);
-                    }
-                    /* add it if we have room */
-                    if ((apdu_len + len) < MAX_APDU) {
-                        apdu_len += len;
-                    } else {
-                        /* Abort response */
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Binary_Value_Priority_Array_Encode, BACNET_MAX_PRIORITY, apdu,
+                apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
                         rpdata->error_code =
                             ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-                        apdu_len = BACNET_STATUS_ERROR;
-                        break;
-                    }
-                }
-            } else {
-                if (rpdata->array_index <= BACNET_MAX_PRIORITY) {
-                    if (Binary_Value_Priority_Array_Null(
-                            rpdata->object_instance, rpdata->array_index)) {
-                        apdu_len = encode_application_null(&apdu[0]);
-                    } else {
-                        present_value = Binary_Value_Priority_Array(
-                            rpdata->object_instance, rpdata->array_index);
-                        apdu_len = encode_application_enumerated(
-                            &apdu[0], present_value);
-                    }
-                } else {
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                     rpdata->error_class = ERROR_CLASS_PROPERTY;
                     rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                    apdu_len = BACNET_STATUS_ERROR;
-                }
             }
             break;
         case PROP_RELINQUISH_DEFAULT:

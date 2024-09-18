@@ -98,6 +98,8 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ANALOG_VALUE;
 /* callback for present value writes */
+typedef void (*analog_value_write_present_value_callback)(
+    uint32_t object_instance, float old_value, float value);
 static analog_value_write_present_value_callback
     Analog_Value_Write_Present_Value_Callback;
 
@@ -2196,7 +2198,7 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
 
 #if PRINT_ENABLED
         fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(OBJECT_ANALOG_VALUE), object_instance);
+            bactext_object_type_name(Object_Type), object_instance);
 #endif /* PRINT_ENABLED */
 
         characterstring_init_ansi(&msgText, "AckNotification");

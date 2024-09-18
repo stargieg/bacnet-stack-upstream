@@ -90,6 +90,8 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_MULTI_STATE_INPUT;
 /* callback for present value writes */
+typedef void (*multistate_input_write_present_value_callback)(
+    uint32_t object_instance, uint32_t old_value, uint32_t value);
 static multistate_input_write_present_value_callback
     Multistate_Input_Write_Present_Value_Callback;
 /* default state text when none is specified */
@@ -905,51 +907,33 @@ unsigned Multistate_Input_Present_Value_Priority(
 }
 
 /**
- * @brief For a given object instance-number and priority 1..16, determines the
- *  priority-array value
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @return priority-array value of the object
+ * @brief Encode a BACnetARRAY property element
+ * @param object_instance [in] BACnet network port object instance number
+ * @param priority [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-static uint32_t Multistate_Input_Priority_Array(
-    uint32_t object_instance, uint8_t priority)
+static int Multistate_Input_Priority_Array_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX priority, uint8_t *apdu)
 {
+    int apdu_len = BACNET_STATUS_ERROR;
     uint32_t value = 1;
     struct object_data *pObject;
 
-    pObject = Multistate_Input_Object(object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            value = pObject->Priority_Array[priority - 1];
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && (priority < BACNET_MAX_PRIORITY)) {
+        if (pObject->Relinquished[priority]) {
+            apdu_len = encode_application_null(apdu);
+        } else {
+            value = pObject->Priority_Array[priority];
+            apdu_len = encode_application_enumerated(apdu, value);
         }
     }
 
-    return value;
-}
-
-/**
- * @brief For a given object instance-number and priority 1..16, determines
- *  if the priority-array slot is NULL
- * @param  object_instance - object-instance number of the object
- * @param  priority - priority-array index value 1..16
- * @return true if the priority array slot is NULL
- */
-static bool Multistate_Input_Priority_Array_Null(
-    uint32_t object_instance, uint8_t priority)
-{
-    bool null_value = false;
-    struct object_data *pObject;
-
-    pObject = Multistate_Input_Object(object_instance);
-    if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
-            if (pObject->Relinquished[priority - 1]) {
-                null_value = true;
-            }
-        }
-    }
-
-    return null_value;
+    return apdu_len;
 }
 
 /**
@@ -1321,7 +1305,7 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int len = 0;
     int apdu_len = 0; /* return value */
-    //int apdu_size = 0;
+    int apdu_size = 0;
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     uint32_t present_value = 0;
@@ -1337,7 +1321,7 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
-    //apdu_size = rpdata->application_data_len;
+    apdu_size = rpdata->application_data_len;
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -1392,49 +1376,16 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 Multistate_Input_Max_States(rpdata->object_instance));
             break;
         case PROP_PRIORITY_ARRAY:
-            if (rpdata->array_index == 0) {
-                /* Array element zero = the number of elements in the array */
-                apdu_len =
-                    encode_application_unsigned(&apdu[0], BACNET_MAX_PRIORITY);
-            } else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                /* no index was specified; try to encode the entire list */
-                for (i = 1; i <= BACNET_MAX_PRIORITY; i++) {
-                    if (Multistate_Input_Priority_Array_Null(
-                            rpdata->object_instance, i)) {
-                        len = encode_application_null(&apdu[apdu_len]);
-                    } else {
-                        present_value = Multistate_Input_Priority_Array(
-                            rpdata->object_instance, i);
-                        len = encode_application_unsigned(
-                            &apdu[apdu_len], present_value);
-                    }
-                    /* add it if we have room */
-                    if ((apdu_len + len) < MAX_APDU) {
-                        apdu_len += len;
-                    } else {
-                        /* Abort response */
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Multistate_Input_Priority_Array_Encode, BACNET_MAX_PRIORITY,
+                apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
                         rpdata->error_code =
                             ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-                        apdu_len = BACNET_STATUS_ABORT;
-                        break;
-                    }
-                }
-            } else {
-                if (rpdata->array_index <= BACNET_MAX_PRIORITY) {
-                    if (Multistate_Input_Priority_Array_Null(
-                            rpdata->object_instance, rpdata->array_index)) {
-                        apdu_len = encode_application_null(&apdu[apdu_len]);
-                    } else {
-                        present_value = Multistate_Input_Priority_Array(
-                            rpdata->object_instance, rpdata->array_index);
-                        apdu_len = encode_application_unsigned(
-                            &apdu[apdu_len], present_value);
-                    }
-                } else {
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                     rpdata->error_class = ERROR_CLASS_PROPERTY;
                     rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                    apdu_len = BACNET_STATUS_ERROR;
-                }
             }
             break;
         case PROP_RELINQUISH_DEFAULT:
@@ -2513,7 +2464,7 @@ int Multistate_Input_Event_Information(
 
     if ((IsActiveEvent) || (IsNotAckedTransitions)) {
         /* Object Identifier */
-        getevent_data->objectIdentifier.type = OBJECT_MULTI_STATE_INPUT;
+        getevent_data->objectIdentifier.type = Object_Type;
         getevent_data->objectIdentifier.instance =
             Multistate_Input_Index_To_Instance(index);
         /* Event State */
@@ -2665,7 +2616,7 @@ int Multistate_Input_Alarm_Summary(
         if ((pObject->Event_State != EVENT_STATE_NORMAL) &&
             (pObject->Notify_Type == NOTIFY_ALARM)) {
             /* Object Identifier */
-            getalarm_data->objectIdentifier.type = OBJECT_BINARY_INPUT;
+            getalarm_data->objectIdentifier.type = Object_Type;
             getalarm_data->objectIdentifier.instance =
                 Multistate_Input_Index_To_Instance(index);
             /* Alarm State */

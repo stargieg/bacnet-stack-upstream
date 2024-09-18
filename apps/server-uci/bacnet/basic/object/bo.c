@@ -99,6 +99,10 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_BINARY_OUTPUT;
 /* callback for present value writes */
+typedef void (*binary_output_write_present_value_callback)(
+    uint32_t object_instance,
+    BACNET_BINARY_PV old_value,
+    BACNET_BINARY_PV value);
 static binary_output_write_present_value_callback
     Binary_Output_Write_Present_Value_Callback;
 
@@ -1918,7 +1922,7 @@ void Binary_Output_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
         fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(OBJECT_BINARY_OUTPUT), object_instance);
+            bactext_object_type_name(Object_Type), object_instance);
 #endif /* PRINT_ENABLED */
 
         characterstring_init_ansi(&msgText, "AckNotification");
@@ -2049,7 +2053,7 @@ void Binary_Output_Intrinsic_Reporting(
 
 #if PRINT_ENABLED
             fprintf(stderr, "Event_State for (%s,%d) goes from %s to %s.\n",
-                bactext_object_type_name(OBJECT_BINARY_OUTPUT), object_instance,
+                bactext_object_type_name(Object_Type), object_instance,
                 bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
 #endif /* PRINT_ENABLED */
@@ -2065,7 +2069,7 @@ void Binary_Output_Intrinsic_Reporting(
 
     if (SendNotify) {
         /* Event Object Identifier */
-        event_data.eventObjectIdentifier.type = OBJECT_BINARY_OUTPUT;
+        event_data.eventObjectIdentifier.type = Object_Type;
         event_data.eventObjectIdentifier.instance = object_instance;
 
         /* Time Stamp */
@@ -2200,7 +2204,7 @@ int Binary_Output_Event_Information(
 
     if ((IsActiveEvent) || (IsNotAckedTransitions)) {
         /* Object Identifier */
-        getevent_data->objectIdentifier.type = OBJECT_BINARY_OUTPUT;
+        getevent_data->objectIdentifier.type = Object_Type;
         getevent_data->objectIdentifier.instance =
             Binary_Output_Index_To_Instance(index);
         /* Event State */
@@ -2352,7 +2356,7 @@ int Binary_Output_Alarm_Summary(
         if ((pObject->Event_State != EVENT_STATE_NORMAL) &&
             (pObject->Notify_Type == NOTIFY_ALARM)) {
             /* Object Identifier */
-            getalarm_data->objectIdentifier.type = OBJECT_BINARY_OUTPUT;
+            getalarm_data->objectIdentifier.type = Object_Type;
             getalarm_data->objectIdentifier.instance =
                 Binary_Output_Index_To_Instance(index);
             /* Alarm State */
