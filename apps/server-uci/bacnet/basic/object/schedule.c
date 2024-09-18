@@ -221,7 +221,6 @@ static void uci_list(const char *sec_idx,
     pObject->Out_Of_Service = false;
     pObject->Changed = false;
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
-    fprintf(stderr, "BACNET_EXCEPTION_SCHEDULE_SIZE %i\n", idx);
     for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
         event = &pObject->Exception_Schedule[e];
         event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
@@ -482,7 +481,7 @@ bool Schedule_Description_Set(uint32_t object_instance, char *new_name)
 }
 
 
-#if 0
+#if 1
 /**
  * @brief Encode a BACnetARRAY property element
  * @param object_instance [in] BACnet network port object instance number
@@ -497,7 +496,7 @@ static int Schedule_Weekly_Schedule_Encode(
     uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu)
 {
     int apdu_len = 0, len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data_schedule *pObject;
     int day, i;
 
     if (array_index >= 7) {
@@ -606,32 +605,15 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 encode_application_date(&apdu[apdu_len], &pObject->End_Date);
             break;
         case PROP_WEEKLY_SCHEDULE:
-            if (rpdata->array_index == 0) { /* count, always 7 */
-                apdu_len = encode_application_unsigned(&apdu[0], 7);
-            } else if (rpdata->array_index ==
-                BACNET_ARRAY_ALL) { /* full array */
-                int day;
-                for (day = 0; day < 7; day++) {
-                    apdu_len += encode_opening_tag(&apdu[apdu_len], 0);
-                    for (i = 0; i < pObject->Weekly_Schedule[day].TV_Count;
-                         i++) {
-                        apdu_len += bacnet_time_value_encode(&apdu[apdu_len],
-                            &pObject->Weekly_Schedule[day].Time_Values[i]);
-                    }
-                    apdu_len += encode_closing_tag(&apdu[apdu_len], 0);
-                }
-            } else if (rpdata->array_index <= 7) { /* some array element */
-                int day = rpdata->array_index - 1;
-                apdu_len += encode_opening_tag(&apdu[apdu_len], 0);
-                for (i = 0; i < pObject->Weekly_Schedule[day].TV_Count; i++) {
-                    apdu_len += bacnet_time_value_encode(&apdu[apdu_len],
-                        &pObject->Weekly_Schedule[day].Time_Values[i]);
-                }
-                apdu_len += encode_closing_tag(&apdu[apdu_len], 0);
-            } else { /* out of bounds */
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Schedule_Weekly_Schedule_Encode, 7, apdu, apdu_max);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
                 rpdata->error_class = ERROR_CLASS_PROPERTY;
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                apdu_len = BACNET_STATUS_ERROR;
             }
             break;
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
