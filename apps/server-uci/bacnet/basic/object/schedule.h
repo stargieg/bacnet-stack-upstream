@@ -74,6 +74,32 @@ typedef struct schedule {
     bool Out_Of_Service;
 } SCHEDULE_DESCR;
 #endif
+struct object_data_schedule {
+    /* Effective Period: Start and End Date */
+    BACNET_DATE Start_Date;
+    BACNET_DATE End_Date;
+    /* Properties concerning Present Value */
+    BACNET_OBJ_DAILY_SCHEDULE Weekly_Schedule[7];
+    BACNET_APPLICATION_DATA_VALUE Schedule_Default;
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+    BACNET_SPECIAL_EVENT Exception_Schedule[BACNET_EXCEPTION_SCHEDULE_SIZE];
+#endif
+    /*
+        * Caution: This is a converted to BACNET_PRIMITIVE_APPLICATION_DATA_VALUE.
+        * Only some data types may be used!
+        */
+    BACNET_APPLICATION_DATA_VALUE Present_Value;   /* must be set to a valid value
+                                                        * default is Schedule_Default */
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
+        Object_Property_References[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
+    uint8_t obj_prop_ref_cnt;       /* actual number of obj_prop references */
+    uint8_t Priority_For_Writing;   /* (1..16) */
+    bool Out_Of_Service;
+    bool Changed;
+    const char *Object_Name;
+    const char *Description;
+};
+
 
 BACNET_STACK_EXPORT
 void Schedule_Property_Lists(
@@ -104,20 +130,16 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 BACNET_STACK_EXPORT
 bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
 
-#if 0
 /* utility functions for calculating current Present Value
  * if Exception Schedule is to be added, these functions must take that into
  * account */
 BACNET_STACK_EXPORT
 bool Schedule_In_Effective_Period(
-    const SCHEDULE_DESCR *desc, const BACNET_DATE *date);
-#endif
+    const struct object_data_schedule *pObject, const BACNET_DATE *date);
 
-#if 0
 BACNET_STACK_EXPORT
 void Schedule_Recalculate_PV(
-    SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, const BACNET_TIME *time);
-#endif
+    struct object_data_schedule *pObject, BACNET_DATE_TIME *date);
 
 BACNET_STACK_EXPORT
 void schedule_timer(uint16_t uSeconds);

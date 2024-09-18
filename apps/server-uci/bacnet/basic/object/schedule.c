@@ -24,29 +24,6 @@
 static const char *sec = "bacnet_sc";
 static const char *type = "sc";
 
-struct object_data {
-    /* Effective Period: Start and End Date */
-    BACNET_DATE Start_Date;
-    BACNET_DATE End_Date;
-    /* Properties concerning Present Value */
-    BACNET_OBJ_DAILY_SCHEDULE Weekly_Schedule[7];
-    BACNET_APPLICATION_DATA_VALUE Schedule_Default;
-    /*
-        * Caution: This is a converted to BACNET_PRIMITIVE_APPLICATION_DATA_VALUE.
-        * Only some data types may be used!
-        */
-    BACNET_APPLICATION_DATA_VALUE Present_Value;   /* must be set to a valid value
-                                                        * default is Schedule_Default */
-    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
-        Object_Property_References[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
-    uint8_t obj_prop_ref_cnt;       /* actual number of obj_prop references */
-    uint8_t Priority_For_Writing;   /* (1..16) */
-    bool Out_Of_Service;
-    bool Changed;
-    const char *Object_Name;
-    const char *Description;
-};
-
 struct object_data_t {
     uint8_t Priority_For_Writing;   /* (1..16) */
     const char *Object_Name;
@@ -96,17 +73,15 @@ void Schedule_Property_Lists(
     }
 }
 
-#if 0
 /**
  * @brief Gets an object from the list using an instance number
  * @param  object_instance - object-instance number of the object
  * @return object found in the list, or NULL if not found
  */
-static struct object_data *Schedule_Object(uint32_t object_instance)
+static struct object_data_schedule *Schedule_Object(uint32_t object_instance)
 {
     return Keylist_Data(Object_List, object_instance);
 }
-#endif
 
 /* structure to hold tuple-list and uci context during iteration */
 struct itr_ctx {
@@ -118,7 +93,7 @@ struct itr_ctx {
 static void uci_list(const char *sec_idx,
 	struct itr_ctx *ictx)
 {
-	int disable,idx,j,k;
+	int disable,idx,j,k,e;
     char *uci_list_values[254];
     uint32_t instance;
     char *uci_list_name = NULL;
@@ -133,11 +108,13 @@ static void uci_list(const char *sec_idx,
 	if (disable)
 		return;
     idx = atoi(sec_idx);
-    struct object_data *pObject = NULL;
+    struct object_data_schedule *pObject = NULL;
     int index = 0;
-    pObject = calloc(1, sizeof(struct object_data));
+    pObject = calloc(1, sizeof(struct object_data_schedule));
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
+    BACNET_DATE start_date = { 0 }, end_date = { 0 };
+    BACNET_SPECIAL_EVENT *event;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -243,6 +220,23 @@ static void uci_list(const char *sec_idx,
     pObject->Priority_For_Writing = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio", ictx->Object.Priority_For_Writing); /* lowest priority */
     pObject->Out_Of_Service = false;
     pObject->Changed = false;
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+    fprintf(stderr, "BACNET_EXCEPTION_SCHEDULE_SIZE %i\n", idx);
+    for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
+        event = &pObject->Exception_Schedule[e];
+        event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
+        event->period.calendarEntry.tag = BACNET_CALENDAR_DATE_RANGE;
+        datetime_copy_date(
+            &event->period.calendarEntry.type.DateRange.startdate,
+            &start_date);
+        datetime_copy_date(
+            &event->period.calendarEntry.type.DateRange.enddate, &end_date);
+        event->period.calendarEntry.next = NULL;
+        event->timeValues.TV_Count = 0;
+        event->priority = 16;
+    }
+#endif
+
     memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
         sizeof(pObject->Present_Value));
 
@@ -297,7 +291,7 @@ void Schedule_Init(void)
  */
 bool Schedule_Valid_Instance(uint32_t object_instance)
 {
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         return true;
@@ -352,7 +346,7 @@ bool Schedule_Object_Name(
 {
     char name_text[32] = "";
     bool status = false;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -384,7 +378,7 @@ bool Schedule_Name_Set(uint32_t object_instance, char *new_name)
     BACNET_CHARACTER_STRING object_name;
     BACNET_OBJECT_TYPE found_type = 0;
     uint32_t found_instance = 0;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && new_name) {
@@ -421,7 +415,7 @@ bool Schedule_Name_Set(uint32_t object_instance, char *new_name)
 bool Schedule_Out_Of_Service(uint32_t object_instance)
 {
     bool value = false;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -438,7 +432,7 @@ bool Schedule_Out_Of_Service(uint32_t object_instance)
  */
 void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
 {
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -457,7 +451,7 @@ void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
 char *Schedule_Description(uint32_t object_instance)
 {
     char *name = NULL;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -476,7 +470,7 @@ char *Schedule_Description(uint32_t object_instance)
 bool Schedule_Description_Set(uint32_t object_instance, char *new_name)
 {
     bool status = false; /* return value */
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && new_name) {
@@ -534,7 +528,6 @@ static int Schedule_Weekly_Schedule_Encode(
 }
 #endif
 
-#if 0
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
 /**
  * @brief Encode a BACnetARRAY property element
@@ -550,7 +543,7 @@ static int Schedule_Exception_Schedule_Encode(
     uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu)
 {
     int apdu_len;
-    SCHEDULE_DESCR *pObject;
+    struct object_data_schedule *pObject;
 
     if (array_index >= BACNET_EXCEPTION_SCHEDULE_SIZE) {
         return BACNET_STATUS_ERROR;
@@ -565,14 +558,13 @@ static int Schedule_Exception_Schedule_Encode(
     return apdu_len;
 }
 #endif
-#endif
 
 int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int apdu_len = 0;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
     uint8_t *apdu = NULL;
-    //uint16_t apdu_max = 0;
+    uint16_t apdu_max = 0;
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     int i;
@@ -590,7 +582,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return apdu_len;
     }
     apdu = rpdata->application_data;
-    //apdu_max = rpdata->application_data_len;
+    apdu_max = rpdata->application_data_len;
     switch ((int)rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -642,6 +634,21 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 apdu_len = BACNET_STATUS_ERROR;
             }
             break;
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+        case PROP_EXCEPTION_SCHEDULE:
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Schedule_Exception_Schedule_Encode,
+                BACNET_EXCEPTION_SCHEDULE_SIZE, apdu, apdu_max);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+            }
+            break;
+#endif
         case PROP_SCHEDULE_DEFAULT:
             apdu_len =
                 bacapp_encode_data(&apdu[0], &pObject->Schedule_Default);
@@ -679,7 +686,6 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
-        case PROP_EXCEPTION_SCHEDULE:
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
             rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
@@ -702,7 +708,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false; /* return value */
     int iOffset;
     uint8_t idx;
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
     int len;
     BACNET_APPLICATION_DATA_VALUE value;
     BACNET_TIME_VALUE time_value;
@@ -1063,14 +1069,14 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
  * @param date - date to check
  * @return true if the calendar entry is within the effective period
  */
-static bool Schedule_In_Effective_Period(
-    struct object_data *desc, BACNET_DATE *date)
+bool Schedule_In_Effective_Period(
+    const struct object_data_schedule *pObject, const BACNET_DATE *date)
 {
     bool res = false;
 
-    if (desc && date) {
-        if (datetime_wildcard_compare_date(&desc->Start_Date, date) <= 0 &&
-            datetime_wildcard_compare_date(&desc->End_Date, date) >= 0) {
+    if (pObject && date) {
+        if (datetime_wildcard_compare_date(&pObject->Start_Date, date) <= 0 &&
+            datetime_wildcard_compare_date(&pObject->End_Date, date) >= 0) {
             res = true;
         }
     }
@@ -1123,12 +1129,12 @@ static int Schedule_Data_Encode(uint8_t *apdu,
 
 /**
  * @brief Recalculate the Present Value of the Schedule object
- * @param desc - schedule descriptor
+ * @param pObject - schedule descriptor
  * @param wday - day of the week
  * @param time - time of the day
  */
-static void Schedule_Recalculate_PV(
-    struct object_data *desc, BACNET_DATE_TIME *date)
+void Schedule_Recalculate_PV(
+    struct object_data_schedule *pObject, BACNET_DATE_TIME *date)
 {
     int i,j;
     bool active = false;
@@ -1149,14 +1155,14 @@ static void Schedule_Recalculate_PV(
     /*  Note to developers: please ping Edward at info@connect-ex.com
         for a more complete schedule object implementation. */
     j = -1;
-    for (i = 0; i < desc->Weekly_Schedule[date->date.wday - 1].TV_Count; i++) {
+    for (i = 0; i < pObject->Weekly_Schedule[date->date.wday - 1].TV_Count; i++) {
         diff = datetime_wildcard_compare_time(
-            &date->time, &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time);
+            &date->time, &pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time);
         if (diff >= 0) {
             if (j >= 0) {
                 diff = datetime_wildcard_compare_time(
-                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time,
-                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Time);
+                    &pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[i].Time,
+                    &pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Time);
                 if (diff >= 0) j = i;
             } else {
                 j = i;
@@ -1165,28 +1171,28 @@ static void Schedule_Recalculate_PV(
     }
 
     if (j >= 0) {
-        if (desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.tag !=
+        if (pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.tag !=
             BACNET_APPLICATION_TAG_NULL) {
-            switch (desc->Schedule_Default.tag) {
+            switch (pObject->Schedule_Default.tag) {
             case BACNET_APPLICATION_TAG_BOOLEAN:
-                if (desc->Present_Value.type.Boolean != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Boolean) {
+                if (pObject->Present_Value.type.Boolean != pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Boolean) {
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 active = true;
                 break;
             case BACNET_APPLICATION_TAG_REAL:
-                if (desc->Present_Value.type.Real < desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real ||
-                    desc->Present_Value.type.Real > desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real) {
+                if (pObject->Present_Value.type.Real < pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real ||
+                    pObject->Present_Value.type.Real > pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Real) {
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 active = true;
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
-                if (desc->Present_Value.type.Enumerated != desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Enumerated) {
+                if (pObject->Present_Value.type.Enumerated != pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value.type.Enumerated) {
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 active = true;
                 break;
@@ -1194,34 +1200,34 @@ static void Schedule_Recalculate_PV(
                 break;
             }
             if (change) {
-                bacnet_primitive_to_application_data_value(&desc->Present_Value,
-                    &desc->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
+                bacnet_primitive_to_application_data_value(&pObject->Present_Value,
+                    &pObject->Weekly_Schedule[date->date.wday - 1].Time_Values[j].Value);
             }
         } else {
-            switch (desc->Schedule_Default.tag) {
+            switch (pObject->Schedule_Default.tag) {
             case BACNET_APPLICATION_TAG_BOOLEAN:
-                if (desc->Present_Value.type.Boolean != desc->Schedule_Default.type.Boolean) {
-                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                        sizeof(desc->Present_Value));
+                if (pObject->Present_Value.type.Boolean != pObject->Schedule_Default.type.Boolean) {
+                    memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                        sizeof(pObject->Present_Value));
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 break;
             case BACNET_APPLICATION_TAG_REAL:
-                if (desc->Present_Value.type.Real < desc->Schedule_Default.type.Real ||
-                    desc->Present_Value.type.Real > desc->Schedule_Default.type.Real) {
-                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                        sizeof(desc->Present_Value));
+                if (pObject->Present_Value.type.Real < pObject->Schedule_Default.type.Real ||
+                    pObject->Present_Value.type.Real > pObject->Schedule_Default.type.Real) {
+                    memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                        sizeof(pObject->Present_Value));
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
-                if (desc->Present_Value.type.Enumerated != desc->Schedule_Default.type.Enumerated) {
-                    memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                        sizeof(desc->Present_Value));
+                if (pObject->Present_Value.type.Enumerated != pObject->Schedule_Default.type.Enumerated) {
+                    memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                        sizeof(pObject->Present_Value));
                     change = true;
-                    desc->Changed = true;
+                    pObject->Changed = true;
                 }
                 break;
             default:
@@ -1231,30 +1237,30 @@ static void Schedule_Recalculate_PV(
         }
     }
     if (! active ) {
-        switch (desc->Schedule_Default.tag) {
+        switch (pObject->Schedule_Default.tag) {
         case BACNET_APPLICATION_TAG_BOOLEAN:
-            if (desc->Present_Value.type.Boolean != desc->Schedule_Default.type.Boolean) {
-                memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                    sizeof(desc->Present_Value));
+            if (pObject->Present_Value.type.Boolean != pObject->Schedule_Default.type.Boolean) {
+                memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                    sizeof(pObject->Present_Value));
                 change = true;
-                desc->Changed = true;
+                pObject->Changed = true;
             }
             break;
         case BACNET_APPLICATION_TAG_REAL:
-            if (desc->Present_Value.type.Real < desc->Schedule_Default.type.Real ||
-                desc->Present_Value.type.Real > desc->Schedule_Default.type.Real) {
-                memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                    sizeof(desc->Present_Value));
+            if (pObject->Present_Value.type.Real < pObject->Schedule_Default.type.Real ||
+                pObject->Present_Value.type.Real > pObject->Schedule_Default.type.Real) {
+                memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                    sizeof(pObject->Present_Value));
                 change = true;
-                desc->Changed = true;
+                pObject->Changed = true;
             }
             break;
         case BACNET_APPLICATION_TAG_ENUMERATED:
-            if (desc->Present_Value.type.Enumerated != desc->Schedule_Default.type.Enumerated) {
-                memcpy(&desc->Present_Value, &desc->Schedule_Default,
-                    sizeof(desc->Present_Value));
+            if (pObject->Present_Value.type.Enumerated != pObject->Schedule_Default.type.Enumerated) {
+                memcpy(&pObject->Present_Value, &pObject->Schedule_Default,
+                    sizeof(pObject->Present_Value));
                 change = true;
-                desc->Changed = true;
+                pObject->Changed = true;
             }
             break;
         default:
@@ -1262,17 +1268,17 @@ static void Schedule_Recalculate_PV(
         }
     }
     if (change) {
-        for (m = 0 ; m < desc->obj_prop_ref_cnt; m++) {
-            pMember = &desc->Object_Property_References[m];
+        for (m = 0 ; m < pObject->obj_prop_ref_cnt; m++) {
+            pMember = &pObject->Object_Property_References[m];
             if (pMember->deviceIdentifier.type == 65535) {
                 wpdata.object_type = pMember->objectIdentifier.type;
                 wpdata.object_instance = pMember->objectIdentifier.instance;
                 wpdata.object_property = pMember->propertyIdentifier;
                 wpdata.array_index = pMember->arrayIndex;
-                wpdata.priority = desc->Priority_For_Writing;
+                wpdata.priority = pObject->Priority_For_Writing;
                 wpdata.application_data_len = sizeof(wpdata.application_data);
                 apdu_len = Schedule_Data_Encode(&wpdata.application_data[0],
-                    &wpdata.application_data_len, &desc->Present_Value);
+                    &wpdata.application_data_len, &pObject->Present_Value);
                 if (apdu_len != BACNET_STATUS_ERROR) {
                     wpdata.application_data_len = apdu_len;
                     Device_Write_Property(&wpdata);
@@ -1294,8 +1300,8 @@ static void Schedule_Recalculate_PV(
                             pMember->objectIdentifier.type,
                             pMember->objectIdentifier.instance,
                             pMember->propertyIdentifier,
-                            &desc->Present_Value,
-                            desc->Priority_For_Writing,
+                            &pObject->Present_Value,
+                            pObject->Priority_For_Writing,
                             pMember->arrayIndex);
                     }
                 }
@@ -1306,7 +1312,7 @@ static void Schedule_Recalculate_PV(
 
 void schedule_timer(uint16_t uSeconds)
 {
-    struct object_data *pObject;
+    struct object_data_schedule *pObject;
     int iCount = 0;
     //bacnet_time_t tNow = 0;
     BACNET_DATE_TIME bdatetime;
