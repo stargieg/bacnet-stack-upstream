@@ -40,7 +40,7 @@ BACNET_PORT_SRC += \
 	$(BACNET_SRC_DIR)/bacnet/basic/bbmd6/vmac.c \
 	$(BACNET_SRC_DIR)/bacnet/datalink/bvlc6.c
 endif
-ifneq (,$(filter $(BACNET_PORT),at91sam7s atmega168 bdk-atxx4-mstp linux pic18f6720 pic18f97j60 stm32f10x stm32f4xx win32 xplained))
+ifneq (,$(filter $(BACNET_PORT),at91sam7s atmega168 bdk-atxx4-mstp bsd linux pic18f6720 pic18f97j60 stm32f10x stm32f4xx win32 xplained))
 BACDL_DEFINE += -DBACDL_MSTP
 BACNET_PORT_SRC += \
 	$(BACNET_PORT_DIR)/rs485.c \
