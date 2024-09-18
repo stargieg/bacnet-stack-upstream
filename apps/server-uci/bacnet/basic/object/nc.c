@@ -1,64 +1,43 @@
-/**************************************************************************
- *
- * Copyright (C) 2011 Krzysztof Malorny <malornykrzysztof@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
- * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
- * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
- * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- *   Additional changes, Copyright (c) 2018 Ed Hague <edward@bac-test.com>
- *
- *   2018.06.17 -    Attempting to write to Object_Name returned
- *UNKNOWN_PROPERTY. Now returns WRITE_ACCESS_DENIED
- *
- *********************************************************************/
-
+/**
+ * @file
+ * @author Krzysztof Malorny <malornykrzysztof@gmail.com>
+ * @author Ed Hague <edward@bac-test.com>
+ * @date 2011, 2018
+ * @brief A basic BACnet Notification Class object
+ * @copyright SPDX-License-Identifier: MIT
+ */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "bacnet/basic/binding/address.h"
+/* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
+/* BACnet Stack API */
 #include "bacnet/bacdcode.h"
-#include "bacnet/bacenum.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/bacdest.h"
-#include "bacnet/basic/services.h"
-#include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/ucix/ucix.h"
-#include "bacnet/config.h"
 #include "bacnet/datetime.h"
-#include "bacnet/basic/object/device.h"
 #include "bacnet/event.h"
+#include "bacnet/wp.h"
+#include "bacnet/basic/sys/keylist.h"
+#include "bacnet/basic/object/device.h"
+#include "bacnet/basic/object/device.h"
+#include "bacnet/basic/object/nc.h"
+#include "bacnet/basic/binding/address.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/tsm/tsm.h"
-#include "bacnet/wp.h"
-#include "bacnet/basic/object/nc.h"
 #include "bacnet/datalink/datalink.h"
 
 #define PRINTF debug_perror
-#define INTRINSIC_REPORTING
+
+
 #if defined(INTRINSIC_REPORTING)
 /* buffer for sending event messages */
-//static uint8_t Event_Buffer[MAX_APDU];
+static uint8_t Event_Buffer[MAX_APDU];
+
 static const char *sec = "bacnet_nc";
 static const char *type = "nc";
 
@@ -84,9 +63,12 @@ static OS_Keylist Object_List;
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_NOTIFICATION_CLASS;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Notification_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
-    PROP_OBJECT_NAME, PROP_OBJECT_TYPE, PROP_NOTIFICATION_CLASS, PROP_PRIORITY,
-    PROP_ACK_REQUIRED, PROP_RECIPIENT_LIST, -1 };
+static const int Notification_Properties_Required[] = {
+    PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,
+    PROP_OBJECT_TYPE,       PROP_NOTIFICATION_CLASS,
+    PROP_PRIORITY,          PROP_ACK_REQUIRED,
+    PROP_RECIPIENT_LIST,    -1
+};
 
 static const int Notification_Properties_Optional[] = { PROP_DESCRIPTION, -1 };
 
@@ -95,20 +77,207 @@ static const int Notification_Properties_Proprietary[] = { -1 };
 void Notification_Class_Property_Lists(
     const int **pRequired, const int **pOptional, const int **pProprietary)
 {
-    if (pRequired)
+    if (pRequired) {
         *pRequired = Notification_Properties_Required;
-    if (pOptional)
+    }
+    if (pOptional) {
         *pOptional = Notification_Properties_Optional;
-    if (pProprietary)
+    }
+    if (pProprietary) {
         *pProprietary = Notification_Properties_Proprietary;
+    }
     return;
 }
 
-/**
- * @brief Determines if a given Notification Value instance is valid
- * @param  object_instance - object-instance number of the object
- * @return  true if the instance is valid, and false if not
- */
+/* structure to hold tuple-list and uci context during iteration */
+struct itr_ctx {
+	struct uci_context *ctx;
+	const char *section;
+    struct object_data_t Object;
+};
+
+static void uci_list(const char *sec_idx,
+	struct itr_ctx *ictx)
+{
+	int disable,idx;
+	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+	"disable", 0);
+	if (strcmp(sec_idx, "default") == 0)
+		return;
+	if (disable)
+		return;
+    idx = atoi(sec_idx);
+    struct object_data *pObject = NULL;
+    int index = 0;
+    pObject = calloc(1, sizeof(struct object_data));
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Object_Name = strndup(option,option_str.length);
+
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Description = strndup(option,option_str.length);
+    else
+        pObject->Description = strdup(ictx->Object.Description);
+
+    pObject->Ack_Required = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "ack_required", ictx->Object.Ack_Required);
+    pObject->Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_offnormal", ictx->Object.Priority[TRANSITION_TO_OFFNORMAL]);
+    pObject->Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_fault", ictx->Object.Priority[TRANSITION_TO_FAULT]);
+    pObject->Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_normal", ictx->Object.Priority[TRANSITION_TO_NORMAL]);
+
+    char *ucirecp[254];
+    BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
+    int ucirecp_n = 0;
+    int ucirecp_i = 0;
+    char *uci_ptr;
+    char *uci_ptr_a;
+    char *src_ip;
+    const char *src_net;
+    unsigned net;
+    unsigned src_port;
+    unsigned i;
+
+    ucirecp_n = ucix_get_list(ucirecp, ictx->ctx, ictx->section, sec_idx,
+        "recipient");
+
+    for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
+        BACNET_ADDRESS src = { 0 };
+        /* configure for every day, all day long */
+        for (i = 0; i < MAX_BACNET_DAYS_OF_WEEK; i++) {
+            bitstring_set_bit(&recplist[ucirecp_i].ValidDays, i, true);
+        }
+        recplist[ucirecp_i].FromTime.hour = 0;
+        recplist[ucirecp_i].FromTime.min = 0;
+        recplist[ucirecp_i].FromTime.sec = 0;
+        recplist[ucirecp_i].FromTime.hundredths = 0;
+        recplist[ucirecp_i].ToTime.hour = 23;
+        recplist[ucirecp_i].ToTime.min = 59;
+        recplist[ucirecp_i].ToTime.sec = 59;
+        recplist[ucirecp_i].ToTime.hundredths = 99;
+        recplist[ucirecp_i].ConfirmedNotify = false;
+        recplist[ucirecp_i].ProcessIdentifier = ucirecp_i;
+        bitstring_set_bit(
+            &recplist[ucirecp_i].Transitions, TRANSITION_TO_OFFNORMAL, true);
+        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_FAULT, true);
+        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_NORMAL, true);
+        uci_ptr = strtok(ucirecp[ucirecp_i], ",");
+	    if (strcmp(uci_ptr,"d") == 0) {
+            uci_ptr = strtok(NULL, "\0");
+            recplist[ucirecp_i].Recipient.type.device.instance = atoi(uci_ptr);
+            recplist[ucirecp_i].Recipient.tag =
+                BACNET_RECIPIENT_TAG_DEVICE;
+        } else if ((strcmp(uci_ptr,"n") == 0)) {
+            uci_ptr = strtok(NULL, "\0");
+            uci_ptr = strtok(uci_ptr, ",");
+            src_net = uci_ptr;
+            if (!src_net) {
+                net = 0;
+            } else {
+                net = atoi(src_net);
+            }
+            if (net == 0) {
+                uci_ptr = strtok(NULL, ":");
+                if (uci_ptr) {
+                    src_ip = uci_ptr;
+                    uci_ptr = strtok(NULL, "\0");
+                    src_port = atoi(uci_ptr);
+                    src.mac[4] = ( src_port / 256 );
+                    src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
+                    //bip_get_addr_by_name(src_ip, &addr);
+                    //addr.port = src_port;
+                    uci_ptr_a = strtok(src_ip, ".");
+                    src.mac[0] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[1] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[2] = atoi(uci_ptr_a);
+                    uci_ptr_a = strtok(NULL, ".");
+                    src.mac[3] = atoi(uci_ptr_a);
+                    src.mac_len = 7;
+                    src.net = net;
+                    src.len = 0;
+                    recplist[ucirecp_i].Recipient.type.address = src;
+                    recplist[ucirecp_i].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_ADDRESS;
+                }
+            } else if (net == 65535) {
+                recplist[ucirecp_i].Recipient.type.address.net = net;
+                recplist[ucirecp_i].Recipient.tag =
+                        BACNET_RECIPIENT_TAG_ADDRESS;
+                recplist[ucirecp_i].Recipient.type.address.len = 0;
+                recplist[ucirecp_i].Recipient.type.address.mac_len = 0;
+            }
+        } else {
+            recplist[ucirecp_i].Recipient.tag =
+                BACNET_RECIPIENT_TAG_MAX;
+        }
+    }
+    for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
+        BACNET_ADDRESS src = { 0 };
+        unsigned max_apdu = 0;
+        int32_t DeviceID;
+
+        pObject->Recipient_List[ucirecp_i] =
+            recplist[ucirecp_i];
+
+        if (pObject->Recipient_List[ucirecp_i].Recipient.
+            tag == BACNET_RECIPIENT_TAG_DEVICE) {
+            /* copy Device_ID */
+            DeviceID =
+                pObject->Recipient_List[ucirecp_i].Recipient.type.device.instance;
+            address_bind_request(DeviceID, &max_apdu, &src);
+
+        } else if (pObject->Recipient_List[ucirecp_i].Recipient.
+            tag == BACNET_RECIPIENT_TAG_ADDRESS) {
+            /* copy Address */
+            src = pObject->Recipient_List[ucirecp_i].Recipient.type.address;
+            address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+        }
+    }
+
+    /* add to list */
+    index = Keylist_Data_Add(Object_List, idx, pObject);
+    if (index >= 0) {
+        Device_Inc_Database_Revision();
+    }
+    return;
+}
+
+void Notification_Class_Init(void)
+{
+    Object_List = Keylist_Create();
+    struct uci_context *ctx;
+    ctx = ucix_init(sec);
+    if (!ctx)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+    struct object_data_t tObject;
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+
+    option = ucix_get_option(ctx, sec, "default", "description");
+    if (option && characterstring_init_ansi(&option_str, option))
+        tObject.Description = strndup(option,option_str.length);
+    else
+        tObject.Description = "Notification Class";
+    tObject.Ack_Required = ucix_get_option_int(ctx, sec, "default", "ack_required", 0); // or 3?
+    tObject.Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_offnormal", 255);
+    tObject.Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ctx, sec, "default", "prio_fault", 255);
+    tObject.Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_normal", 255);
+    struct itr_ctx itr_m;
+	itr_m.section = sec;
+	itr_m.ctx = ctx;
+	itr_m.Object = tObject;
+    ucix_for_each_section_type(ctx, sec, type,
+        (void (*)(const char *, void *))uci_list, &itr_m);
+    ucix_cleanup(ctx);
+}
+
+/* we simply have 0-n object instances.  Yours might be */
+/* more complex, and then you need validate that the */
+/* given instance exists */
 bool Notification_Class_Valid_Instance(uint32_t object_instance)
 {
     struct object_data *pObject;
@@ -121,48 +290,33 @@ bool Notification_Class_Valid_Instance(uint32_t object_instance)
     return false;
 }
 
-/**
- * @brief Determines the number of Notification Value objects
- * @return  Number of Notification Value objects
- */
+/* we simply have 0-n object instances.  Yours might be */
+/* more complex, and then count how many you have */
 unsigned Notification_Class_Count(void)
 {
     return Keylist_Count(Object_List);
 }
 
-/**
- * @brief Determines the object instance-number for a given 0..N index
- * of Notification Value objects where N is Notification_Class_Count().
- * @param  index - 0..MAX_ANALOG_OUTPUTS value
- * @return  object instance-number for the given index
- */
+/* we simply have 0-n object instances.  Yours might be */
+/* more complex, and then you need to return the instance */
+/* that correlates to the correct index */
 uint32_t Notification_Class_Index_To_Instance(unsigned index)
 {
-    return Keylist_Key(Object_List, index);
+    uint32_t instance = UINT32_MAX;
+
+    (void)Keylist_Index_Key(Object_List, index, &instance);
+
+    return instance;
 }
 
-/**
- * @brief For a given object instance-number, determines a 0..N index
- * of Notification Value objects where N is Notification_Class_Count().
- * @param  object_instance - object-instance number of the object
- * @return  index for the given instance-number, or MAX_ANALOG_OUTPUTS
- * if not valid.
- */
+/* we simply have 0-n object instances.  Yours might be */
+/* more complex, and then you need to return the index */
+/* that correlates to the correct instance number */
 unsigned Notification_Class_Instance_To_Index(uint32_t object_instance)
 {
     return Keylist_Index(Object_List, object_instance);
 }
 
-/**
- * For a given object instance-number, loads the object-name into
- * a characterstring. Note that the object name must be unique
- * within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  object_name - holds the object-name retrieved
- *
- * @return  true if object-name was retrieved
- */
 bool Notification_Class_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
@@ -184,267 +338,6 @@ bool Notification_Class_Object_Name(
 
     return status;
 }
-
-/**
- * For a given object instance-number, sets the object-name
- * Note that the object name must be unique within this device.
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
- */
-bool Notification_Class_Name_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    BACNET_CHARACTER_STRING object_name;
-    BACNET_OBJECT_TYPE found_type = 0;
-    uint32_t found_instance = 0;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        /* All the object names in a device must be unique */
-        characterstring_init_ansi(&object_name, new_name);
-        if (Device_Valid_Object_Name(
-                &object_name, &found_type, &found_instance)) {
-            if ((found_type == Object_Type) &&
-                (found_instance == object_instance)) {
-                /* writing same name to same object */
-                status = true;
-            } else {
-                /* duplicate name! */
-                status = false;
-            }
-        } else {
-            status = true;
-            pObject->Object_Name = new_name;
-            Device_Inc_Database_Revision();
-        }
-    }
-
-    return status;
-}
-/**
- * @brief For a given object instance-number, returns the description
- * @param  object_instance - object-instance number of the object
- * @return description text or NULL if not found
- */
-char *Notification_Class_Description(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = (char *)pObject->Description;
-    }
-
-    return name;
-}
-
-/**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if object-name was set
- */
-bool Notification_Class_Description_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        status = true;
-        pObject->Description = new_name;
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the Priority
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - Priority Array
- *
- * @return true
- */
-bool Notification_Class_Priority(uint32_t object_instance, uint8_t value[MAX_BACNET_EVENT_TRANSITION])
-{
-    struct object_data *pObject;
-    uint8_t b = 0;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
-            value[b] = pObject->Priority[b];
-        }
-        return true;
-    } else
-        return false;
-}
-
-/**
- * For a given object instance-number, write the Priority
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - Priority array
- * @param  a - Priority array index
- *
- * @return true
- */
-bool Notification_Class_Priority_Set(uint32_t object_instance, uint8_t value[MAX_BACNET_EVENT_TRANSITION], uint8_t a)
-{
-    struct object_data *pObject;
-    uint8_t b = 0;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        if (a < MAX_BACNET_EVENT_TRANSITION)
-            pObject->Priority[a] = value[a];
-        else {
-            for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
-                pObject->Priority[b] = value[b];
-            }
-        }
-        return true;
-    } else
-        return false;
-}
-
-/**
- * For a given object instance-number, returns the Notify Type
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  Ack Required value
- */
-uint8_t Notification_Class_Ack_Required(uint32_t object_instance)
-{
-    uint8_t value = 0;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = pObject->Ack_Required;
-    }
-
-    return value;
-}
-
-/**
- * For a given object instance-number, sets the Ack Required value
- *
- * @param object_instance - object-instance number of the object
- * @param value - Ack Required value
- *
- * @return true if the Ack Required value was set
- */
-bool Notification_Class_Ack_Required_Set(uint32_t object_instance, uint8_t value)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        pObject->Ack_Required = value;
-        status = true;
-    }
-
-    return status;
-}
-
-/**
- * For a given object instance-number, returns the Recipient from List
- *
- * @param  object_instance - object-instance number of the object
- * @param  b - Recipient index
- *
- * @return Recipient struct
- */
-BACNET_DESTINATION * Notification_Class_Recipient_List(uint32_t object_instance, uint8_t b)
-{
-    struct object_data *pObject;
-    BACNET_DESTINATION *value;
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        value = &pObject->Recipient_List[b];
-        return value;
-    } else
-        return NULL;
-}
-
-/**
- * For a given object instance-number, write the Recipient List with index
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - Recipient struct
- * @param  b - list len
- *
- * @return true
- */
-bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DESTINATION value[NC_MAX_RECIPIENTS])
-{
-    struct object_data *pObject;
-    pObject = Keylist_Data(Object_List, object_instance);
-    bool ret = false;
-    int idx = 0;
-    if (pObject) {
-        /* Decoded all recipient list */
-        /* copy elements from temporary object */
-        for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
-            BACNET_ADDRESS src = { 0 };
-            unsigned max_apdu = 0;
-            uint32_t DeviceID = 0;
-            if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) &&
-            (value[idx].Recipient.type.device.instance > 0)) {
-                pObject->Recipient_List[idx] = value[idx];
-                DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
-                address_bind_request(DeviceID, &max_apdu, &src);
-                ret = true;
-            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
-            (value[idx].Recipient.type.address.net == 0) &&
-            (value[idx].Recipient.type.address.mac_len > 0)) {
-                pObject->Recipient_List[idx] = value[idx];
-                /* copy Address */
-                src = pObject->Recipient_List[idx].Recipient.type.address;
-                address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
-                ret = true;
-            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
-            (value[idx].Recipient.type.address.net != 65535) &&
-            (value[idx].Recipient.type.address.len > 0)) {
-                pObject->Recipient_List[idx] = value[idx];
-                /* copy Address */
-                src = pObject->Recipient_List[idx].Recipient.type.address;
-                address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
-                ret = true;
-            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
-            (value[idx].Recipient.type.address.net == 65535)) {
-                pObject->Recipient_List[idx] = value[idx];
-                ret = true;
-            } else {
-                if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
-                    /* remove Device_ID */
-                    DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
-                    address_remove_device(DeviceID);
-                } else if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
-                    /* remove Address if not broadcast */
-                    if (pObject->Recipient_List[idx].Recipient.type.address.net != 65535) {
-                        src = pObject->Recipient_List[idx].Recipient.type.address;
-                        if (address_get_device_id(&src, &DeviceID))
-                            address_remove_device(DeviceID);
-                    }
-                }
-                pObject->Recipient_List[idx].Recipient.tag = BACNET_RECIPIENT_TAG_MAX;
-                ret = true;
-            }
-        }
-    }
-    return ret;
-}
-
 
 int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
@@ -470,6 +363,7 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_object_id(
                 &apdu[0], OBJECT_NOTIFICATION_CLASS, rpdata->object_instance);
             break;
+
         case PROP_OBJECT_NAME:
             Notification_Class_Object_Name(
                 rpdata->object_instance, &char_string);
@@ -493,21 +387,25 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_PRIORITY:
-            if (rpdata->array_index == 0)
+            if (rpdata->array_index == 0) {
                 apdu_len += encode_application_unsigned(&apdu[0], 3);
-            else {
+            } else {
                 if (rpdata->array_index == BACNET_ARRAY_ALL) {
                     if (Notification_Class_Priority(rpdata->object_instance, prio)) {
-                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                        apdu_len += encode_application_unsigned(
+                            &apdu[apdu_len],
                             prio[TRANSITION_TO_OFFNORMAL]);
-                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                        apdu_len += encode_application_unsigned(
+                            &apdu[apdu_len],
                             prio[TRANSITION_TO_FAULT]);
-                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                        apdu_len += encode_application_unsigned(
+                            &apdu[apdu_len],
                             prio[TRANSITION_TO_NORMAL]);
                     }
                 } else if (rpdata->array_index <= MAX_BACNET_EVENT_TRANSITION) {
                     if (Notification_Class_Priority(rpdata->object_instance, prio)) {
-                        apdu_len += encode_application_unsigned(&apdu[apdu_len],
+                        apdu_len += encode_application_unsigned(
+                            &apdu[apdu_len],
                             prio[rpdata->array_index - 1]);
                     }
                 } else {
@@ -522,11 +420,14 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             u8Val = Notification_Class_Ack_Required(rpdata->object_instance);
 
             bitstring_init(&bit_string);
-            bitstring_set_bit(&bit_string, TRANSITION_TO_OFFNORMAL,
+            bitstring_set_bit(
+                &bit_string, TRANSITION_TO_OFFNORMAL,
                 (u8Val & TRANSITION_TO_OFFNORMAL_MASKED) ? true : false);
-            bitstring_set_bit(&bit_string, TRANSITION_TO_FAULT,
+            bitstring_set_bit(
+                &bit_string, TRANSITION_TO_FAULT,
                 (u8Val & TRANSITION_TO_FAULT_MASKED) ? true : false);
-            bitstring_set_bit(&bit_string, TRANSITION_TO_NORMAL,
+            bitstring_set_bit(
+                &bit_string, TRANSITION_TO_NORMAL,
                 (u8Val & TRANSITION_TO_NORMAL_MASKED) ? true : false);
             /* encode bitstring */
             apdu_len +=
@@ -534,7 +435,7 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_RECIPIENT_LIST:
-            /* encode all entry of Recipient_List */
+            /* get the size of all entry of Recipient_List */
             for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
 
                 /* get pointer of current element for Recipient_List  - easier
@@ -831,8 +732,8 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 
                 iOffset += len;
                 /* context tag [0] - Device */
-                if (decode_is_context_tag(
-                        &wp_data->application_data[iOffset], 0)) {
+                if (bacnet_is_opening_tag_number(
+                    wp_data->application_data,iOffset, 0, NULL)) {
                     TmpNotify.Recipient_List[idx].Recipient.tag =
                         BACNET_RECIPIENT_TAG_DEVICE;
                     /* Decode Network Number */
@@ -856,8 +757,8 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     iOffset += len;
                 }
                 /* opening tag [1] - Recipient */
-                else if (decode_is_opening_tag_number(
-                             &wp_data->application_data[iOffset], 1)) {
+                else if (bacnet_is_opening_tag_number(
+                    wp_data->application_data, iOffset, 1, NULL)) {
                     iOffset++;
                     TmpNotify.Recipient_List[idx].Recipient.tag =
                         BACNET_RECIPIENT_TAG_ADDRESS;
@@ -913,10 +814,10 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 
                     iOffset += len;
                     /* closing tag [1] - Recipient */
-                    if (decode_is_closing_tag_number(
-                            &wp_data->application_data[iOffset], 1))
+                    if (bacnet_is_closing_tag_number(
+                        wp_data->application_data,iOffset, 1, NULL)) {
                         iOffset++;
-                    else {
+                    } else {
                         /* Bad decode, wrong tag or following required parameter
                          * missing */
                         wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -1079,6 +980,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             break;
+
         default:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
@@ -1090,12 +992,6 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     return status;
 }
 
-/**
- * @brief Get the COV change flag status
- * @param object_instance - object-instance number of the object
- * @param PriorityArray - return PriorityArray
- * @return void
- */
 void Notification_Class_Get_Priorities(
     uint32_t object_instance, uint32_t *pPriorityArray)
 {
@@ -1112,8 +1008,145 @@ void Notification_Class_Get_Priorities(
     }
 }
 
-static bool IsRecipientActive(
-    BACNET_DESTINATION *pBacDest, uint8_t EventToState)
+BACNET_DESTINATION * Notification_Class_Recipient_List(uint32_t object_instance, uint8_t b)
+{
+    struct object_data *pObject;
+    BACNET_DESTINATION *value;
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = &pObject->Recipient_List[b];
+        return value;
+    } else
+        return NULL;
+}
+
+/**
+ * For a given object instance-number, write the Recipient List with index
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - Recipient struct
+ * @param  b - list len
+ *
+ * @return true
+ */
+bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DESTINATION value[NC_MAX_RECIPIENTS])
+{
+    struct object_data *pObject;
+    pObject = Keylist_Data(Object_List, object_instance);
+    bool ret = false;
+    int idx = 0;
+    if (pObject) {
+        /* Decoded all recipient list */
+        /* copy elements from temporary object */
+        for (idx = 0; idx < NC_MAX_RECIPIENTS; idx++) {
+            BACNET_ADDRESS src = { 0 };
+            unsigned max_apdu = 0;
+            uint32_t DeviceID = 0;
+            if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) &&
+            (value[idx].Recipient.type.device.instance > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
+                DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
+                address_bind_request(DeviceID, &max_apdu, &src);
+                ret = true;
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net == 0) &&
+            (value[idx].Recipient.type.address.mac_len > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
+                /* copy Address */
+                src = pObject->Recipient_List[idx].Recipient.type.address;
+                address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+                ret = true;
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net != 65535) &&
+            (value[idx].Recipient.type.address.len > 0)) {
+                pObject->Recipient_List[idx] = value[idx];
+                /* copy Address */
+                src = pObject->Recipient_List[idx].Recipient.type.address;
+                address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+                ret = true;
+            } else if ((value[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (value[idx].Recipient.type.address.net == 65535)) {
+                pObject->Recipient_List[idx] = value[idx];
+                ret = true;
+            } else {
+                if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
+                    /* remove Device_ID */
+                    DeviceID = pObject->Recipient_List[idx].Recipient.type.device.instance;
+                    address_remove_device(DeviceID);
+                } else if (pObject->Recipient_List[idx].Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
+                    /* remove Address if not broadcast */
+                    if (pObject->Recipient_List[idx].Recipient.type.address.net != 65535) {
+                        src = pObject->Recipient_List[idx].Recipient.type.address;
+                        if (address_get_device_id(&src, &DeviceID))
+                            address_remove_device(DeviceID);
+                    }
+                }
+                pObject->Recipient_List[idx].Recipient.tag = BACNET_RECIPIENT_TAG_MAX;
+                ret = true;
+            }
+        }
+    }
+    return ret;
+}
+
+/**
+ * For a given object instance-number, write the Priority
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - Priority array
+ * @param  a - Priority array index
+ *
+ * @return true
+ */
+bool Notification_Class_Priority_Set(uint32_t object_instance, uint8_t value[MAX_BACNET_EVENT_TRANSITION], uint8_t a)
+{
+    struct object_data *pObject;
+    uint8_t b = 0;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        if (a < MAX_BACNET_EVENT_TRANSITION)
+            pObject->Priority[a] = value[a];
+        else {
+            for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
+                pObject->Priority[b] = value[b];
+            }
+        }
+        return true;
+    } else
+        return false;
+}
+
+uint8_t Notification_Class_Ack_Required(uint32_t object_instance)
+{
+    uint8_t value = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        value = pObject->Ack_Required;
+    }
+
+    return value;
+}
+
+bool Notification_Class_Ack_Required_Set(
+    uint32_t object_instance, uint8_t value)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Ack_Required = value;
+        status = true;
+    }
+
+    return status;
+}
+
+static bool
+IsRecipientActive(BACNET_DESTINATION *pBacDest, uint8_t EventToState)
 {
     BACNET_DATE_TIME DateTime;
 
@@ -1122,18 +1155,22 @@ static bool IsRecipientActive(
         case EVENT_STATE_OFFNORMAL:
         case EVENT_STATE_HIGH_LIMIT:
         case EVENT_STATE_LOW_LIMIT:
-            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_OFFNORMAL_MASKED)))
+            if (!bitstring_bit(
+                    &pBacDest->Transitions, TRANSITION_TO_OFFNORMAL)) {
                 return false;
+            }
             break;
 
         case EVENT_STATE_FAULT:
-            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_FAULT_MASKED)))
+            if (!bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_FAULT)) {
                 return false;
+            }
             break;
 
         case EVENT_STATE_NORMAL:
-            if (!(bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_NORMAL_MASKED)))
+            if (!bitstring_bit(&pBacDest->Transitions, TRANSITION_TO_NORMAL)) {
                 return false;
+            }
             break;
 
         default:
@@ -1148,12 +1185,14 @@ static bool IsRecipientActive(
         return false;
     }
     /* valid FromTime */
-    if (datetime_compare_time(&DateTime.time, &pBacDest->FromTime) < 0)
+    if (datetime_compare_time(&DateTime.time, &pBacDest->FromTime) < 0) {
         return false;
+    }
 
     /* valid ToTime */
-    if (datetime_compare_time(&pBacDest->ToTime, &DateTime.time) < 0)
+    if (datetime_compare_time(&pBacDest->ToTime, &DateTime.time) < 0) {
         return false;
+    }
 
     return true;
 }
@@ -1211,15 +1250,15 @@ void Notification_Class_common_reporting_function(
     }
 
     /* send notifications for active recipients */
-    PRINTF("Notification Class[%u]: send notifications\n",
+    PRINTF(
+        "Notification Class[%u]: send notifications\n",
         event_data->notificationClass);
     /* pointer to first recipient */
     pBacDest = &pObject->Recipient_List[0];
     for (index = 0; index < NC_MAX_RECIPIENTS; index++, pBacDest++) {
-        /* check if recipient is defined */
-        if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_MAX)
-            break; /* recipient doesn't defined - end of list */
-
+        if (bacnet_recipient_device_wildcard(&pBacDest->Recipient)) {
+            continue;
+        }
         if (IsRecipientActive(pBacDest, event_data->toState)) {
             BACNET_ADDRESS dest;
             uint32_t device_id;
@@ -1232,25 +1271,27 @@ void Notification_Class_common_reporting_function(
             if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                 /* send notification to the specified device */
                 device_id = pBacDest->Recipient.type.device.instance;
-                PRINTF("Notification Class[%u]: send notification to %u\n",
+                PRINTF(
+                    "Notification Class[%u]: send notification to %u\n",
                     event_data->notificationClass, (unsigned)device_id);
-                if (pBacDest->ConfirmedNotify == true)
+                if (pBacDest->ConfirmedNotify == true) {
                     Send_CEvent_Notify(device_id, event_data);
-                else if (address_get_by_device(device_id, &max_apdu, &dest))
-                    Send_UEvent_Notify(
-                        Handler_Transmit_Buffer, event_data, &dest);
-            } else if (pBacDest->Recipient.tag ==
-                BACNET_RECIPIENT_TAG_ADDRESS) {
-                PRINTF("Notification Class[%u]: send notification to ADDR\n",
+                } else if (address_get_by_device(device_id, &max_apdu, &dest)) {
+                    Send_UEvent_Notify(Event_Buffer, event_data, &dest);
+                }
+            } else if (
+                pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
+                PRINTF(
+                    "Notification Class[%u]: send notification to ADDR\n",
                     event_data->notificationClass);
                 /* send notification to the address indicated */
                 if (pBacDest->ConfirmedNotify == true) {
-                    if (address_get_device_id(&dest, &device_id))
+                    if (address_get_device_id(&dest, &device_id)) {
                         Send_CEvent_Notify(device_id, event_data);
+                    }
                 } else {
                     dest = pBacDest->Recipient.type.address;
-                    Send_UEvent_Notify(
-                        Handler_Transmit_Buffer, event_data, &dest);
+                    Send_UEvent_Notify(Event_Buffer, event_data, &dest);
                 }
             }
         }
@@ -1266,7 +1307,7 @@ void Notification_Class_find_recipient(void)
     BACNET_ADDRESS src = { 0 };
     unsigned max_apdu = 0;
     int notify_index;
-    uint32_t DeviceID;
+    uint32_t device_id;
     uint8_t idx;
 
     for (notify_index = 0; notify_index < Keylist_Count(Object_List);
@@ -1280,16 +1321,18 @@ void Notification_Class_find_recipient(void)
             if (pObject->Recipient_List[idx].Recipient.tag ==
                 BACNET_RECIPIENT_TAG_DEVICE) {
                 /* Device ID */
-                DeviceID = pObject->Recipient_List[idx]
+                device_id = pObject->Recipient_List[idx]
                                .Recipient.type.device.instance;
                 /* Send who_ is request only when address of device is unknown.
                  */
-                if (DeviceID < BACNET_MAX_INSTANCE) {
+                if (device_id < BACNET_MAX_INSTANCE) {
                     /* note: BACNET_MAX_INSTANCE = wildcard, not valid */
                     /* note: BUG not on MSTP */
                     if ( datalink_get() == 3 || datalink_get() == 4 ) {
-                        if (!address_bind_request(DeviceID, &max_apdu, &src)) {
-                            Send_WhoIs(DeviceID, DeviceID);
+                        if (!address_bind_request(device_id, &max_apdu, &src)) {
+                            /*  Send who_ is request only when
+                                address of device is unknown. */
+                            Send_WhoIs(device_id, device_id);
                         }
                     }
                 }
@@ -1299,189 +1342,413 @@ void Notification_Class_find_recipient(void)
         }
     }
 }
-/* structure to hold tuple-list and uci context during iteration */
-struct itr_ctx {
-	struct uci_context *ctx;
-	const char *section;
-    struct object_data_t Object;
-};
 
-static void uci_list(const char *sec_idx,
-	struct itr_ctx *ictx)
+#if 0
+/**
+ * @brief AddListElement from an object list property
+ * @ingroup ObjHelpers
+ * @param list_element [in] Pointer to the BACnet_List_Element_Data structure,
+ * which is packed with the information from the request.
+ * @return #BACNET_STATUS_OK or #BACNET_STATUS_ERROR or
+ * #BACNET_STATUS_ABORT or #BACNET_STATUS_REJECT.
+ * @note 15.1.2 Service Procedure
+ * After verifying the validity of the request, the responding BACnet-user
+ * shall attempt to modify the object identified in the
+ * 'Object Identifier' parameter. If the identified object exists
+ * and has the property specified in the 'Property Identifier' parameter,
+ * and, if present, has the array element specified in the
+ * 'Property Array Index' parameter, an attempt shall be made to add all of
+ * the elements specified in the 'List of Elements' parameter to the
+ * specified property or array element of the property. If this
+ * attempt is successful, a 'Result(+)' primitive shall be issued.
+ *
+ * When comparing elements in the 'List of Elements' parameter with
+ * elements in the specified property or array element of the
+ * property, the complete element shall be compared unless the
+ * property description specifies otherwise. If one or more of the
+ * elements is already present in the BACnetLIST, it shall be updated
+ * with the provided element, that is, the existing element is
+ * over-written with the provided element. Optionally, if the provided
+ * element is exactly the same as the existing element in every
+ * way, it can be ignored, that is, not added to the BACnetLIST.
+ * Ignoring an element that already exists shall not cause the
+ * service to fail.
+ *
+ * If the specified object does not exist, the specified property
+ * does not exist, the specified array element does not exist, or the
+ * specified property or array element is not a BACnetLIST, then
+ * the service shall fail and a 'Result(-)' response primitive shall
+ * be issued. If one or more elements cannot be added to, or updated
+ * in, the BACnetLIST, a 'Result(-)' response primitive shall be
+ * issued and no elements shall be added to, or updated in, the BACnetLIST.
+ *
+ * The effect of this service shall be to add to, or update in,
+ * the BACnetLIST all of the specified elements, or to neither add nor
+ * update any elements at all.
+ */
+int Notification_Class_Add_List_Element(BACNET_LIST_ELEMENT_DATA *list_element)
 {
-	int disable,idx;
-	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
-	"disable", 0);
-	if (strcmp(sec_idx, "default") == 0)
-		return;
-	if (disable)
-		return;
-    idx = atoi(sec_idx);
-    struct object_data *pObject = NULL;
-    int index = 0;
-    pObject = calloc(1, sizeof(struct object_data));
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    NOTIFICATION_CLASS_INFO *notification = NULL;
+    BACNET_DESTINATION recipient_list[NC_MAX_RECIPIENTS] = { 0 };
+    uint8_t *application_data = NULL;
+    int application_data_len = 0, len = 0;
+    uint32_t notify_index = 0;
+    unsigned index = 0;
+    unsigned element_count = 0, new_element_count = 0;
+    unsigned added_element_count = 0, same_element_count = 0;
+    bool same_element = false;
+    unsigned i = 0, j = 0;
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Object_Name = strndup(option,option_str.length);
-
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Description = strndup(option,option_str.length);
-    else
-        pObject->Description = strdup(ictx->Object.Description);
-
-    pObject->Ack_Required = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "ack_required", ictx->Object.Ack_Required);
-    pObject->Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_offnormal", ictx->Object.Priority[TRANSITION_TO_OFFNORMAL]);
-    pObject->Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_fault", ictx->Object.Priority[TRANSITION_TO_FAULT]);
-    pObject->Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_normal", ictx->Object.Priority[TRANSITION_TO_NORMAL]);
-
-    char *ucirecp[254];
-    BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
-    int ucirecp_n = 0;
-    int ucirecp_i = 0;
-    char *uci_ptr;
-    char *uci_ptr_a;
-    char *src_ip;
-    const char *src_net;
-    unsigned net;
-    unsigned src_port;
-    unsigned i;
-
-    ucirecp_n = ucix_get_list(ucirecp, ictx->ctx, ictx->section, sec_idx,
-        "recipient");
-
-    for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
-        BACNET_ADDRESS src = { 0 };
-        /* configure for every day, all day long */
-        for (i = 0; i < MAX_BACNET_DAYS_OF_WEEK; i++) {
-            bitstring_set_bit(&recplist[ucirecp_i].ValidDays, i, true);
+    if (!list_element) {
+        return BACNET_STATUS_ABORT;
+    }
+    if (list_element->object_property != PROP_RECIPIENT_LIST) {
+        list_element->error_class = ERROR_CLASS_SERVICES;
+        list_element->error_code = ERROR_CODE_PROPERTY_IS_NOT_A_LIST;
+        return BACNET_STATUS_ERROR;
+    }
+    if (list_element->array_index != BACNET_ARRAY_ALL) {
+        list_element->error_class = ERROR_CLASS_PROPERTY;
+        list_element->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
+        return BACNET_STATUS_ERROR;
+    }
+    notify_index =
+        Notification_Class_Instance_To_Index(list_element->object_instance);
+    if (notify_index < MAX_NOTIFICATION_CLASSES) {
+        notification = &NC_Info[notify_index];
+    } else {
+        list_element->error_class = ERROR_CLASS_OBJECT;
+        list_element->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+        return BACNET_STATUS_ERROR;
+    }
+    /* get the current size of all entry of Recipient_List */
+    for (index = 0; index < NC_MAX_RECIPIENTS; index++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &notification->Recipient_List[index];
+        r1 = &d1->Recipient;
+        if (!bacnet_recipient_device_wildcard(r1)) {
+            element_count++;
         }
-        recplist[ucirecp_i].FromTime.hour = 0;
-        recplist[ucirecp_i].FromTime.min = 0;
-        recplist[ucirecp_i].FromTime.sec = 0;
-        recplist[ucirecp_i].FromTime.hundredths = 0;
-        recplist[ucirecp_i].ToTime.hour = 23;
-        recplist[ucirecp_i].ToTime.min = 59;
-        recplist[ucirecp_i].ToTime.sec = 59;
-        recplist[ucirecp_i].ToTime.hundredths = 99;
-        recplist[ucirecp_i].ConfirmedNotify = false;
-        recplist[ucirecp_i].ProcessIdentifier = ucirecp_i;
-        bitstring_set_bit(
-            &recplist[ucirecp_i].Transitions, TRANSITION_TO_OFFNORMAL, true);
-        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_FAULT, true);
-        bitstring_set_bit(&recplist[ucirecp_i].Transitions, TRANSITION_TO_NORMAL, true);
-        uci_ptr = strtok(ucirecp[ucirecp_i], ",");
-	    if (strcmp(uci_ptr,"d") == 0) {
-            uci_ptr = strtok(NULL, "\0");
-            recplist[ucirecp_i].Recipient.type.device.instance = atoi(uci_ptr);
-            recplist[ucirecp_i].Recipient.tag =
-                BACNET_RECIPIENT_TAG_DEVICE;
-        } else if ((strcmp(uci_ptr,"n") == 0)) {
-            uci_ptr = strtok(NULL, "\0");
-            uci_ptr = strtok(uci_ptr, ",");
-            src_net = uci_ptr;
-            if (!src_net) {
-                net = 0;
-            } else {
-                net = atoi(src_net);
+    }
+    /* decode the elements */
+    new_element_count = 0;
+    application_data = list_element->application_data;
+    application_data_len = list_element->application_data_len;
+    while (application_data_len > 0) {
+        len = bacnet_destination_decode(
+            application_data, application_data_len, &recipient_list[index]);
+        if (len > 0) {
+            new_element_count++;
+            application_data_len -= len;
+        } else {
+            list_element->first_failed_element_number = new_element_count;
+            list_element->error_class = ERROR_CLASS_PROPERTY;
+            list_element->error_code = ERROR_CODE_INVALID_DATA_ENCODING;
+            return BACNET_STATUS_ERROR;
+        }
+    }
+    if (new_element_count == 0) {
+        return BACNET_STATUS_OK;
+    }
+    /* determine the same and added recipient counts */
+    same_element_count = 0;
+    added_element_count = 0;
+    for (i = 0; i < new_element_count; i++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &recipient_list[i];
+        r1 = &d1->Recipient;
+        same_element = false;
+        for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+            BACNET_DESTINATION *d2;
+            BACNET_RECIPIENT *r2;
+            d2 = &notification->Recipient_List[j];
+            r2 = &d2->Recipient;
+            if (bacnet_recipient_same(r1, r2)) {
+                same_element = true;
+                break;
             }
-            if (net == 0) {
-                uci_ptr = strtok(NULL, ":");
-                if (uci_ptr) {
-                    src_ip = uci_ptr;
-                    uci_ptr = strtok(NULL, "\0");
-                    src_port = atoi(uci_ptr);
-                    src.mac[4] = ( src_port / 256 );
-                    src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
-                    //bip_get_addr_by_name(src_ip, &addr);
-                    //addr.port = src_port;
-                    uci_ptr_a = strtok(src_ip, ".");
-                    src.mac[0] = atoi(uci_ptr_a);
-                    uci_ptr_a = strtok(NULL, ".");
-                    src.mac[1] = atoi(uci_ptr_a);
-                    uci_ptr_a = strtok(NULL, ".");
-                    src.mac[2] = atoi(uci_ptr_a);
-                    uci_ptr_a = strtok(NULL, ".");
-                    src.mac[3] = atoi(uci_ptr_a);
-                    src.mac_len = 7;
-                    src.net = net;
-                    src.len = 0;
-                    recplist[ucirecp_i].Recipient.type.address = src;
-                    recplist[ucirecp_i].Recipient.tag =
-                        BACNET_RECIPIENT_TAG_ADDRESS;
+        }
+        if (same_element) {
+            same_element_count++;
+        } else {
+            added_element_count++;
+            if ((added_element_count + element_count) > NC_MAX_RECIPIENTS) {
+                list_element->first_failed_element_number = 1 + i;
+                list_element->error_class = ERROR_CLASS_RESOURCES;
+                list_element->error_code =
+                    ERROR_CODE_NO_SPACE_TO_ADD_LIST_ELEMENT;
+                return BACNET_STATUS_ERROR;
+            }
+        }
+    }
+    /* update existing and add new */
+    for (i = 0; i < new_element_count; i++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &recipient_list[i];
+        r1 = &d1->Recipient;
+        same_element = false;
+        for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+            BACNET_DESTINATION *d2;
+            BACNET_RECIPIENT *r2;
+            d2 = &notification->Recipient_List[j];
+            r2 = &d2->Recipient;
+            if (bacnet_recipient_same(r1, r2)) {
+                /* update existing element */
+                same_element = true;
+                bacnet_destination_copy(d2, d1);
+            }
+        }
+        if (!same_element) {
+            /* add new element to next free slot */
+            for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+                BACNET_DESTINATION *d2;
+                BACNET_RECIPIENT *r2;
+                d2 = &notification->Recipient_List[j];
+                r2 = &d2->Recipient;
+                if (!bacnet_recipient_device_wildcard(r2)) {
+                    bacnet_destination_copy(d2, d1);
+                    break;
                 }
-            } else if (net == 65535) {
-                recplist[ucirecp_i].Recipient.type.address.net = net;
-                recplist[ucirecp_i].Recipient.tag =
-                        BACNET_RECIPIENT_TAG_ADDRESS;
-                recplist[ucirecp_i].Recipient.type.address.len = 0;
-                recplist[ucirecp_i].Recipient.type.address.mac_len = 0;
+            }
+        }
+    }
+
+    return BACNET_STATUS_OK;
+}
+#endif
+
+#if 0
+/**
+ * @brief RemoveListElement from an object list property
+ * @ingroup ObjHelpers
+ * @param list_element [in] Pointer to the BACnet_List_Element_Data structure,
+ * which is packed with the information from the request.
+ * @return The length of the apdu encoded or #BACNET_STATUS_ERROR or
+ * #BACNET_STATUS_ABORT or #BACNET_STATUS_REJECT.
+ * @note After verifying the validity of the request, the responding
+ * BACnet-user shall attempt to modify the object identified in the
+ * 'Object Identifier' parameter. If the identified object exists and it
+ * has the property specified in the 'Property Identifier' parameter,
+ * and if present has the array element specified in the 'Property Array Index'
+ * parameter, an attempt shall be made to remove the
+ * elements in the 'List of Elements' from the property or array element
+ * of the property of the object.
+ *
+ * When comparing elements of the service with entries in the affected
+ * BACnetLIST, the complete element shall be compared
+ * unless the property description specifies otherwise. If one or more
+ * of the elements does not exist or cannot be removed because
+ * of insufficient authority, none of the elements shall be removed and
+ * a 'Result(-)' response primitive shall be issued.
+ */
+int Notification_Class_Remove_List_Element(
+    BACNET_LIST_ELEMENT_DATA *list_element)
+{
+    NOTIFICATION_CLASS_INFO *notification = NULL;
+    uint32_t notify_index = 0;
+    unsigned index = 0;
+    BACNET_DESTINATION recipient_list[NC_MAX_RECIPIENTS] = { 0 };
+    uint8_t *application_data = NULL;
+    int application_data_len = 0, len = 0;
+    unsigned element_count = 0;
+    unsigned remove_element_count = 0;
+    bool same_element = false;
+    unsigned i = 0, j = 0;
+
+    if (!list_element) {
+        return BACNET_STATUS_ABORT;
+    }
+    if (list_element->object_property != PROP_RECIPIENT_LIST) {
+        list_element->error_class = ERROR_CLASS_SERVICES;
+        list_element->error_code = ERROR_CODE_PROPERTY_IS_NOT_A_LIST;
+        return BACNET_STATUS_ERROR;
+    }
+    if (list_element->array_index != BACNET_ARRAY_ALL) {
+        list_element->error_class = ERROR_CLASS_PROPERTY;
+        list_element->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
+        return BACNET_STATUS_ERROR;
+    }
+    notify_index =
+        Notification_Class_Instance_To_Index(list_element->object_instance);
+    if (notify_index < MAX_NOTIFICATION_CLASSES) {
+        notification = &NC_Info[notify_index];
+    } else {
+        list_element->error_class = ERROR_CLASS_OBJECT;
+        list_element->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+        return BACNET_STATUS_ERROR;
+    }
+    /* get the current size of all entry of Recipient_List */
+    for (index = 0; index < NC_MAX_RECIPIENTS; index++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &notification->Recipient_List[index];
+        r1 = &d1->Recipient;
+        if (!bacnet_recipient_device_wildcard(r1)) {
+            element_count++;
+        }
+    }
+    /* decode the elements */
+    application_data = list_element->application_data;
+    application_data_len = list_element->application_data_len;
+    while (application_data_len > 0) {
+        len = bacnet_destination_decode(
+            application_data, application_data_len, &recipient_list[index]);
+        if (len > 0) {
+            remove_element_count++;
+            application_data_len -= len;
+        } else {
+            list_element->first_failed_element_number = remove_element_count;
+            list_element->error_class = ERROR_CLASS_PROPERTY;
+            list_element->error_code = ERROR_CODE_INVALID_DATA_ENCODING;
+            return BACNET_STATUS_ERROR;
+        }
+    }
+    /* determine if one or more of the elements does not exist */
+    for (i = 0; i < remove_element_count; i++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &recipient_list[i];
+        r1 = &d1->Recipient;
+        same_element = false;
+        for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+            BACNET_DESTINATION *d2;
+            BACNET_RECIPIENT *r2;
+            d2 = &notification->Recipient_List[j];
+            r2 = &d2->Recipient;
+            if (bacnet_recipient_same(r1, r2)) {
+                same_element = true;
+            }
+        }
+        if (!same_element) {
+            list_element->first_failed_element_number = 1 + i;
+            list_element->error_class = ERROR_CLASS_SERVICES;
+            list_element->error_code = ERROR_CODE_LIST_ELEMENT_NOT_FOUND;
+            return BACNET_STATUS_ERROR;
+        }
+    }
+    /* remove any matching elements */
+    for (i = 0; i < remove_element_count; i++) {
+        BACNET_DESTINATION *d1;
+        BACNET_RECIPIENT *r1;
+        d1 = &recipient_list[i];
+        r1 = &d1->Recipient;
+        for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+            BACNET_DESTINATION *d2;
+            BACNET_RECIPIENT *r2;
+            d2 = &notification->Recipient_List[j];
+            r2 = &d2->Recipient;
+            if (bacnet_recipient_same(r1, r2)) {
+                bacnet_destination_default_init(d2);
+            }
+        }
+    }
+
+    return BACNET_STATUS_OK;
+}
+#endif
+
+/**
+ * For a given object instance-number, sets the object-name
+ * Note that the object name must be unique within this device.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the object-name to be set
+ *
+ * @return  true if object-name was set
+ */
+bool Notification_Class_Name_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    BACNET_CHARACTER_STRING object_name;
+    BACNET_OBJECT_TYPE found_type = 0;
+    uint32_t found_instance = 0;
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        /* All the object names in a device must be unique */
+        characterstring_init_ansi(&object_name, new_name);
+        if (Device_Valid_Object_Name(
+                &object_name, &found_type, &found_instance)) {
+            if ((found_type == Object_Type) &&
+                (found_instance == object_instance)) {
+                /* writing same name to same object */
+                status = true;
+            } else {
+                /* duplicate name! */
+                status = false;
             }
         } else {
-            recplist[ucirecp_i].Recipient.tag =
-                BACNET_RECIPIENT_TAG_MAX;
-        }
-    }
-    for (ucirecp_i = 0; ucirecp_i < ucirecp_n; ucirecp_i++) {
-        BACNET_ADDRESS src = { 0 };
-        unsigned max_apdu = 0;
-        int32_t DeviceID;
-
-        pObject->Recipient_List[ucirecp_i] =
-            recplist[ucirecp_i];
-
-        if (pObject->Recipient_List[ucirecp_i].Recipient.
-            tag == BACNET_RECIPIENT_TAG_DEVICE) {
-            /* copy Device_ID */
-            DeviceID =
-                pObject->Recipient_List[ucirecp_i].Recipient.type.device.instance;
-            address_bind_request(DeviceID, &max_apdu, &src);
-
-        } else if (pObject->Recipient_List[ucirecp_i].Recipient.
-            tag == BACNET_RECIPIENT_TAG_ADDRESS) {
-            /* copy Address */
-            src = pObject->Recipient_List[ucirecp_i].Recipient.type.address;
-            address_bind_request(BACNET_MAX_INSTANCE, &max_apdu, &src);
+            status = true;
+            pObject->Object_Name = new_name;
+            Device_Inc_Database_Revision();
         }
     }
 
-    /* add to list */
-    index = Keylist_Data_Add(Object_List, idx, pObject);
-    if (index >= 0) {
-        Device_Inc_Database_Revision();
-    }
-    return;
+    return status;
 }
-
-void Notification_Class_Init(void)
+/**
+ * @brief For a given object instance-number, returns the description
+ * @param  object_instance - object-instance number of the object
+ * @return description text or NULL if not found
+ */
+char *Notification_Class_Description(uint32_t object_instance)
 {
-    Object_List = Keylist_Create();
-    struct uci_context *ctx;
-    ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
-    struct object_data_t tObject;
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    char *name = NULL;
+    struct object_data *pObject;
 
-    option = ucix_get_option(ctx, sec, "default", "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Description = strndup(option,option_str.length);
-    else
-        tObject.Description = "Notification Class";
-    tObject.Ack_Required = ucix_get_option_int(ctx, sec, "default", "ack_required", 0); // or 3?
-    tObject.Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_offnormal", 255);
-    tObject.Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ctx, sec, "default", "prio_fault", 255);
-    tObject.Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_normal", 255);
-    struct itr_ctx itr_m;
-	itr_m.section = sec;
-	itr_m.ctx = ctx;
-	itr_m.Object = tObject;
-    ucix_for_each_section_type(ctx, sec, type,
-        (void (*)(const char *, void *))uci_list, &itr_m);
-    ucix_cleanup(ctx);
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        name = (char *)pObject->Description;
+    }
+
+    return name;
 }
+
+/**
+ * @brief For a given object instance-number, sets the description
+ * @param  object_instance - object-instance number of the object
+ * @param  new_name - holds the description to be set
+ * @return  true if object-name was set
+ */
+bool Notification_Class_Description_Set(uint32_t object_instance, char *new_name)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && new_name) {
+        status = true;
+        pObject->Description = new_name;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, returns the Priority
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - Priority Array
+ *
+ * @return true
+ */
+bool Notification_Class_Priority(uint32_t object_instance, uint8_t value[MAX_BACNET_EVENT_TRANSITION])
+{
+    struct object_data *pObject;
+    uint8_t b = 0;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        for (b = 0; b < MAX_BACNET_EVENT_TRANSITION; b++) {
+            value[b] = pObject->Priority[b];
+        }
+        return true;
+    } else
+        return false;
+}
+
 #endif /* defined(INTRINSIC_REPORTING) */
