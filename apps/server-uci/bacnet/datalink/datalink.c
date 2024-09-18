@@ -41,6 +41,8 @@ static enum {
     DATALINK_MSTP
 } Datalink_Transport;
 
+char *Datalink_Ifname;
+
 int datalink_set(char *datalink_string)
 {
     if (strcasecmp("bip", datalink_string) == 0) {
@@ -63,11 +65,16 @@ int datalink_get(void)
 {
     return Datalink_Transport;
 }
+char *
+datalink_get_interface(void)
+{
+    return Datalink_Ifname;
+}
 
 bool datalink_init(char *ifname)
 {
     bool status = false;
-
+    Datalink_Ifname = ifname;
     switch (Datalink_Transport) {
         case DATALINK_NONE:
             status = true;

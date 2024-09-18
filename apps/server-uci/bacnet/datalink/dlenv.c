@@ -367,7 +367,8 @@ void dlenv_network_port_init_bip(void)
 #endif
 
     Network_Port_Object_Instance_Number_Set(0, instance);
-    Network_Port_Name_Set(instance, "BACnet/IP Port");
+    const char *interface = datalink_get_interface();
+    Network_Port_Name_Set(instance, interface);
     Network_Port_Type_Set(instance, PORT_TYPE_BIP);
     bip_get_addr(&addr);
     prefix = bip_get_subnet_prefix();

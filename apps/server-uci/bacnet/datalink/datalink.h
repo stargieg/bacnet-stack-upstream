@@ -75,6 +75,10 @@ BACNET_STACK_EXPORT
 int datalink_get(void);
 
 BACNET_STACK_EXPORT
+char *
+datalink_get_interface(void);
+
+BACNET_STACK_EXPORT
 void datalink_maintenance_timer(uint16_t seconds);
 
 #ifdef __cplusplus

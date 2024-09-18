@@ -198,6 +198,7 @@ static void print_usage(const char *filename)
 
 static void print_help(const char *filename)
 {
+    printf("%s\n", filename);
     printf("Simulate a BACnet server device\n"
             );
 }
@@ -245,14 +246,16 @@ int main(int argc, char *argv[])
         }
     }
     printf(
-        "BACnet Server Demo\n"
-        "BACnet Stack Version %s\n"
-        "BACnet Device ID: %u\n",
-        BACnet_Version, Device_Object_Instance_Number());
+        "BACnet Server uci\n"
+        "BACnet Stack Version %s\n",
+        BACnet_Version);
     /* load any static address bindings to show up
        in our device bindings list */
     address_init();
     Init_Service_Handlers();
+    printf(
+        "BACnet Device ID: %u\n",
+         Device_Object_Instance_Number());
     /* initialize timesync callback function. */
     handler_timesync_set_callback_set(&datetime_timesync);
     if (Device_Object_Name(Device_Object_Instance_Number(), &DeviceName)) {
@@ -260,33 +263,35 @@ int main(int argc, char *argv[])
     }
 
     Datalink_Transport = dlenv_init();
+    printf("Datalink Interface: %s ", datalink_get_interface());
     switch (Datalink_Transport) {
         case DATALINK_ARCNET:
 #if defined(BACDL_ARCNET)
-            printf("Datalink Arcnet Max APDU: %d\n", ARCNET_MPDU_MAX);
+            printf("Arcnet Max APDU: %d\n", ARCNET_MPDU_MAX);
 #endif
             break;
         case DATALINK_ETHERNET:
 #if defined(BACDL_ETHERNET)
-            printf("Datalink Ethernet Max APDU: %d\n", ETHERNET_MPDU_MAX);
+            printf("Ethernet Max APDU: %d\n", ETHERNET_MPDU_MAX);
 #endif
             break;
         case DATALINK_BIP:
 #if defined(BACDL_BIP)
-            printf("Datalink IPv4 Max APDU: %d\n", BIP_MPDU_MAX);
+            printf("IPv4 Max APDU: %d\n", BIP_MPDU_MAX);
 #endif
             break;
         case DATALINK_BIP6:
 #if defined(BACDL_BIP6)
-            printf("Datalink IPv6 Max APDU: %d\n", BIP6_MPDU_MAX);
+            printf("IPv6 Max APDU: %d\n", BIP6_MPDU_MAX);
 #endif
             break;
         case DATALINK_MSTP:
 #if defined(BACDL_MSTP)
-            printf("Datalink MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
+            printf("MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
 #endif
             break;
         default:
+            printf("No Datalink APDU: %d\n", MAX_APDU);
             break;
         }
 
