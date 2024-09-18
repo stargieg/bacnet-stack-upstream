@@ -1831,8 +1831,7 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
 {
     int iLen = 0;
     BACNET_BIT_STRING TempBits;
-    uint8_t tag_number = 0;
-    uint32_t len_value_type = 0;
+    BACNET_TAG tag;
     uint8_t ucCount;
     struct object_data *pObject;
     struct tl_data_record TempRec;
@@ -1851,9 +1850,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
         TempRec.ucRecType = TL_TYPE_BOOL;
         TempRec.Datum.ucBoolean = value.type.Boolean;
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -1874,9 +1873,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
         TempRec.ucRecType = TL_TYPE_UNSIGN;
         TempRec.Datum.ulUValue = value.type.Unsigned_Int;
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -1897,9 +1896,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
         TempRec.ucRecType = TL_TYPE_SIGN;
         TempRec.Datum.lSValue = value.type.Signed_Int;
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -1920,9 +1919,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
         TempRec.ucRecType = TL_TYPE_REAL;
         TempRec.Datum.fReal = value.type.Real;
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -1963,9 +1962,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
             }
         }
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -1986,9 +1985,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
         TempRec.ucRecType = TL_TYPE_ENUM;
         TempRec.Datum.ulEnum = value.type.Enumerated;
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        iLen =
+            bacnet_tag_decode(StatusBuf, iLen, &tag);
+        bacnet_bitstring_decode(StatusBuf, iLen, tag.len_value_type, &TempBits);
         TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
         pObject->Logs[pObject->iIndex++] = TempRec;
         if (pObject->iIndex >= TL_MAX_ENTRIES) {
@@ -2017,8 +2016,7 @@ static void TL_fetch_property(int iLog)
     BACNET_ERROR_CLASS error_class = ERROR_CLASS_SERVICES;
     BACNET_ERROR_CODE error_code = ERROR_CODE_OTHER;
     int iLen = 0;
-    uint8_t tag_number = 0;
-    uint32_t len_value_type = 0;
+    BACNET_TAG tag;
     struct object_data *pObject;
     unsigned max_apdu = 0;
     BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
@@ -2034,40 +2032,40 @@ static void TL_fetch_property(int iLog)
         if (iLen > 0) {
             /* Decode data returned and see if we can fit it into the log */
             iLen =
-                decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
-            value.tag = tag_number;
-            switch (tag_number) {
+                bacnet_tag_decode(ValueBuf, iLen, &tag);
+            value.tag = tag.number;
+            switch (tag.number) {
                 case BACNET_APPLICATION_TAG_BOOLEAN:
-                    value.type.Boolean = decode_boolean(len_value_type);
+                    value.type.Boolean = decode_boolean(tag.len_value_type);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
                 case BACNET_APPLICATION_TAG_UNSIGNED_INT:
-                    decode_unsigned(
-                        &ValueBuf[iLen], len_value_type, &value.type.Unsigned_Int);
+                    bacnet_unsigned_decode(
+                        ValueBuf, iLen, tag.len_value_type, &value.type.Unsigned_Int);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
                 case BACNET_APPLICATION_TAG_SIGNED_INT:
-                    decode_signed(
-                        &ValueBuf[iLen], len_value_type, &value.type.Signed_Int);
+                    bacnet_signed_decode(
+                        ValueBuf, iLen, tag.len_value_type, &value.type.Signed_Int);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
                 case BACNET_APPLICATION_TAG_REAL:
                     decode_real_safe(
-                        &ValueBuf[iLen], len_value_type, &value.type.Real);
+                        &ValueBuf[iLen], tag.len_value_type, &value.type.Real);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
                 case BACNET_APPLICATION_TAG_BIT_STRING:
-                    decode_bitstring(&ValueBuf[iLen], len_value_type, &value.type.Bit_String);
+                    bacnet_bitstring_decode(ValueBuf, iLen, tag.len_value_type, &value.type.Bit_String);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
                 case BACNET_APPLICATION_TAG_ENUMERATED:
-                    decode_enumerated(
-                        &ValueBuf[iLen], len_value_type, &value.type.Enumerated);
+                    bacnet_enumerated_decode(
+                        ValueBuf, iLen, tag.len_value_type, &value.type.Enumerated);
                     write_property_to_rec(value,iLog,StatusBuf);
                     break;
 
