@@ -1223,7 +1223,9 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_POLARITY polarity = POLARITY_NORMAL;
     unsigned i = 0;
     bool state = false;
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     //struct object_data *pObject;
 //#if defined(INTRINSIC_REPORTING)

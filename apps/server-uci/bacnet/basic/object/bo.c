@@ -1390,7 +1390,9 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     bool state = false;
     uint8_t *apdu = NULL;
     int apdu_size = 0;
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
 
     if ((rpdata->application_data == NULL) ||

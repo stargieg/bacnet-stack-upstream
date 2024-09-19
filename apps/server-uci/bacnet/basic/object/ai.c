@@ -24,6 +24,12 @@
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/basic/object/device.h"
+#if defined(INTRINSIC_REPORTING)
+#include "bacnet/basic/object/nc.h"
+#include "bacnet/alarm_ack.h"
+#include "bacnet/getevent.h"
+#include "bacnet/get_alarm_sum.h"
+#endif
 /* me! */
 #include "bacnet/basic/object/ai.h"
 
@@ -1284,7 +1290,7 @@ static bool Analog_Input_Present_Value_Write(
     if (pObject) {
         value = limit_value_by_resolution(value, pObject->Resolution);
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= pObject->Low_Limit) && (value <= pObject->High_Limit)) {
+            (value >= pObject->Min_Pres_Value) && (value <= pObject->Max_Pres_Value)) {
             if (priority != 6) {
                 old_value = Analog_Input_Present_Value(object_instance);
                 Analog_Input_Present_Value_Set(object_instance, value, priority);
@@ -1549,12 +1555,14 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_CHARACTER_STRING char_string;
     uint32_t units = 0;
     float real_value = (float)1.414;
-#if defined(INTRINSIC_REPORTING)
+//#if defined(INTRINSIC_REPORTING)
     int apdu_size = 0;
-#endif
+//#endif
     unsigned i = 0;
     bool state = false;
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
@@ -2769,8 +2777,8 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
             pObject->Changed = false;
             pObject->Min_Pres_Value = 0;
             pObject->Max_Pres_Value = 100;
-            pObject->Event_State = EVENT_STATE_NORMAL;
 #if defined(INTRINSIC_REPORTING)
+            pObject->Event_State = EVENT_STATE_NORMAL;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
             /* initialize Event time stamps using wildcards

@@ -1588,7 +1588,9 @@ int Analog_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     float real_value = 0.0;
     unsigned i = 0;
     bool state = false;
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {

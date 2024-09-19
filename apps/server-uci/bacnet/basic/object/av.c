@@ -1298,7 +1298,7 @@ static bool Analog_Value_Present_Value_Write(
     if (pObject) {
         value = limit_value_by_resolution(value, pObject->Resolution);
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
-            (value >= pObject->Low_Limit) && (value <= pObject->High_Limit)) {
+            (value >= pObject->Min_Pres_Value) && (value <= pObject->Max_Pres_Value)) {
             if (priority != 6) {
                 old_value = Analog_Value_Present_Value(object_instance);
                 Analog_Value_Present_Value_Set(object_instance, value, priority);
@@ -1555,7 +1555,9 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     float real_value = 0.0;
     unsigned i = 0;
     bool state = false;
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     /* Valid data? */
     if (rpdata == NULL) {
@@ -2800,8 +2802,8 @@ uint32_t Analog_Value_Create(uint32_t object_instance)
             pObject->Changed = false;
             pObject->Min_Pres_Value = 0;
             pObject->Max_Pres_Value = 100;
-            pObject->Event_State = EVENT_STATE_NORMAL;
 #if defined(INTRINSIC_REPORTING)
+            pObject->Event_State = EVENT_STATE_NORMAL;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
             /* initialize Event time stamps using wildcards

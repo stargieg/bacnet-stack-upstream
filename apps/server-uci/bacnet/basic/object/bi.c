@@ -1099,10 +1099,12 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_POLARITY polarity = POLARITY_NORMAL;
     unsigned i = 0;
     bool state = false;
-//#if defined(INTRINSIC_REPORTING) && (BINARY_INPUT_INTRINSIC_REPORTING)
+//#if defined(INTRINSIC_REPORTING)
     int apdu_size = 0;
 //#endif
+#if defined(INTRINSIC_REPORTING)
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
