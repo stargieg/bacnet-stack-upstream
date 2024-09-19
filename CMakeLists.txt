@@ -8,6 +8,15 @@ project(
 #
 # options
 #
+option(
+  UCI
+  "build with uci"
+  ON)
+
+option(
+  SERVER_UCI
+  "SERVER_UCI"
+  ON)
 
 option(
   BACNET_STACK_BUILD_APPS
@@ -183,6 +192,15 @@ endif()
 #
 # library
 #
+if(UCI)
+  add_compile_definitions(BAC_UCI)
+  FIND_PATH(uci_include_dir uci.h)
+  message(STATUS "BACNET: BAC_UCI Include:............\"${uci_include_dir}\"")
+  include_directories(${uci_include_dir})
+  FIND_LIBRARY(uci NAMES uci)
+  message(STATUS "BACNET: BAC_UCI Lib:................\"${uci}\"")
+  link_libraries(${uci})
+endif()
 
 find_package(Threads)
 
@@ -605,7 +623,7 @@ target_compile_definitions(
   $<$<BOOL:${BACDL_NONE}>:BACDL_NONE>
   $<$<BOOL:${BACNET_PROPERTY_LISTS}>:BACNET_PROPERTY_LISTS=1>
   $<$<BOOL:${BACNET_PROPERTY_ARRAY_LISTS}>:BACNET_PROPERTY_ARRAY_LISTS=1>
-  $<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
+  #$<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
   $<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:BACNET_STACK_STATIC_DEFINE>
   PRIVATE
   PRINT_ENABLED=1)
@@ -696,6 +714,61 @@ endif()
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${BACNET_PORT_DIRECTORY_PATH}>
 )
+
+
+if(SERVER_UCI)
+  add_executable(
+    server-uci
+    src/bacnet/basic/ucix/ucix.c
+    src/bacnet/basic/ucix/ucix.h
+    apps/server-uci/main.c
+    apps/server-uci/bacnet/basic/object/device.c
+    apps/server-uci/bacnet/basic/object/device.h
+    apps/server-uci/bacnet/datalink/datalink.c
+    apps/server-uci/bacnet/datalink/datalink.h
+    apps/server-uci/bacnet/datalink/dlenv.c
+    apps/server-uci/bacnet/datalink/dlenv.h
+    apps/server-uci/bacnet/basic/object/ao.c
+    apps/server-uci/bacnet/basic/object/ao.h
+    apps/server-uci/bacnet/basic/object/av.c
+    apps/server-uci/bacnet/basic/object/av.h
+    apps/server-uci/bacnet/basic/object/ai.c
+    apps/server-uci/bacnet/basic/object/ai.h
+    apps/server-uci/bacnet/basic/object/bo.c
+    apps/server-uci/bacnet/basic/object/bo.h
+    apps/server-uci/bacnet/basic/object/bv.c
+    apps/server-uci/bacnet/basic/object/bv.h
+    apps/server-uci/bacnet/basic/object/bi.c
+    apps/server-uci/bacnet/basic/object/bi.h
+    apps/server-uci/bacnet/basic/object/mso.c
+    apps/server-uci/bacnet/basic/object/mso.h
+    apps/server-uci/bacnet/basic/object/msv.c
+    apps/server-uci/bacnet/basic/object/msv.h
+    apps/server-uci/bacnet/basic/object/ms-input.c
+    apps/server-uci/bacnet/basic/object/ms-input.h
+    apps/server-uci/bacnet/basic/object/trendlog.c
+    apps/server-uci/bacnet/basic/object/trendlog.h
+    apps/server-uci/bacnet/basic/object/nc.c
+    apps/server-uci/bacnet/basic/object/nc.h
+    apps/server-uci/bacnet/basic/object/schedule.c
+    apps/server-uci/bacnet/basic/object/schedule.h
+  )
+
+  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/apps/server-uci)
+        
+  target_link_libraries(
+    server-uci
+    PRIVATE ${PROJECT_NAME})
+
+  target_compile_definitions(
+    server-uci
+    PUBLIC
+    INTRINSIC_REPORTING
+    PRIVATE
+    PRINT_ENABLED=1
+  )
+          
+endif()
 
 #
 # examples
