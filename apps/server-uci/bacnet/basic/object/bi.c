@@ -97,10 +97,6 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_BINARY_INPUT;
 /* callback for present value writes */
-typedef void (*binary_input_write_present_value_callback)(
-    uint32_t object_instance,
-    BACNET_BINARY_PV old_value,
-    BACNET_BINARY_PV value);
 static binary_input_write_present_value_callback
     Binary_Input_Write_Present_Value_Callback;
 

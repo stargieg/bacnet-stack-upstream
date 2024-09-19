@@ -98,8 +98,6 @@ static OS_Keylist Object_List;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ANALOG_VALUE;
 /* callback for present value writes */
-typedef void (*analog_value_write_present_value_callback)(
-    uint32_t object_instance, float old_value, float value);
 static analog_value_write_present_value_callback
     Analog_Value_Write_Present_Value_Callback;
 
