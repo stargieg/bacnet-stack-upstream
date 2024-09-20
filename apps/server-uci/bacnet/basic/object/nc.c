@@ -100,6 +100,22 @@ static void uci_list(const char *sec_idx,
 	struct itr_ctx *ictx)
 {
 	int disable,idx;
+    struct object_data *pObject = NULL;
+    int index = 0;
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+    char *ucirecp[254];
+    BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
+    int ucirecp_n = 0;
+    int ucirecp_i = 0;
+    char *uci_ptr;
+    char *uci_ptr_a;
+    char *src_ip;
+    const char *src_net;
+    unsigned net;
+    unsigned src_port;
+    unsigned i;
+
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
 	if (strcmp(sec_idx, "default") == 0)
@@ -107,11 +123,7 @@ static void uci_list(const char *sec_idx,
 	if (disable)
 		return;
     idx = atoi(sec_idx);
-    struct object_data *pObject = NULL;
-    int index = 0;
     pObject = calloc(1, sizeof(struct object_data));
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -127,18 +139,6 @@ static void uci_list(const char *sec_idx,
     pObject->Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_offnormal", ictx->Object.Priority[TRANSITION_TO_OFFNORMAL]);
     pObject->Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_fault", ictx->Object.Priority[TRANSITION_TO_FAULT]);
     pObject->Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_normal", ictx->Object.Priority[TRANSITION_TO_NORMAL]);
-
-    char *ucirecp[254];
-    BACNET_DESTINATION recplist[NC_MAX_RECIPIENTS];
-    int ucirecp_n = 0;
-    int ucirecp_i = 0;
-    char *uci_ptr;
-    char *uci_ptr_a;
-    char *src_ip;
-    const char *src_net;
-    unsigned net;
-    unsigned src_port;
-    unsigned i;
 
     ucirecp_n = ucix_get_list(ucirecp, ictx->ctx, ictx->section, sec_idx,
         "recipient");
@@ -248,14 +248,15 @@ static void uci_list(const char *sec_idx,
 
 void Notification_Class_Init(void)
 {
-    Object_List = Keylist_Create();
     struct uci_context *ctx;
-    ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
+    struct itr_ctx itr_m;
+    Object_List = Keylist_Create();
+    ctx = ucix_init(sec);
+    if (!ctx)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
 
     option = ucix_get_option(ctx, sec, "default", "description");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -266,7 +267,6 @@ void Notification_Class_Init(void)
     tObject.Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_offnormal", 255);
     tObject.Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ctx, sec, "default", "prio_fault", 255);
     tObject.Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_normal", 255);
-    struct itr_ctx itr_m;
 	itr_m.section = sec;
 	itr_m.ctx = ctx;
 	itr_m.Object = tObject;
@@ -550,6 +550,8 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
+    char ucirecp[254][64];
+    int ucirecp_n = 0;
 
 
     /* decode some of the request */
@@ -902,8 +904,6 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 }
             }
             len = idx;
-            char ucirecp[254][64];
-            int ucirecp_n = 0;
             if (Notification_Class_Recipient_List_Set(wp_data->object_instance, TmpNotify.Recipient_List)) {
                 for (idx = 0; idx < len; idx++) {
                     unsigned src_port,src_port1,src_port2;
@@ -1031,10 +1031,10 @@ BACNET_DESTINATION * Notification_Class_Recipient_List(uint32_t object_instance,
  */
 bool Notification_Class_Recipient_List_Set(uint32_t object_instance, BACNET_DESTINATION value[NC_MAX_RECIPIENTS])
 {
-    struct object_data *pObject;
-    pObject = Keylist_Data(Object_List, object_instance);
     bool ret = false;
     int idx = 0;
+    struct object_data *pObject;
+    pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         /* Decoded all recipient list */
         /* copy elements from temporary object */

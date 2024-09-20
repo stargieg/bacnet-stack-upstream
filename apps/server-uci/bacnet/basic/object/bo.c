@@ -2482,6 +2482,12 @@ static void uci_list(const char *sec_idx,
 #if defined(INTRINSIC_REPORTING)
     unsigned j;
 #endif
+    struct object_data *pObject = NULL;
+    int index = 0;
+    unsigned priority = 0;
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
+    bool value_b = false;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
 	if (strcmp(sec_idx, "default") == 0)
@@ -2489,13 +2495,7 @@ static void uci_list(const char *sec_idx,
 	if (disable)
 		return;
     idx = atoi(sec_idx);
-    struct object_data *pObject = NULL;
-    int index = 0;
-    unsigned priority = 0;
     pObject = calloc(1, sizeof(struct object_data));
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
-    bool value_b = false;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -2566,18 +2566,19 @@ static void uci_list(const char *sec_idx,
  */
 void Binary_Output_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
-    }
     struct uci_context *ctx;
-    ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
-
     struct object_data *pObject = NULL;
+    struct itr_ctx itr_m;
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
+    ctx = ucix_init(sec);
+    if (!ctx)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
+
     /* add to list */
     Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
 
@@ -2606,7 +2607,6 @@ void Binary_Output_Init(void)
     else
         tObject.Alarm_Value = "0";
 #endif
-    struct itr_ctx itr_m;
     itr_m.section = sec;
     itr_m.ctx = ctx;
     itr_m.Object = tObject;

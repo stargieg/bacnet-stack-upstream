@@ -231,6 +231,10 @@ static void uci_list(const char *sec_idx,
 	struct itr_ctx *ictx)
 {
 	int disable,idx;
+    struct object_data *pObject = NULL;
+    int index = 0;
+    const char *option = NULL;
+    BACNET_CHARACTER_STRING option_str;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
 	if (strcmp(sec_idx, "default") == 0)
@@ -238,11 +242,7 @@ static void uci_list(const char *sec_idx,
 	if (disable)
 		return;
     idx = atoi(sec_idx);
-    struct object_data *pObject = NULL;
-    int index = 0;
     pObject = calloc(1, sizeof(struct object_data));
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
 
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -315,14 +315,15 @@ static void uci_list(const char *sec_idx,
  */
 void Trend_Log_Init(void)
 {
-    Object_List = Keylist_Create();
     struct uci_context *ctx;
-    ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
+    struct itr_ctx itr_m;
+    Object_List = Keylist_Create();
+    ctx = ucix_init(sec);
+    if (!ctx)
+        fprintf(stderr, "Failed to load config file %s\n",sec);
 
     option = ucix_get_option(ctx, sec, "default", "description");
     if (option && characterstring_init_ansi(&option_str, option))
@@ -335,7 +336,6 @@ void Trend_Log_Init(void)
         Device_Object_Instance_Number());
     tObject.cov_data.covSubscribeToProperty = ucix_get_option_int(ctx, sec, "default", "subscribetoproperty", 0);
     tObject.cov_data.lifetime = ucix_get_option_int(ctx, sec, "default", "lifetime", 300);
-    struct itr_ctx itr_m;
 	itr_m.section = sec;
 	itr_m.ctx = ctx;
 	itr_m.Object = tObject;
