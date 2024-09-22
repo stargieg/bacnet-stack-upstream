@@ -80,13 +80,15 @@ static int get_local_hwaddr(const char *ifname, unsigned char *mac)
 {
     struct ifaddrs *ifap, *ifaptr;
     unsigned char *ptr;
+    int i;
 
     if (getifaddrs(&ifap) == 0) {
         for(ifaptr = ifap; ifaptr != NULL; ifaptr = (ifaptr)->ifa_next) {
             if (!strcmp((ifaptr)->ifa_name, ifname) && (((ifaptr)->ifa_addr)->sa_family == AF_LINK)) {
                 ptr = (unsigned char *)LLADDR((struct sockaddr_dl *)(ifaptr)->ifa_addr);
-                sprintf((char *)mac, "%02x:%02x:%02x:%02x:%02x:%02x",
-                                    *ptr, *(ptr+1), *(ptr+2), *(ptr+3), *(ptr+4), *(ptr+5));
+                for (i = 0; i < 6; ++i) {
+                    mac[i] = *(ptr+i);
+                }
                 break;
             }
         }
@@ -131,7 +133,14 @@ bool ethernet_init(char *if_name)
      * Get local MAC address
      */
     get_local_hwaddr(if_name, Ethernet_MAC_Address);
-    fprintf(stderr, "ethernet: src mac %s \n",Ethernet_MAC_Address);
+    fprintf(stderr, "ethernet: src mac %02x:%02x:%02x:%02x:%02x:%02x \n",
+        Ethernet_MAC_Address[0],
+        Ethernet_MAC_Address[1],
+        Ethernet_MAC_Address[2],
+        Ethernet_MAC_Address[3],
+        Ethernet_MAC_Address[4],
+        Ethernet_MAC_Address[5]
+     );
 
 
     /**
