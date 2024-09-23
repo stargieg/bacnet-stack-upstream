@@ -9,14 +9,9 @@ project(
 # options
 #
 option(
-  UCI
-  "build with uci"
-  ON)
-
-option(
   SERVER_UCI
   "SERVER_UCI"
-  ON)
+  OFF)
 
 option(
   BACNET_STACK_BUILD_APPS
@@ -86,6 +81,11 @@ if(NOT (BACDL_ETHERNET OR
         BACDL_CUSTOM))
   add_definitions(-DBACDL_NONE)
 endif()
+
+option(
+  UCI
+  "build with uci"
+  ON)
 
 set(BACNET_PROTOCOL_REVISION 19)
 
@@ -192,17 +192,23 @@ endif()
 #
 # library
 #
-if(UCI)
-  add_compile_definitions(BAC_UCI)
-  FIND_PATH(uci_include_dir uci.h)
-  message(STATUS "BACNET: BAC_UCI Include:............\"${uci_include_dir}\"")
-  include_directories(${uci_include_dir})
-  FIND_LIBRARY(uci NAMES uci)
-  message(STATUS "BACNET: BAC_UCI Lib:................\"${uci}\"")
-  link_libraries(${uci})
-endif()
 
 find_package(Threads)
+
+if(UCI)
+  FIND_PATH(uci_include_dir uci.h)
+  FIND_LIBRARY(uci_lib NAMES uci)
+  if (uci_include_dir AND uci_lib)
+    message(STATUS "BACNET: BAC_UCI Include:................\"${uci_include_dir}\"")
+    message(STATUS "BACNET: BAC_UCI Lib:....................\"${uci_lib}\"")
+    include_directories(${uci_include_dir})
+    link_libraries(${uci_lib})
+    add_compile_definitions(BAC_UCI)
+  else()
+    message(WARNING "BACNET: BAC_UCI Lib:....................\"not found\"")
+    set(UCI OFF)
+  endif()
+endif()
 
 add_library(${PROJECT_NAME}
   src/bacnet/abort.c
@@ -596,7 +602,9 @@ add_library(${PROJECT_NAME}
   src/bacnet/wp.c
   src/bacnet/wp.h
   src/bacnet/wpm.c
-  src/bacnet/wpm.h)
+  src/bacnet/wpm.h
+  $<$<BOOL:${UCI}>:src/bacnet/basic/ucix/ucix.c>
+  $<$<BOOL:${UCI}>:src/bacnet/basic/ucix/ucix.h>)
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
