@@ -182,7 +182,6 @@ void ucix_set_list(struct uci_context *ctx, const char *p, const char *s, const 
     int i;
     ucix_get_ptr(ctx, p, s, o, NULL);
     uci_delete(ctx, &ptr);
-    uci_set_savedir(ctx, "/tmp/.uci/");
     uci_save(ctx, NULL);
     for (i = 0; i < l; i++) {
         if (value[i]) {
