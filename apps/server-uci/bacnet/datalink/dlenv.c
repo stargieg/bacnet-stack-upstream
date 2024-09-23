@@ -365,9 +365,9 @@ void dlenv_network_port_init_bip(void)
 #if BBMD_ENABLED
     uint8_t addr0, addr1, addr2, addr3;
 #endif
+    const char *interface = datalink_get_interface();
 
     Network_Port_Object_Instance_Number_Set(0, instance);
-    const char *interface = datalink_get_interface();
     Network_Port_Name_Set(instance, interface);
     Network_Port_Type_Set(instance, PORT_TYPE_BIP);
     bip_get_addr(&addr);
@@ -570,6 +570,7 @@ int dlenv_init(void)
     BACNET_IP6_ADDRESS addr6;
 #endif
     char option_chr[16];
+    char ifname[32];
     ctx = ucix_init("bacnet_dev");
     if (!ctx) {
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
@@ -665,11 +666,11 @@ int dlenv_init(void)
     if (option_int != 0) {
         apdu_retries_set(option_int);
     }
-    char ifname[32];
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "iface");
     if (option != 0) {
         snprintf(ifname,sizeof(ifname),"%s",option);
+        printf("BACnet Data link init: %s\n", ifname);
         /* === Initialize the Datalink Here === */
         if (!datalink_init(ifname)) {
             if (!ctx)
@@ -700,7 +701,7 @@ int dlenv_init(void)
             dlenv_network_port_init_arcnet();
             break;
 #endif
-#if defined(BACDL_ETHERNET)
+#if 0 //defined(BACDL_ETHERNET)
         case DATALINK_ETHERNET:
             dlenv_network_port_init_ethernet();
             break;
