@@ -85,7 +85,7 @@ endif()
 option(
   UCI
   "build with uci"
-  ON)
+  OFF)
 
 set(BACNET_PROTOCOL_REVISION 19)
 
@@ -707,6 +707,28 @@ elseif(APPLE)
     ports/bsd/datetime-init.c
     ports/bsd/mstimer-init.c
     ports/bsd/stdbool.h)
+
+  if(BACDL_ETHERNET)
+    FIND_PATH(PCAP_INCLUDE pcap.h)
+    if(NOT PCAP_INCLUDE)
+      message(WARNING "BACNET: pcap.h header file not found")
+    else()
+      message(STATUS "BACNET: pcap Include:...................\"${PCAP_INCLUDE}\"")
+    endif()
+    FIND_LIBRARY(PCAP_LIBRARIES NAMES pcap)
+    if(NOT PCAP_LIBRARIES)
+      message(WARNING "BACNET: libpcap not found")
+    else()
+      message(STATUS "BACNET: pcap Lib:.......................\"${PCAP_LIBRARIES}\"")
+    endif()
+    if(PCAP_INCLUDE AND PCAP_LIBRARIES)
+      include_directories(${PCAP_INCLUDE})
+      link_libraries(${PCAP_LIBRARIES})
+      target_sources(${PROJECT_NAME} PRIVATE
+        ports/bsd/ethernet.c
+      )
+    endif()
+  endif()
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
   message(STATUS "BACNET: building for FreeBSD")
   set(BACNET_PORT_DIRECTORY_PATH ${CMAKE_CURRENT_LIST_DIR}/ports/bsd)
@@ -880,7 +902,7 @@ if(BACNET_STACK_BUILD_APPS)
     )
   endif(BACNET_BUILD_BACDISCOVER_APP)
 
-  if(BACDL_BIP OR BACDL_BIP6)
+  if(BACDL_BIP)
     add_executable(readbdt apps/readbdt/main.c)
     target_link_libraries(readbdt PRIVATE ${PROJECT_NAME})
 
@@ -942,7 +964,7 @@ if(BACNET_STACK_BUILD_APPS)
     endif()
   endif()
 
-  if(BACDL_BIP6)
+  if(BACDL_BIP AND BACDL_BIP6)
     add_executable(router-ipv6 apps/router-ipv6/main.c)
     target_link_libraries(router-ipv6 PRIVATE ${PROJECT_NAME})
   endif()
