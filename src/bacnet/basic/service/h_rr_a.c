@@ -13,6 +13,7 @@
 #include "bacnet/apdu.h"
 #include "bacnet/bactext.h"
 #include "bacnet/readrange.h"
+#include "bacnet/bacapp_json.h"
 /* some demo stuff needed */
 #include "bacnet/basic/binding/address.h"
 #include "bacnet/basic/object/device.h"
@@ -22,8 +23,8 @@
 
 /** @file h_rr_a.c  Handles Read Range Acknowledgments. */
 
-/* for debugging... */
-static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
+/* for Trendlog */
+static void PrintReadRangeDataTrendlog(BACNET_READ_RANGE_DATA *data)
 {
 #ifdef BACAPP_PRINT_ENABLED
     BACNET_OBJECT_PROPERTY_VALUE object_value;
@@ -50,39 +51,101 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
             return;
         }
         //json open list
-        printf("{\n \"list\": [\n");
+        fprintf(stdout, "{\n \"list\": [\n");
         for (p = &entry; p != NULL; p = p->next) {
             //json open array
-            printf("  [");
+            fprintf(stdout, "  [");
             //print timestamp
             object_value.value = &value;
             value.tag = BACNET_APPLICATION_TAG_TIMESTAMP;
             value.type.Time_Stamp.tag = TIME_STAMP_DATETIME;
             value.type.Time_Stamp.value.dateTime = p->timestamp;
-            printf("\"");
+            fprintf(stdout, "\"");
             bacapp_print_value(stdout, &object_value);
-            printf("\",");
+            fprintf(stdout, "\",");
 
             //print log value or status bits [log-disabled, buffer-purged, log-interrupted]
             object_value.value = &p->value;
-            bacapp_print_value(stdout, &object_value);
-            printf(",");
+            bacapp_json_print_value(stdout, &object_value);
+            fprintf(stdout, ",");
 
             //print log status bits [in-alarm, fault, overriden, out-of-service]
             object_value.value = &value;
             value.tag = BACNET_APPLICATION_TAG_BIT_STRING;
             value.type.Bit_String = p->status;
             //TODO replace {} with [] in bacapp_snprintf_value #BACNET_APPLICATION_TAG_BIT_STRING
-            bacapp_print_value(stdout, &object_value);
+            bacapp_json_print_value(stdout, &object_value);
 
             if (p->next)
-                printf("],\n");
+                fprintf(stdout, "],\n");
             else
                 //json last element
-                printf("]\n");
+                fprintf(stdout, "]\n");
         }
         //json close list
-        printf(" ]\n}\n");
+        fprintf(stdout, " ]\n}\n");
+#endif
+    }
+}
+
+/* for debugging... */
+static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
+{
+#ifdef BACAPP_PRINT_ENABLED
+    BACNET_OBJECT_PROPERTY_VALUE object_value; /* for bacapp printing */
+#endif
+    BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
+    int len = 0;
+    uint8_t *application_data;
+    int application_data_len;
+    bool first_value = true;
+#if PRINT_ENABLED
+    bool print_brace = false;
+#endif
+
+    if (data) {
+        application_data = data->application_data;
+        application_data_len = data->application_data_len;
+        /* FIXME: what if application_data_len is bigger than 255? */
+        /* value? need to loop until all of the len is gone... */
+        for (;;) {
+            len = bacapp_decode_application_data(
+                application_data, (uint8_t)application_data_len, &value);
+            if (first_value && (len < application_data_len)) {
+                first_value = false;
+#if PRINT_ENABLED
+                fprintf(stdout, "{");
+                print_brace = true;
+#endif
+            }
+#ifdef BACAPP_PRINT_ENABLED
+            object_value.object_type = data->object_type;
+            object_value.object_instance = data->object_instance;
+            object_value.object_property = data->object_property;
+            object_value.array_index = data->array_index;
+            object_value.value = &value;
+            bacapp_print_value(stdout, &object_value);
+#endif
+            if (len > 0) {
+                if (len < application_data_len) {
+                    application_data += len;
+                    application_data_len -= len;
+                    /* there's more! */
+#if PRINT_ENABLED
+                    fprintf(stdout, ",");
+#endif
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+#if PRINT_ENABLED
+        if (print_brace) {
+            fprintf(stdout, "}");
+        }
+        fprintf(stdout, "\r\n");
 #endif
     }
 }
@@ -105,6 +168,11 @@ void handler_read_range_ack(
 #endif
 
     if (len > 0) {
-        PrintReadRangeData(&data);
+        fprintf(stderr, "Received ReadRange Len: %i\n",len);
+        if (data.object_type == OBJECT_TRENDLOG) {
+            PrintReadRangeDataTrendlog(&data);
+        } else {
+            PrintReadRangeData(&data);
+        }
     }
 }

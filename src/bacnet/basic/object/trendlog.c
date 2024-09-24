@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <string.h> /* for memmove */
 #include <stdlib.h> /* calloc */
+#include <string.h>
+/* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
@@ -1591,6 +1593,7 @@ int rr_decode_trendlog_entries(
                 default:
                     // anything to do here?
                     // skip over the value if we don't suppord decoding it
+                    break;
             }
             if (len <= 0) {
                 break;
