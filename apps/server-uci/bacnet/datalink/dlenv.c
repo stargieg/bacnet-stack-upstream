@@ -696,7 +696,7 @@ int dlenv_init(void)
         ucix_cleanup(ctx);
 
     switch (Datalink_Transport) {
-#if defined(BACDL_ARCNET)
+#if 0 //#if defined(BACDL_ARCNET)
         case DATALINK_ARCNET:
             dlenv_network_port_init_arcnet();
             break;
