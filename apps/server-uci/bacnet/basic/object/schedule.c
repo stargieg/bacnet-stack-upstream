@@ -258,7 +258,7 @@ void Schedule_Init(void)
     BACNET_SPECIAL_EVENT *event;
     SCHEDULE_DESCR *psched;
     */
-    struct uci_context *ctx = uci_alloc_context();
+    struct uci_context *ctx;
     struct object_data_t tObject;
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
