@@ -430,6 +430,10 @@ static BACNET_REINITIALIZED_STATE Reinitialize_State = BACNET_REINIT_IDLE;
 static const char *Reinit_Password = "filister";
 static write_property_function Device_Write_Property_Store_Callback;
 
+#ifdef BAC_ROUTING
+static bool Device_Router_Mode = false;
+#endif
+
 /** Commands a Device re-initialization, to a given state.
  * The request's password must match for the operation to succeed.
  * This implementation provides a framework, but doesn't
@@ -513,7 +517,11 @@ uint32_t Device_Index_To_Instance(unsigned index)
 uint32_t Device_Object_Instance_Number(void)
 {
 #ifdef BAC_ROUTING
-    return Routed_Device_Object_Instance_Number();
+    if (Device_Router_Mode) {
+        return Routed_Device_Object_Instance_Number();
+    } else {
+        return Object_Instance_Number;
+    }
 #else
     return Object_Instance_Number;
 #endif
@@ -2211,6 +2219,7 @@ void Device_Timer(uint16_t milliseconds)
 void Routing_Device_Init(uint32_t first_object_instance)
 {
     struct object_functions *pDevObject = NULL;
+    Device_Router_Mode = true;
 
     /* Initialize with our preset strings */
     Add_Routed_Device(first_object_instance, &My_Object_Name, Description);
