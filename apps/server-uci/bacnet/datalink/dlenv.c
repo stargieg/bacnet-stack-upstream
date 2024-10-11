@@ -365,7 +365,11 @@ void dlenv_network_port_init_bip(void)
 #if BBMD_ENABLED
     uint8_t addr0, addr1, addr2, addr3;
 #endif
-    const char *interface = datalink_get_interface();
+    static char interface[1470];
+    char *dl_interface = NULL;
+
+    dl_interface = datalink_get_interface();
+    strcpy(interface,dl_interface);
 
     Network_Port_Object_Instance_Number_Set(0, instance);
     Network_Port_Name_Set(instance, interface);
@@ -414,9 +418,14 @@ void dlenv_network_port_init_mstp(void)
 {
     uint32_t instance = 1;
     uint8_t mac[1] = { 0 };
+    static char interface[1470];
+    char *dl_interface = NULL;
+
+    dl_interface = datalink_get_interface();
+    strcpy(interface,dl_interface);
 
     Network_Port_Object_Instance_Number_Set(0, instance);
-    Network_Port_Name_Set(instance, "MS/TP Port");
+    Network_Port_Name_Set(instance, interface);
     Network_Port_Type_Set(instance, PORT_TYPE_MSTP);
     Network_Port_MSTP_Max_Master_Set(instance, dlmstp_max_master());
     Network_Port_MSTP_Max_Info_Frames_Set(instance, dlmstp_max_info_frames());
@@ -445,8 +454,14 @@ void dlenv_network_port_init_bip6(void)
     BACNET_ADDRESS addr = { 0 };
     BACNET_IP6_ADDRESS addr6 = { .address={0}, .port=0 };
 
+    static char interface[1470];
+    char *dl_interface = NULL;
+
+    dl_interface = datalink_get_interface();
+    strcpy(interface,dl_interface);
+
     Network_Port_Object_Instance_Number_Set(0, instance);
-    Network_Port_Name_Set(instance, "BACnet/IPv6 Port");
+    Network_Port_Name_Set(instance, interface);
     Network_Port_Type_Set(instance, PORT_TYPE_BIP6);
     Network_Port_BIP6_Port_Set(instance, bip6_get_port());
     bip6_get_my_address(&addr);
