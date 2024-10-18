@@ -58,6 +58,11 @@ typedef struct {
     } value;
 } BACNET_SHED_LEVEL;
 
+typedef struct BACnetCustomValue {
+    uint8_t *data;
+    int len;
+} BACNET_CUSTOM_VALUE;
+
 struct BACnet_Application_Data_Value;
 typedef struct BACnet_Application_Data_Value {
     bool context_specific; /* true if context specific data */
@@ -163,6 +168,9 @@ typedef struct BACnet_Application_Data_Value {
 #endif
 #if defined(BACAPP_ACCESS_RULE)
         BACNET_ACCESS_RULE Access_Rule;
+#endif
+#if defined(BACDL_BSC)
+        BACNET_CUSTOM_VALUE Custom_Value;
 #endif
     } type;
     /* simple linked list if needed */
