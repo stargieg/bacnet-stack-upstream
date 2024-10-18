@@ -34,6 +34,9 @@
 #include "bacnet/calendar_entry.h"
 #include "bacnet/special_event.h"
 #include "bacnet/basic/sys/platform.h"
+#ifdef BACDL_BSC
+#include "bacnet/basic/object/sc_netport.h"
+#endif
 
 #if defined(BACAPP_SCALE)
 /**
@@ -1304,6 +1307,14 @@ int bacapp_known_property_tag(
         case PROP_NEGATIVE_ACCESS_RULES:
             /* BACnetAccessRule */
             return BACNET_APPLICATION_TAG_ACCESS_RULE;
+#ifdef BACDL_BSC
+        case PROP_SC_FAILED_CONNECTION_REQUESTS:
+        case PROP_SC_HUB_FUNCTION_CONNECTION_STATUS:
+        case PROP_SC_DIRECT_CONNECT_CONNECTION_STATUS:
+        case PROP_SC_PRIMARY_HUB_CONNECTION_STATUS:
+        case PROP_SC_FAILOVER_HUB_CONNECTION_STATUS:
+            return -1;
+#endif /* BACDL_BSC */
 
         default:
             return -1;
@@ -3355,8 +3366,18 @@ int bacapp_snprintf_value(
                 ret_val = bacapp_snprintf(str, str_len, "{}");
                 break;
             default:
-                ret_val = bacapp_snprintf(
-                    str, str_len, "UnknownType(tag=%d)", value->tag);
+#ifdef BACDL_BSC
+                if (property == PROP_SC_FAILED_CONNECTION_REQUESTS ||
+                    property == PROP_SC_HUB_FUNCTION_CONNECTION_STATUS ||
+                    property == PROP_SC_DIRECT_CONNECT_CONNECTION_STATUS ||
+                    property == PROP_SC_PRIMARY_HUB_CONNECTION_STATUS ||
+                    property == PROP_SC_FAILOVER_HUB_CONNECTION_STATUS) {
+                    ret_val = Network_Port_SC_snprintf_value(
+                        str, str_len, object_value);
+                } else
+#endif /* BACDL_BSC */
+                    ret_val = bacapp_snprintf(
+                        str, str_len, "UnknownType(tag=%d)", value->tag);
                 break;
         }
     }

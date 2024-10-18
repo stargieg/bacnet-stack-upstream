@@ -52,6 +52,10 @@ bip:
 bip-client:
 	$(MAKE) BACDL=bip BBMD=client -s -C apps all
 
+.PHONY: bsc
+bsc:
+	$(MAKE) BACDL=bsc -s -C apps all
+
 .PHONY: ethernet
 ethernet:
 	$(MAKE) BACDL=ethernet -s -C apps all
@@ -183,6 +187,10 @@ server-client:
 .PHONY: server-discover
 server-discover:
 	$(MAKE) LEGACY=true -s -C apps $@
+
+.PHONY: sc-hub
+sc-hub:
+	$(MAKE) BACDL=bsc -s -C apps $@
 
 .PHONY: mstpcap
 mstpcap:
@@ -438,6 +446,7 @@ clean: ports-clean
 	$(MAKE) -s -C apps/gateway clean
 	$(MAKE) -s -C apps/fuzz-afl clean
 	$(MAKE) -s -C apps/fuzz-libfuzzer clean
+	$(MAKE) -s -C apps/sc-hub clean
 	$(MAKE) -s -C ports/lwip clean
 	$(MAKE) -s -C test clean
 	rm -rf ./build

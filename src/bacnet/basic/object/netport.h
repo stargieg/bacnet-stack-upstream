@@ -22,6 +22,9 @@ extern "C" {
 #endif /* __cplusplus */
 
 BACNET_STACK_EXPORT
+unsigned Network_Port_Object_Number(void);
+
+BACNET_STACK_EXPORT
 void Network_Port_Property_Lists(
     const int **pRequired, const int **pOptional, const int **pProprietary);
 BACNET_STACK_EXPORT
@@ -75,6 +78,7 @@ BACNET_STACK_EXPORT
 bool Network_Port_MAC_Address(
     uint32_t object_instance, BACNET_OCTET_STRING *mac_address);
 BACNET_STACK_EXPORT
+uint8_t *Network_Port_MAC_Address_pointer(uint32_t object_instance);
 uint8_t Network_Port_MAC_Address_Value(
     uint32_t object_instance, uint8_t *mac_address, size_t mac_size);
 BACNET_STACK_EXPORT
@@ -363,6 +367,9 @@ int Network_Port_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 /* handling for write property service */
 BACNET_STACK_EXPORT
 bool Network_Port_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+
+void Network_Port_Pending_Params_Apply(uint32_t object_instance);
+void Network_Port_Pending_Params_Discard(uint32_t object_instance);
 
 #ifdef __cplusplus
 }

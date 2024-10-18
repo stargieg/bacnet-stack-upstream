@@ -31,6 +31,7 @@
 #define BACDL_MSTP
 #define BACDL_BIP
 #define BACDL_BIP6
+defined BACDL_BSC
 #endif
 
 #if defined(BACDL_ETHERNET)
@@ -59,6 +60,13 @@
 #endif
 
 #if defined(BACDL_BIP6)
+#if defined(BACDL_SOME_DATALINK_ENABLED)
+#define BACDL_MULTIPLE 1
+#endif
+#define BACDL_SOME_DATALINK_ENABLED 1
+#endif
+
+#if defined(BACDL_BSC)
 #if defined(BACDL_SOME_DATALINK_ENABLED)
 #define BACDL_MULTIPLE 1
 #endif
@@ -136,11 +144,34 @@
 #define MAX_APDU 1420
 #elif !defined(BACNET_SECURITY)
 #define MAX_APDU 480
+#elif defined(BACDL_BSC)
+#define MAX_APDU 1476
 #elif defined(BACDL_MSTP) && defined(BACNET_SECURITY)
 /* TODO: Is this really 412 or should it be 480? */
 #define MAX_APDU 412
 #else
 #define MAX_APDU 412
+#endif
+#endif
+
+#if defined(BACDL_BSC)
+#ifndef SC_NETPORT_BVLC_MAX
+#define SC_NETPORT_BVLC_MAX 1500
+#endif
+#ifndef SC_NETPORT_NPDU_MAX
+#define SC_NETPORT_NPDU_MAX 1500
+#endif
+#ifndef SC_NETPORT_CONNECT_TIMEOUT
+#define SC_NETPORT_CONNECT_TIMEOUT 5
+#endif
+#ifndef SC_NETPORT_HEARTBEAT_TIMEOUT
+#define SC_NETPORT_HEARTBEAT_TIMEOUT 3
+#endif
+#ifndef SC_NETPORT_DISCONNECT_TIMEOUT
+#define SC_NETPORT_DISCONNECT_TIMEOUT 5
+#endif
+#ifndef SC_NETPORT_RECONNECT_TIME
+#define SC_NETPORT_RECONNECT_TIME 2
 #endif
 #endif
 
