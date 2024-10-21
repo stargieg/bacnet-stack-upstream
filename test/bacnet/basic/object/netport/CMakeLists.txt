@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 get_filename_component(basename ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 project(test_${basename}
-	VERSION 1.0.0
-	LANGUAGES C)
+    VERSION 1.0.0
+    LANGUAGES C)
 
 
 string(REGEX REPLACE
@@ -26,8 +26,8 @@ string(REGEX REPLACE
 set(ZTST_DIR "${TST_DIR}/ztest/src")
 
 add_compile_definitions(
-	BIG_ENDIAN=0
-	CONFIG_ZTEST=1
+    BIG_ENDIAN=0
+    CONFIG_ZTEST=1
 	BACDL_BSC=1
 	BACNET_SECURE_CONNECT_ROUTING_TABLE=1
 	BSC_CONF_HUB_FUNCTIONS_NUM=1
@@ -35,13 +35,13 @@ add_compile_definitions(
 	BACNET_SC_DIRECT_ACCEPT_URI_MAX=6
 	MAX_TSM_TRANSACTIONS=0
 	BSC_CONF_TX_PRE=0
-	)
+    )
 
 include_directories(
-	${SRC_DIR}
-	${TST_DIR}/bacnet/basic/object
-	${TST_DIR}/ztest/include
-	)
+    ${SRC_DIR}
+    ${TST_DIR}/bacnet/basic/object/test
+    ${TST_DIR}/ztest/include
+    )
 
 if(ZEPHYR_BASE)
   message(FATAL_ERROR "ZEPHYR_BASE env variable defined. Use zephyr/CMakeLists.txt for Zephyr build")
@@ -53,10 +53,12 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     ${PORTS_DIR}/linux/datetime-init.c
     # File(s) under test
 	${SRC_DIR}/bacnet/basic/object/bacfile.c
-	${SRC_DIR}/bacnet/basic/object/netport.c
+    ${SRC_DIR}/bacnet/basic/object/netport.c
 	${SRC_DIR}/bacnet/basic/object/sc_netport.c
     # Support files and stubs (pathname alphabetical)
+    ${SRC_DIR}/bacnet/access_rule.c
 	${SRC_DIR}/bacnet/arf.c
+    ${SRC_DIR}/bacnet/bacaction.c
 	${SRC_DIR}/bacnet/bacaddr.c
 	${SRC_DIR}/bacnet/bacapp.c
 	${SRC_DIR}/bacnet/bacdcode.c
@@ -110,7 +112,9 @@ elseif(WIN32)
 	${SRC_DIR}/bacnet/basic/object/netport.c
 	${SRC_DIR}/bacnet/basic/object/sc_netport.c
     # Support files and stubs (pathname alphabetical)
+    ${SRC_DIR}/bacnet/access_rule.c
 	${SRC_DIR}/bacnet/arf.c
+    ${SRC_DIR}/bacnet/bacaction.c
 	${SRC_DIR}/bacnet/bacaddr.c
 	${SRC_DIR}/bacnet/bacapp.c
 	${SRC_DIR}/bacnet/bacdcode.c
@@ -155,7 +159,9 @@ elseif(APPLE)
 	${SRC_DIR}/bacnet/basic/object/netport.c
 	${SRC_DIR}/bacnet/basic/object/sc_netport.c
     # Support files and stubs (pathname alphabetical)
+    ${SRC_DIR}/bacnet/access_rule.c
 	${SRC_DIR}/bacnet/arf.c
+    ${SRC_DIR}/bacnet/bacaction.c
 	${SRC_DIR}/bacnet/bacaddr.c
 	${SRC_DIR}/bacnet/bacapp.c
 	${SRC_DIR}/bacnet/bacdcode.c
