@@ -1069,6 +1069,7 @@ void bacfile_cleanup(void)
         do {
             pObject = Keylist_Data_Pop(Object_List);
             if (pObject) {
+                free(pObject->Pathname);
                 free(pObject);
             }
         } while (pObject);

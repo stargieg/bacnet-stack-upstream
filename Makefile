@@ -56,6 +56,12 @@ bip-client:
 ethernet:
 	$(MAKE) BACDL=ethernet -s -C apps all
 
+# note: requires additional libraries to be installed
+# see .github/workflows/gcc.yml
+.PHONY: bsc
+bsc:
+	$(MAKE) BACDL=bsc -s -C apps all
+
 .PHONY: apps
 apps:
 	$(MAKE) -s -C apps all
@@ -183,6 +189,10 @@ server-client:
 .PHONY: server-discover
 server-discover:
 	$(MAKE) LEGACY=true -s -C apps $@
+
+.PHONY: sc-hub
+sc-hub:
+	$(MAKE) BACDL=bsc -s -C apps $@
 
 .PHONY: mstpcap
 mstpcap:
@@ -378,6 +388,11 @@ CPPCHECK_OPTIONS += -DBACNET_STACK_DEPRECATED
 #CPPCHECK_OPTIONS += -I./src
 #CPPCHECK_OPTIONS += --enable=information --check-config
 CPPCHECK_OPTIONS += --error-exitcode=1
+# secure_connect.c
+# false positive cppcheck - snprintf allows null pointers
+CPPCHECK_OPTIONS += --suppress=nullPointer
+CPPCHECK_OPTIONS += --suppress=ctunullpointer
+CPPCHECK_OPTIONS += --suppress=nullPointerRedundantCheck
 .PHONY: cppcheck
 cppcheck:
 	cppcheck $(CPPCHECK_OPTIONS) --quiet --force ./src/
@@ -440,6 +455,7 @@ clean: ports-clean
 	$(MAKE) -s -C apps/router-ipv6 clean
 	$(MAKE) -s -C apps/router-mstp clean
 	$(MAKE) -s -C apps/gateway clean
+	$(MAKE) -s -C apps/sc-hub clean
 	$(MAKE) -s -C apps/fuzz-afl clean
 	$(MAKE) -s -C apps/fuzz-libfuzzer clean
 	$(MAKE) -s -C ports/lwip clean
