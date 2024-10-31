@@ -1254,6 +1254,22 @@ void MSTP_Slave_Node_FSM(struct mstp_port_struct_t *mstp_port)
                     (void)MSTP_Put_Receive(mstp_port);
                 }
                 break;
+            case FRAME_TYPE_BACNET_DATA_NOT_EXPECTING_REPLY:
+            case FRAME_TYPE_BACNET_EXTENDED_DATA_NOT_EXPECTING_REPLY:
+                if ((mstp_port->DestinationAddress == MSTP_BROADCAST_ADDRESS) &&
+                    (npdu_confirmed_service(
+                        mstp_port->InputBuffer, mstp_port->DataLength))) {
+                    /* quietly discard any Confirmed-Request-PDU,
+                       whose destination address is a multicast or
+                       broadcast address, received from the
+                       network layer. */
+                } else {
+                    /* ForUs */
+                    /* indicate successful reception
+                       to the higher layers */
+                    (void)MSTP_Put_Receive(mstp_port);
+                }
+                break;
             case FRAME_TYPE_TEST_REQUEST:
                 MSTP_Create_And_Send_Frame(
                     mstp_port, FRAME_TYPE_TEST_RESPONSE,
@@ -1263,8 +1279,6 @@ void MSTP_Slave_Node_FSM(struct mstp_port_struct_t *mstp_port)
             case FRAME_TYPE_TOKEN:
             case FRAME_TYPE_POLL_FOR_MASTER:
             case FRAME_TYPE_TEST_RESPONSE:
-            case FRAME_TYPE_BACNET_DATA_NOT_EXPECTING_REPLY:
-            case FRAME_TYPE_BACNET_EXTENDED_DATA_NOT_EXPECTING_REPLY:
             default:
                 break;
         }
@@ -1389,7 +1403,12 @@ static void MSTP_Zero_Config_State_Init(struct mstp_port_struct_t *mstp_port)
         return;
     }
     mstp_port->Poll_Count = 0;
-    mstp_port->Zero_Config_Station = Nmin_poll_station;
+    /* initialize the zero config station address */
+    if ((mstp_port->Zero_Config_Preferred_Station < Nmin_poll_station) ||
+        (mstp_port->Zero_Config_Preferred_Station > Nmax_poll_station)) {
+        mstp_port->Zero_Config_Preferred_Station = Nmin_poll_station;
+    }
+    mstp_port->Zero_Config_Station = mstp_port->Zero_Config_Preferred_Station;
     mstp_port->Npoll_slot = 1 + (mstp_port->UUID[0] % Nmax_poll_slot);
     /* basic silence timeout is the dropped token time plus
         one Tslot after the last master node. Add one Tslot of
