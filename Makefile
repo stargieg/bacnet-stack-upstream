@@ -94,7 +94,19 @@ apdu:
 
 .PHONY: blinkt
 blinkt:
-	$(MAKE) -s -C apps $@
+	$(MAKE) LEGACY=true -C apps $@
+
+.PHONY: blinkt-pipeline
+blinkt-pipeline:
+	$(MAKE) LEGACY=true BUILD=pipeline -C apps blinkt
+
+.PHONY: blinkt6
+blinkt6:
+	$(MAKE) LEGACY=true BACDL=bip6 -C apps blinkt
+
+.PHONY: blinkt6-pipeline
+blinkt6-pipeline:
+	$(MAKE) LEGACY=true BACDL=bip6 BUILD=pipeline -C apps blinkt
 
 .PHONY: create-object
 create-object:
@@ -139,6 +151,10 @@ gateway-win32:
 .PHONY: piface
 piface:
 	$(MAKE) CSTANDARD="-std=gnu11" LEGACY=true -s -C apps $@
+
+.PHONY: piface6
+piface6:
+	$(MAKE) CSTANDARD="-std=gnu11" BACDL=bip6 LEGACY=true -s -C apps piface
 
 .PHONY: readbdt
 readbdt:
@@ -204,6 +220,10 @@ whois:
 writepropm:
 	$(MAKE) -s -C apps $@
 
+.PHONY: writegroup
+writegroup:
+	$(MAKE) -s -C apps $@
+
 .PHONY: router
 router:
 	$(MAKE) -s -C apps $@
@@ -242,20 +262,20 @@ fuzz-afl:
 
 # Add "ports" to the build, if desired
 .PHONY: ports
-ports:	atmega168 bdk-atxx4-mstp at91sam7s stm32f10x stm32f4xx
+ports:	atmega328 bdk-atxx4-mstp at91sam7s stm32f10x stm32f4xx
 	@echo "Built the ARM7 and AVR ports"
 
 .PHONY: ports-clean
-ports-clean: atmega168-clean bdk-atxx4-mstp-clean at91sam7s-clean \
+ports-clean: atmega328-clean bdk-atxx4-mstp-clean at91sam7s-clean \
 	stm32f10x-clean stm32f4xx-clean xplained-clean
 
-.PHONY: atmega168
-atmega168: ports/atmega168/Makefile
-	$(MAKE) -s -C ports/atmega168 clean all
+.PHONY: atmega328
+atmega328: ports/atmega328/Makefile
+	$(MAKE) -s -C ports/atmega328 clean all
 
-.PHONY: atmega168-clean
-atmega168-clean: ports/atmega168/Makefile
-	$(MAKE) -s -C ports/atmega168 clean
+.PHONY: atmega328-clean
+atmega328-clean: ports/atmega328/Makefile
+	$(MAKE) -s -C ports/atmega328 clean
 
 .PHONY: bdk-atxx4-mstp
 bdk-atxx4-mstp: ports/bdk-atxx4-mstp/Makefile

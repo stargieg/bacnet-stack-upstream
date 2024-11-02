@@ -25,11 +25,6 @@ option(
   ON)
 
 option(
-  BACNET_PROPERTY_ARRAY_LISTS
-  "enable property array lists"
-  ON)
-
-option(
   BACNET_BUILD_PIFACE_APP
   "compile the piface app"
   OFF)
@@ -67,7 +62,7 @@ option(
 option(
   BACDL_BIP6
   "compile with ipv6 datalink support"
-  OFF)
+  ON)
 
 if(NOT (BACDL_ETHERNET OR
         BACDL_MSTP OR
@@ -256,6 +251,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/bactext.h
   src/bacnet/bactimevalue.c
   src/bacnet/bactimevalue.h
+  src/bacnet/channel_value.c
+  src/bacnet/channel_value.h
   src/bacnet/dailyschedule.c
   src/bacnet/dailyschedule.h
   src/bacnet/weeklyschedule.c
@@ -425,6 +422,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/service/h_wp.h
   src/bacnet/basic/service/h_wpm.c
   src/bacnet/basic/service/h_wpm.h
+  src/bacnet/basic/service/h_write_group.c
+  src/bacnet/basic/service/h_write_group.h
   src/bacnet/basic/service/s_abort.c
   src/bacnet/basic/service/s_abort.h
   src/bacnet/basic/service/s_ack_alarm.c
@@ -481,6 +480,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/service/s_wp.h
   src/bacnet/basic/service/s_wpm.c
   src/bacnet/basic/service/s_wpm.h
+  src/bacnet/basic/service/s_write_group.c
+  src/bacnet/basic/service/s_write_group.h
   src/bacnet/basic/services.h
   src/bacnet/basic/sys/bigend.c
   src/bacnet/basic/sys/bigend.h
@@ -601,6 +602,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/wp.h
   src/bacnet/wpm.c
   src/bacnet/wpm.h
+  src/bacnet/write_group.c
+  src/bacnet/write_group.h
   $<$<BOOL:${UCI}>:src/bacnet/basic/ucix/ucix.c>
   $<$<BOOL:${UCI}>:src/bacnet/basic/ucix/ucix.h>)
 target_sources(
@@ -628,7 +631,6 @@ target_compile_definitions(
   $<$<BOOL:${BACDL_ETHERNET}>:BACDL_ETHERNET>
   $<$<BOOL:${BACDL_NONE}>:BACDL_NONE>
   $<$<BOOL:${BACNET_PROPERTY_LISTS}>:BACNET_PROPERTY_LISTS=1>
-  $<$<BOOL:${BACNET_PROPERTY_ARRAY_LISTS}>:BACNET_PROPERTY_ARRAY_LISTS=1>
   $<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
   $<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:BACNET_STACK_STATIC_DEFINE>
   PRIVATE
@@ -662,8 +664,6 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/rs485.h>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp.c>
-    $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp_linux.c>
-    $<$<BOOL:${BACDL_MSTP}>:ports/linux/dlmstp_linux.h>
     $<$<BOOL:${BACDL_ETHERNET}>:ports/linux/ethernet.c>
     ports/linux/mstimer-init.c)
 
@@ -675,8 +675,8 @@ elseif(WIN32)
 
   target_link_libraries(${PROJECT_NAME} PRIVATE
     winmm
-    $<$<BOOL:${BACDL_BIP}>:ws2_32>
-    $<$<BOOL:${BACDL_BIP}>:iphlpapi>)
+    $<$<BOOL:${BACDL_BIP} OR BOOL:${BACDL_BIP6}>:ws2_32>
+    $<$<BOOL:${BACDL_BIP} OR BOOL:${BACDL_BIP6}>:iphlpapi>)
 
   target_sources(${PROJECT_NAME} PRIVATE
     ports/win32/bacport.h
@@ -685,10 +685,38 @@ elseif(WIN32)
     ports/win32/datetime-init.c
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/dlmstp.c>
     #  ports/win32/dlmstp-mm.c
-    $<$<BOOL:${BACDL_ETHERNET}>:ports/win32/ethernet.c>
     ports/win32/mstimer-init.c
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/rs485.h>)
+
+  if(BACDL_ETHERNET)
+    include(ExternalProject)
+    set(PCAP_LIB_DIR ${CMAKE_CURRENT_BINARY_DIR}/npcap/Lib/x64)
+    set(PCAP_LIB_WPCAP ${PCAP_LIB_DIR}/wpcap.lib)
+    set(PCAP_LIB_PACKET ${PCAP_LIB_DIR}/Packet.lib)
+    set(PCAP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/npcap/Include)
+    message(STATUS "BACNET: npcap Include:..................\"${PCAP_INCLUDE}\"")
+    message(STATUS "BACNET: npcap Lib wpcap:................\"${PCAP_LIB_WPCAP}\"")
+    message(STATUS "BACNET: npcap Lib Packet:...............\"${PCAP_LIB_PACKET}\"")
+    ExternalProject_Add(npcap
+      URL https://npcap.com/dist/npcap-sdk-1.13.zip
+      URL_HASH SHA1=8d5bb6f3adb813374402344a8d2a12b9cb725197
+      DOWNLOAD_EXTRACT_TIMESTAMP true
+      SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/npcap
+      BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/npcap/Lib/x64
+      UPDATE_COMMAND    ""
+      CONFIGURE_COMMAND ""
+      BUILD_COMMAND     ""
+      INSTALL_COMMAND   ""
+      TEST_COMMAND      ""
+      BUILD_BYPRODUCTS ${PCAP_LIB_WPCAP}
+      BUILD_BYPRODUCTS ${PCAP_LIB_PACKET})
+    include_directories(${PCAP_INCLUDE})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${PCAP_LIB_WPCAP})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${PCAP_LIB_PACKET})
+    target_sources(${PROJECT_NAME} PRIVATE
+      ports/win32/ethernet.c)
+  endif()
 elseif(APPLE)
   message(STATUS "BACNET: building for APPLE")
   set(BACNET_PORT_DIRECTORY_PATH ${CMAKE_CURRENT_LIST_DIR}/ports/bsd)
@@ -696,7 +724,6 @@ elseif(APPLE)
 
   target_sources(${PROJECT_NAME} PRIVATE
     ports/bsd/bacport.h
-    ports/bsd/bip-init.c
     $<$<BOOL:${BACDL_BIP}>:ports/bsd/bip-init.c>
     $<$<BOOL:${BACDL_BIP6}>:ports/bsd/bip6.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/bsd/rs485.c>
@@ -777,8 +804,12 @@ if(BACNET_STACK_BUILD_APPS)
   add_executable(error apps/error/main.c)
   target_link_libraries(error PRIVATE ${PROJECT_NAME})
 
-  # add_executable(gateway apps/gateway/main.c apps/gateway/gateway.h)
-  # target_link_libraries(gateway PRIVATE ${PROJECT_NAME})
+  add_executable(gateway apps/gateway/main.c apps/gateway/gateway.h)
+  target_link_libraries(gateway PRIVATE ${PROJECT_NAME})
+  target_compile_options(gateway PRIVATE
+    # Unreachable code because we have endless loop.
+    $<$<C_COMPILER_ID:MSVC>:/wd4702>
+  )
 
   add_executable(getevent apps/getevent/main.c)
   target_link_libraries(getevent PRIVATE ${PROJECT_NAME})
@@ -871,14 +902,16 @@ if(BACNET_STACK_BUILD_APPS)
   add_executable(reinit apps/reinit/main.c)
   target_link_libraries(reinit PRIVATE ${PROJECT_NAME})
 
-  if(BACDL_MSTP AND NOT WIN32)
+  if(BACDL_BIP AND BACDL_MSTP AND EXISTS ${BACNET_PORT_DIRECTORY_PATH}/dlmstp_port.c)
+    find_path(LIBCONFIG_INCLUDE_DIR libconfig.h)
     find_library(LIBCONFIG_LIBRARIES NAMES config)
     if(NOT LIBCONFIG_LIBRARIES)
       message(WARNING "BACNET: Will not build apps/router as libconfig not found")
-      return()
     else()
       add_executable(
         router
+        ${BACNET_PORT_DIRECTORY_PATH}/dlmstp_port.c
+        ${BACNET_PORT_DIRECTORY_PATH}/dlmstp_port.h
         apps/router/ipmodule.c
         apps/router/ipmodule.h
         apps/router/main.c
@@ -891,25 +924,48 @@ if(BACNET_STACK_BUILD_APPS)
         apps/router/portthread.c
         apps/router/portthread.h)
 
+      target_include_directories(
+        router
+        PRIVATE ${PROJECT_NAME}
+        ${LIBCONFIG_INCLUDE_DIR})
       target_link_libraries(
         router
         PRIVATE ${PROJECT_NAME}
-                # needs libconfig
-                -lconfig)
+        ${LIBCONFIG_LIBRARIES})
 
-      target_compile_options(router PRIVATE
+        target_compile_options(router PRIVATE
         # These make this example not totally C90 compatible but it is ok.
 
-        -Wno-declaration-after-statement
-        -Wno-overlength-strings
         -Wno-variadic-macros
+        -O1
       )
     endif()
   endif()
 
+  if(BACDL_BIP AND BACDL_MSTP)
+    add_executable(
+      router-mstp
+      apps/router-mstp/main.c)
+    target_link_libraries(
+      router-mstp
+      PRIVATE ${PROJECT_NAME})
+    target_compile_options(router-mstp PRIVATE
+      # Unreachable code because we have endless loop.
+      $<$<C_COMPILER_ID:MSVC>:/wd4702>
+    )
+  endif()
+
   if(BACDL_BIP AND BACDL_BIP6)
-    add_executable(router-ipv6 apps/router-ipv6/main.c)
-    target_link_libraries(router-ipv6 PRIVATE ${PROJECT_NAME})
+    add_executable(
+      router-ipv6
+      apps/router-ipv6/main.c)
+    target_link_libraries(
+      router-ipv6
+      PRIVATE ${PROJECT_NAME})
+    target_compile_options(router-ipv6 PRIVATE
+      # Unreachable code because we have endless loop.
+      $<$<C_COMPILER_ID:MSVC>:/wd4702>
+    )
   endif()
 
   add_executable(scov apps/scov/main.c)
@@ -954,6 +1010,9 @@ if(BACNET_STACK_BUILD_APPS)
 
   add_executable(writefile apps/writefile/main.c)
   target_link_libraries(writefile PRIVATE ${PROJECT_NAME})
+
+  add_executable(writegroup apps/writegroup/main.c)
+  target_link_libraries(writegroup PRIVATE ${PROJECT_NAME})
 
   add_executable(writeprop apps/writeprop/main.c)
   target_link_libraries(writeprop PRIVATE ${PROJECT_NAME})
