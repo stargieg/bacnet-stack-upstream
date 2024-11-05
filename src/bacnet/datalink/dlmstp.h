@@ -22,9 +22,9 @@
 
 /* defines specific to MS/TP */
 /* preamble+type+dest+src+len+crc8+crc16 */
-#define DLMSTP_APDU_MAX 412 //MAX_APDU
+#define DLMSTP_APDU_MAX 412 /* MAX_APDU */
 #define DLMSTP_HEADER_MAX (2 + 1 + 1 + 1 + 2 + 1 + 2)
-#define DLMSTP_PDU_MAX (DLMSTP_APDU_MAX + MAX_NPDU) //MAX_PDU
+#define DLMSTP_PDU_MAX (DLMSTP_APDU_MAX + MAX_NPDU) /* MAX_PDU */
 #define DLMSTP_MPDU_MAX (DLMSTP_HEADER_MAX + DLMSTP_PDU_MAX)
 
 typedef struct dlmstp_packet {

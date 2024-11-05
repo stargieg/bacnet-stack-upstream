@@ -153,11 +153,6 @@ unsigned Binary_Value_Event_State(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Binary_Value_Event_State_Set(uint32_t object_instance,unsigned state);
 
-BACNET_STACK_EXPORT
-bool Binary_Value_Reliability_Set(uint32_t object_instance, BACNET_RELIABILITY value);
-BACNET_STACK_EXPORT
-BACNET_RELIABILITY Binary_Value_Reliability(uint32_t object_instance);
-
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
 bool Binary_Value_Event_Detection_Enable(uint32_t object_instance);

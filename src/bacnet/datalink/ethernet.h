@@ -19,9 +19,9 @@
 #include "bacnet/npdu.h"
 
 /* specific defines for Ethernet */
-#define ETHERNET_APDU_MAX 1476 //MAX_APDU
+#define ETHERNET_APDU_MAX 1476 /* MAX_APDU */
 #define ETHERNET_HEADER_MAX (6 + 6 + 2 + 1 + 1 + 1)
-#define ETHERNET_PDU_MAX (ETHERNET_APDU_MAX + MAX_NPDU) //MAX_PDU
+#define ETHERNET_PDU_MAX (ETHERNET_APDU_MAX + MAX_NPDU) /* MAX_PDU */
 #define ETHERNET_MPDU_MAX (ETHERNET_HEADER_MAX + ETHERNET_PDU_MAX)
 
 #ifdef __cplusplus

@@ -201,7 +201,7 @@ static void uci_list(const char *sec_idx,
         if (k >= BACNET_SCHEDULE_OBJ_PROP_REF_SIZE ) break;
         uci_ptr = strtok(uci_list_values[obj_prop_ref_cnt], ",");
         instance = atoi(uci_ptr);
-        if ((instance >= BACNET_MAX_INSTANCE) || (instance < 0)) {
+        if (instance >= BACNET_MAX_INSTANCE) {
             pObject->Object_Property_References[obj_prop_ref_cnt].deviceIdentifier.type = 65535;
         } else {
             pObject->Object_Property_References[obj_prop_ref_cnt].deviceIdentifier.instance =
@@ -693,14 +693,14 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_TIME_VALUE time_value;
     BACNET_UNSIGNED_INTEGER unsigned_value = 0;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE obj_prop_ref_value;
-    uint32_t instance;
+    uint32_t instance = 0;
     int k;
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
     char *uci_list_name = NULL;
     int uci_list_name_len = 0;
-    char uci_list_values[BACNET_WEEKLY_SCHEDULE_SIZE][64];
+    char uci_list_values[254][64];
     int TV_Count = 0;
     char *value_c = NULL;
     int value_c_len = 0;
@@ -976,10 +976,15 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     TV_Count++;
                 }
             }
-            pObject->obj_prop_ref_cnt = TV_Count;
+            pObject->obj_prop_ref_cnt = TV_Count; 
             if (TV_Count > 0) {
-                ucix_set_list(ctxw, sec, idx_c, "references",
-                uci_list_values, TV_Count);
+                ucix_set_list(
+                    ctxw,
+                    sec,
+                    idx_c,
+                    "references",
+                    uci_list_values,
+                    TV_Count);
             } else {
                 ucix_del(ctxw, sec, idx_c, "references");
             }
@@ -1258,7 +1263,7 @@ void Schedule_Recalculate_PV(
                 wpdata.priority = pObject->Priority_For_Writing;
                 wpdata.application_data_len = sizeof(wpdata.application_data);
                 apdu_len = Schedule_Data_Encode(&wpdata.application_data[0],
-                    &wpdata.application_data_len, &pObject->Present_Value);
+                    wpdata.application_data_len, &pObject->Present_Value);
                 if (apdu_len != BACNET_STATUS_ERROR) {
                     wpdata.application_data_len = apdu_len;
                     Device_Write_Property(&wpdata);
@@ -1294,13 +1299,11 @@ void schedule_timer(uint16_t uSeconds)
 {
     struct object_data_schedule *pObject;
     int iCount = 0;
-    //bacnet_time_t tNow = 0;
     BACNET_DATE_TIME bdatetime;
 
     (void)uSeconds;
     /* use OS to get the current time */
     Device_getCurrentDateTime(&bdatetime);
-    //tNow = datetime_seconds_since_epoch(&bdatetime);
     for (iCount = 0; iCount < Keylist_Count(Object_List);
         iCount++) {
         pObject = Keylist_Data_Index(Object_List, iCount);

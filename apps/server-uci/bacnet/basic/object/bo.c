@@ -40,6 +40,11 @@
 /* me! */
 #include "bo.h"
 
+#include "bacnet/basic/sys/debug.h"
+#if !defined(PRINT)
+#define PRINT debug_perror
+#endif
+
 static const char *sec = "bacnet_bo";
 static const char *type = "bo";
 
@@ -1310,22 +1315,24 @@ bool Binary_Output_Encode_Value_List(
 {
     bool status = false;
     struct object_data *pObject;
-    bool in_alarm = false;
+    bool in_alarm = true;
+    bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
     BACNET_BINARY_PV value;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (Binary_Output_Event_State(object_instance) == EVENT_STATE_NORMAL) 
+        if (Binary_Output_Event_State(object_instance) == EVENT_STATE_NORMAL) {
             in_alarm = false;
-        if (Binary_Output_Object_Fault(pObject))
-            fault = true;
+        }
+        fault = Binary_Output_Object_Fault(pObject);
         value = pObject->Prior_Value;
         overridden = pObject->Overridden;
+        out_of_service = pObject->Out_Of_Service;
         status = cov_value_list_encode_enumerated(
             value_list, value, in_alarm, fault, overridden,
-            pObject->Out_Of_Service);
+            out_of_service);
     }
     return status;
 }
@@ -1391,7 +1398,7 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     uint8_t *apdu = NULL;
     int apdu_size = 0;
 #if defined(INTRINSIC_REPORTING)
-    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
 #endif
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
 
@@ -1428,10 +1435,13 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_STATUS_FLAGS:
             /* note: see the details in the standard on how to use these */
             bitstring_init(&bit_string);
-            bitstring_set_bit(&bit_string, STATUS_FLAG_IN_ALARM, false);
+            bitstring_set_bit(&bit_string, STATUS_FLAG_IN_ALARM,
+            Binary_Output_Event_State(rpdata->object_instance) !=
+                    EVENT_STATE_NORMAL);
             state = Binary_Output_Fault(rpdata->object_instance);
             bitstring_set_bit(&bit_string, STATUS_FLAG_FAULT, state);
-            bitstring_set_bit(&bit_string, STATUS_FLAG_OVERRIDDEN, false);
+            state = Binary_Output_Overridden(rpdata->object_instance);
+            bitstring_set_bit(&bit_string, STATUS_FLAG_OVERRIDDEN, state);
             state = Binary_Output_Out_Of_Service(rpdata->object_instance);
             bitstring_set_bit(&bit_string, STATUS_FLAG_OUT_OF_SERVICE, state);
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
@@ -1759,6 +1769,7 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_commit(ctxw,sec);
                 }
             }
+            break;
         case PROP_RELIABILITY:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_ENUMERATED);
@@ -1908,10 +1919,6 @@ void Binary_Output_Intrinsic_Reporting(
     if (!pObject)
         return;
 
-    //TODO
-    //if (!pObject->Limit_Enable)
-    //    return; /* limits are not configured */
-
     if (pObject->Ack_notify_data.bSendAckNotify) {
         /* clean bSendAckNotify flag */
         pObject->Ack_notify_data.bSendAckNotify = false;
@@ -1976,13 +1983,12 @@ void Binary_Output_Intrinsic_Reporting(
                    for a minimum period of time, specified in the Time_Delay property, and
                    (b) the HighLimitEnable flag must be set in the Limit_Enable property, and
                    (c) the TO-NORMAL flag must be set in the Event_Enable property. */
-                if ((PresentVal != pObject->Alarm_Value)
-                    && ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                        EVENT_ENABLE_TO_NORMAL)) {
-                    if (!pObject->Remaining_Time_Delay)
+                if (PresentVal != pObject->Alarm_Value) {
+                    if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_NORMAL;
-                    else
+                    } else {
                         pObject->Remaining_Time_Delay--;
+                    }
                     break;
                 }
                 /* value of the object is still in the same event state */
@@ -2023,29 +2029,36 @@ void Binary_Output_Intrinsic_Reporting(
 
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
-                    //ExceededLimit = pObject->Alarm_Value;
-                    characterstring_init_ansi(&msgText, "Goes to Alarm Value");
+                    if (pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) {
+                        characterstring_init_ansi(&msgText, "Goes to Alarm Value");
+                        /* Send EventNotification. */
+                        SendNotify = true;
+                    }
                     break;
 
                 case EVENT_STATE_FAULT:
-                    //ExceededLimit = pObject->Low_Limit;
-                    characterstring_init_ansi(&msgText, "Goes to Feedback fault");
+                    if (pObject->Event_Enable & EVENT_ENABLE_TO_FAULT) {
+                        characterstring_init_ansi(&msgText, "Goes to Feedback fault");
+                        /* Send EventNotification. */
+                        SendNotify = true;
+                    }
                     break;
 
                 case EVENT_STATE_NORMAL:
-                    if (FromState == EVENT_STATE_OFFNORMAL) {
-                        //ExceededLimit = pObject->High_Limit;
-                        characterstring_init_ansi(&msgText,
-                            "Back to normal state from Alarm Value");
-                    } else {
-                        //ExceededLimit = pObject->Low_Limit;
-                        characterstring_init_ansi(&msgText,
-                            "Back to normal state from Feedback Fault");
+                    if (pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) {
+                        if (FromState == EVENT_STATE_OFFNORMAL) {
+                            characterstring_init_ansi(&msgText,
+                                "Back to normal state from Alarm Value");
+                        } else {
+                            characterstring_init_ansi(&msgText,
+                                "Back to normal state from Feedback Fault");
+                        }
+                        /* Send EventNotification. */
+                        SendNotify = true;
                     }
                     break;
 
                 default:
-                    //ExceededLimit = 0;
                     break;
             }   /* switch (ToState) */
 
@@ -2059,8 +2072,6 @@ void Binary_Output_Intrinsic_Reporting(
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
 
-            /* Send EventNotification. */
-            SendNotify = true;
         }
     }
 
@@ -2090,6 +2101,8 @@ void Binary_Output_Intrinsic_Reporting(
                 case EVENT_STATE_NORMAL:
                     pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL] =
                         event_data.timeStamp.value.dateTime;
+                    break;
+                default:
                     break;
             }
         }
@@ -2134,6 +2147,18 @@ void Binary_Output_Intrinsic_Reporting(
         }
 
         /* add data from notification class */
+        PRINT(
+            "Binary-Value[%d]: Notification Class[%d]-%s "
+            "%u/%u/%u-%u:%u:%u.%u!\n",
+            object_instance, event_data.notificationClass,
+            bactext_event_type_name(event_data.eventType),
+            (unsigned)event_data.timeStamp.value.dateTime.date.year,
+            (unsigned)event_data.timeStamp.value.dateTime.date.month,
+            (unsigned)event_data.timeStamp.value.dateTime.date.day,
+            (unsigned)event_data.timeStamp.value.dateTime.time.hour,
+            (unsigned)event_data.timeStamp.value.dateTime.time.min,
+            (unsigned)event_data.timeStamp.value.dateTime.time.sec,
+            (unsigned)event_data.timeStamp.value.dateTime.time.hundredths);
         Notification_Class_common_reporting_function(&event_data);
 
         /* Ack required */
@@ -2163,6 +2188,8 @@ void Binary_Output_Intrinsic_Reporting(
                 case EVENT_STATE_LOW_LIMIT:
                 case EVENT_STATE_HIGH_LIMIT:
                 case EVENT_STATE_MAX:
+                    break;
+                default:
                     break;
             }
         }
@@ -2538,12 +2565,12 @@ static void uci_list(const char *sec_idx,
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable); // or 7?
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay); // or 2s
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
     pObject->Alarm_Value = value_b;
 
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -2599,8 +2626,8 @@ void Binary_Output_Init(void)
         tObject.Inactive_Text = "Inactive";
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0); // or 7?
-    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0); // or 2s
+    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     option = ucix_get_option(ctx, sec, "default", "alarm_value");
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.Alarm_Value = strndup(option,option_str.length);

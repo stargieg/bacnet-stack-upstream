@@ -81,18 +81,6 @@ BACNET_STACK_EXPORT
 void Multistate_Value_Write_Present_Value_Callback_Set(
     multistate_value_write_present_value_callback cb);
 
-
-
-
-
-BACNET_STACK_EXPORT
-uint32_t Multistate_Value_Relinquish_Default(
-    uint32_t object_instance);
-BACNET_STACK_EXPORT
-bool Multistate_Value_Relinquish_Default_Set(
-    uint32_t object_instance,
-    uint32_t value);
-
 BACNET_STACK_EXPORT
 unsigned Multistate_Value_Event_State(
     uint32_t object_instance);

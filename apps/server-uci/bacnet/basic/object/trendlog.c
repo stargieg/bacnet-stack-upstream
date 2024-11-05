@@ -280,8 +280,6 @@ static void uci_list(const char *sec_idx,
         int32_t PID = 0;
         PID = Keylist_Count(Object_List); PID++; PID = PID*2;
         pObject->max_apdu = 0;
-        //pObject->cov_data.covIncrement = 10.0;
-        //pObject->cov_data.covIncrementPresent = 10.0;
         pObject->cov_data.covSubscribeToProperty = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "subscribetoproperty", ictx->Object.cov_data.covSubscribeToProperty);
         pObject->cov_data.monitoredProperty.propertyIdentifier = PROP_PRESENT_VALUE;
         pObject->cov_data.monitoredObjectIdentifier = pObject->Source.objectIdentifier;
@@ -2180,8 +2178,6 @@ void trend_log_writepropertysimpleackhandler(
 void trend_log_unconfirmed_cov_notification_handler(
     uint8_t *service_request, uint16_t service_len, BACNET_ADDRESS *src)
 {
-    //todo
-    //printf("Subscribe unconfirmed COV Notification!\n");
     handler_ucov_notification(service_request, service_len, src);
 }
 

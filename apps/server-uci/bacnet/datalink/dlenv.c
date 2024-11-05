@@ -43,7 +43,6 @@
 #include "bacnet/datalink/dlmstp.h"
 #endif
 
-//#include <strings.h>
 #include "bacnet/basic/ucix/ucix.h"
 
 
@@ -281,7 +280,7 @@ static int bbmd_register_as_foreign_device(void)
  *         0 if no registration request is sent, or
  *         -1 if registration fails.
  */
-//TODO uci support
+/* TODO uci support */
 static int bbmd6_register_as_foreign_device(void)
 {
     int retval = 0;
@@ -360,7 +359,7 @@ int dlenv_register_as_foreign_device(void)
 void dlenv_network_port_init_bip(void)
 {
     const uint32_t instance = 1;
-    BACNET_IP_ADDRESS addr = { .address={0}, .port=0 };
+    BACNET_IP_ADDRESS addr = { 0 };
     uint8_t prefix = 0;
 #if BBMD_ENABLED
     uint8_t addr0, addr1, addr2, addr3;
@@ -452,7 +451,7 @@ void dlenv_network_port_init_bip6(void)
     uint32_t instance = 1;
     uint8_t prefix = 0;
     BACNET_ADDRESS addr = { 0 };
-    BACNET_IP6_ADDRESS addr6 = { .address={0}, .port=0 };
+    BACNET_IP6_ADDRESS addr6 = { 0 };
 
     static char interface[1470];
     char *dl_interface = NULL;
@@ -711,15 +710,19 @@ int dlenv_init(void)
         ucix_cleanup(ctx);
 
     switch (Datalink_Transport) {
-#if 0 //#if defined(BACDL_ARCNET)
+#if 0 
+#if defined(BACDL_ARCNET)
         case DATALINK_ARCNET:
             dlenv_network_port_init_arcnet();
             break;
 #endif
-#if 0 //defined(BACDL_ETHERNET)
+#endif
+#if 0
+#if defined(BACDL_ETHERNET)
         case DATALINK_ETHERNET:
             dlenv_network_port_init_ethernet();
             break;
+#endif
 #endif
 #if defined(BACDL_BIP)
         case DATALINK_BIP:

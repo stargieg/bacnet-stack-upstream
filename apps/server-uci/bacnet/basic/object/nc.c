@@ -186,8 +186,6 @@ static void uci_list(const char *sec_idx,
                     src_port = atoi(uci_ptr);
                     src.mac[4] = ( src_port / 256 );
                     src.mac[5] = src_port - ( ( src_port / 256 ) * 256 );
-                    //bip_get_addr_by_name(src_ip, &addr);
-                    //addr.port = src_port;
                     uci_ptr_a = strtok(src_ip, ".");
                     src.mac[0] = atoi(uci_ptr_a);
                     uci_ptr_a = strtok(NULL, ".");
@@ -263,7 +261,7 @@ void Notification_Class_Init(void)
         tObject.Description = strndup(option,option_str.length);
     else
         tObject.Description = "Notification Class";
-    tObject.Ack_Required = ucix_get_option_int(ctx, sec, "default", "ack_required", 0); // or 3?
+    tObject.Ack_Required = ucix_get_option_int(ctx, sec, "default", "ack_required", 0);
     tObject.Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_offnormal", 255);
     tObject.Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ctx, sec, "default", "prio_fault", 255);
     tObject.Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ctx, sec, "default", "prio_normal", 255);
@@ -540,7 +538,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     struct object_data TmpNotify;
     BACNET_APPLICATION_DATA_VALUE value;
-    uint8_t TmpPriority[MAX_BACNET_EVENT_TRANSITION]; /* BACnetARRAY[3] of
+    uint8_t TmpPriority[MAX_BACNET_EVENT_TRANSITION] = { 0 }; /* BACnetARRAY[3] of
                                                          Unsigned */
     bool status = false;
     int iOffset;

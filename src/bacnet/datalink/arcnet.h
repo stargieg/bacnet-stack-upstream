@@ -19,9 +19,9 @@
 #include "bacnet/npdu.h"
 
 /* specific defines for ARCNET */
-#define ARCNET_APDU_MAX 480 //MAX_APDU
+#define ARCNET_APDU_MAX 480 /* MAX_APDU */
 #define ARCNET_HEADER_MAX (1 + 1 + 2 + 2 + 1 + 1 + 1 + 1)
-#define ARCNET_PDU_MAX (ARCNET_APDU_MAX + MAX_NPDU) //MAX_PDU
+#define ARCNET_PDU_MAX (ARCNET_APDU_MAX + MAX_NPDU) /* MAX_PDU */
 #define ARCNET_MPDU_MAX (ARCNET_HEADER_MAX + ARCNET_PDU_MAX)
 
 #ifdef __cplusplus

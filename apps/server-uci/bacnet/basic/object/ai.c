@@ -1555,13 +1555,11 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_CHARACTER_STRING char_string;
     uint32_t units = 0;
     float real_value = (float)1.414;
-//#if defined(INTRINSIC_REPORTING)
     int apdu_size = 0;
-//#endif
     unsigned i = 0;
     bool state = false;
 #if defined(INTRINSIC_REPORTING)
-    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
+    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
 #endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
@@ -1569,9 +1567,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
-//#if defined(INTRINSIC_REPORTING)
     apdu_size = rpdata->application_data_len;
-//#endif
     switch ((int)rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -2933,9 +2929,9 @@ static void uci_list(const char *sec_idx,
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable); // or 7?
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay); // or 2s
-    pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable); // or 3
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
+    pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "high_limit");
     if (!option)
         option = ictx->Object.High_Limit;
@@ -2957,7 +2953,7 @@ static void uci_list(const char *sec_idx,
     value_f = limit_value_by_resolution(value_f, pObject->Resolution);
     pObject->Deadband = value_f;
 
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -3025,9 +3021,9 @@ void Analog_Input_Init(void)
         tObject.Max_Pres_Value = "100.0";
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0); // or 7?
-    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0); // or 2s
-    tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0); // or 3
+    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
+    tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0);
     option = ucix_get_option(ctx, sec, "default", "high_limit");
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.High_Limit = strndup(option,option_str.length);
@@ -3043,7 +3039,7 @@ void Analog_Input_Init(void)
         tObject.Deadband = strndup(option,option_str.length);
     else
         tObject.Deadband = "0.0";
-    tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0); // 0=Alarm 1=Event
+    tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0);
 #endif
 	itr_m.section = sec;
 	itr_m.ctx = ctx;

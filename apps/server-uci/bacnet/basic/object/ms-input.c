@@ -39,7 +39,7 @@ struct object_data {
     bool Out_Of_Service : 1;
     bool Overridden : 1;
     bool Changed : 1;
-    uint8_t Prior_Value : 1;
+    uint8_t Prior_Value;
     bool Relinquished[BACNET_MAX_PRIORITY];
     uint8_t Priority_Array[BACNET_MAX_PRIORITY];
     uint8_t Relinquish_Default;
@@ -92,8 +92,6 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_MULTI_STATE_INPUT;
 /* callback for present value writes */
 static multistate_input_write_present_value_callback
     Multistate_Input_Write_Present_Value_Callback;
-/* default state text when none is specified */
-//static const char *Default_State_Text[254] = { "State 1","State 2","State 3" };
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int Properties_Required[] = { 
@@ -302,7 +300,7 @@ bool Multistate_Input_State_Text_Set(
 
     pObject = Multistate_Input_Object(object_instance);
     if (pObject && state_index > 0 && char_string) {
-        if (state_index > pObject->State_Count) pObject->State_Count = index;
+        if (state_index > pObject->State_Count) pObject->State_Count = state_index;
         state_index--;
         status =
             characterstring_ansi_copy((char *)pObject->State_Text[state_index],
@@ -1312,8 +1310,8 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     bool state = false;
     uint8_t *apdu = NULL;
 #if defined(INTRINSIC_REPORTING)
-    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION];
-    BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
+    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
+    BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION] = { 0 };
 #endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
@@ -1366,6 +1364,7 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len =
                 encode_application_enumerated(&apdu[0], EVENT_STATE_NORMAL);
 #endif
+            break;
         case PROP_OUT_OF_SERVICE:
             state = Multistate_Input_Out_Of_Service(rpdata->object_instance);
             apdu_len = encode_application_boolean(&apdu[0], state);
@@ -1738,7 +1737,8 @@ bool Multistate_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 stats_n = Multistate_Input_Max_States(wp_data->object_instance);
                 for (k = 0 ; k < stats_n; k++) {
                     value_c = Multistate_Input_State_Text(wp_data->object_instance, k+1);
-                    sprintf(stats[k], "%s", value_c);
+                    if (value_c)
+                        sprintf(stats[k], "%s", value_c);
                 }
                 ucix_set_list(ctxw, sec, idx_c, "state",
                 stats, stats_n);
@@ -1952,8 +1952,6 @@ uint32_t Multistate_Input_Create(uint32_t object_instance)
         pObject = calloc(1, sizeof(struct object_data));
         if (pObject) {
             pObject->Object_Name = NULL;
-            //todo
-            //pObject->State_Text = Default_State_Text;
             pObject->Out_Of_Service = false;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
             pObject->Changed = false;
@@ -2089,8 +2087,8 @@ static void uci_list(const char *sec_idx,
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable); // or 7?
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay); // or 2s
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     stats_n = ucix_get_list(stats, ictx->ctx, ictx->section, sec_idx,
         "alarm");
     if (stats_n) {
@@ -2099,12 +2097,12 @@ static void uci_list(const char *sec_idx,
             pObject->Alarm_State[l] = true;
         }
     } else {
-        for (k = 0 ; k < 255; k++) {
+        for (k = 0 ; k < pObject->State_Count; k++) {
             pObject->Alarm_State[k] = ictx->Object.Alarm_State[k];
         }
     }
 
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type); // 0=Alarm 1=Event
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -2163,8 +2161,8 @@ void Multistate_Input_Init(void)
 
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0); // or 7?
-    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0); // or 2s
+    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     stats_n = ucix_get_list(stats, ctx, sec, "default",
         "alarm");
     if (stats_n) {
@@ -2208,10 +2206,6 @@ void Multistate_Input_Intrinsic_Reporting(
 
     if (!pObject)
         return;
-
-    //TODO
-    //if (!pObject->Limit_Enable)
-    //    return; /* limits are not configured */
 
     if (pObject->Ack_notify_data.bSendAckNotify) {
         /* clean bSendAckNotify flag */
@@ -2289,29 +2283,24 @@ void Multistate_Input_Intrinsic_Reporting(
 
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
-                    //ExceededLimit = pObject->Alarm_Value;
                     characterstring_init_ansi(&msgText, "Goes to Alarm Value");
                     break;
 
                 case EVENT_STATE_FAULT:
-                    //ExceededLimit = pObject->Low_Limit;
                     characterstring_init_ansi(&msgText, "Goes to Feedback fault");
                     break;
 
                 case EVENT_STATE_NORMAL:
                     if (FromState == EVENT_STATE_OFFNORMAL) {
-                        //ExceededLimit = pObject->High_Limit;
                         characterstring_init_ansi(&msgText,
                             "Back to normal state from Alarm Value");
                     } else {
-                        //ExceededLimit = pObject->Low_Limit;
                         characterstring_init_ansi(&msgText,
                             "Back to normal state from Feedback Fault");
                     }
                     break;
 
                 default:
-                    //ExceededLimit = 0;
                     break;
             }   /* switch (ToState) */
 
@@ -2356,6 +2345,8 @@ void Multistate_Input_Intrinsic_Reporting(
                 case EVENT_STATE_NORMAL:
                     pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL] =
                         event_data.timeStamp.value.dateTime;
+                    break;
+                default:
                     break;
             }
         }
@@ -2426,6 +2417,8 @@ void Multistate_Input_Intrinsic_Reporting(
                 case EVENT_STATE_LOW_LIMIT:
                 case EVENT_STATE_HIGH_LIMIT:
                 case EVENT_STATE_MAX:
+                    break;
+                default:
                     break;
             }
         }
