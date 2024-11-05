@@ -40,6 +40,12 @@
  * @return true if datalink was initiated and started, otherwise returns false.
  */
 
+/* specific defines for BACnet/SC over IP Socket */
+#define BSC_APDU_MAX 1460 /* MAX_APDU */
+#define BSC_HEADER_MAX (1 + 1 + 2)
+#define BSC_PDU_MAX (BSC_APDU_MAX + MAX_NPDU) /* MAX_PDU */
+#define BSC_MPDU_MAX (BSC_HEADER_MAX + BSC_PDU_MAX)
+
 BACNET_STACK_EXPORT
 bool bsc_init(char *ifname);
 

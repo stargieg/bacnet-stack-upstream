@@ -44,15 +44,16 @@
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #endif /* defined(INTRINSIC_REPORTING) */
+#if defined(BACFILE)
+#include "bacnet/basic/object/bacfile.h"
+#endif /* defined(BACFILE) */
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
 
 #include "bacnet/basic/ucix/ucix.h"
 
-/* local forward (semi-private) and external prototypes */
-/* int Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata); */
-/* bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data); */
+/* external prototypes */
 extern int Routed_Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata);
 extern bool
 Routed_Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data);
@@ -181,6 +182,15 @@ static object_functions_t My_Object_Table[] = {
         NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
         NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#if defined(BACFILE)
+    { OBJECT_FILE, bacfile_init, bacfile_count, bacfile_index_to_instance,
+        bacfile_valid_instance, bacfile_object_name, bacfile_read_property,
+        bacfile_write_property, BACfile_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        bacfile_create, bacfile_delete, NULL /* Timer */ },
+#endif
     { OBJECT_SCHEDULE, Schedule_Init, Schedule_Count,
         Schedule_Index_To_Instance, Schedule_Valid_Instance,
         Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
@@ -920,7 +930,7 @@ bool Device_Valid_Object_Name(
             pObject = Device_Objects_Find_Functions(type);
             if ((pObject != NULL) && (pObject->Object_Name != NULL) &&
                 (pObject->Object_Name(instance, &object_name2) &&
-                    characterstring_same(object_name1, &object_name2))) {
+                 characterstring_same(object_name1, &object_name2))) {
                 found = true;
                 if (object_type) {
                     *object_type = type;
@@ -1212,11 +1222,11 @@ int Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata)
                 rpdata->object_instance, rpdata->array_index,
                 Device_Object_List_Element_Encode, count, apdu, apdu_max);
             if (apdu_len == BACNET_STATUS_ABORT) {
-                            rpdata->error_code =
-                                ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
             } else if (apdu_len == BACNET_STATUS_ERROR) {
-                    rpdata->error_class = ERROR_CLASS_PROPERTY;
-                    rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
             break;
         case PROP_MAX_APDU_LENGTH_ACCEPTED:
@@ -1384,7 +1394,7 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     BACNET_OBJECT_TYPE object_type = OBJECT_NONE;
     uint32_t object_instance = 0;
     int result = 0;
@@ -2140,7 +2150,7 @@ bool DeviceGetRRInfo(
             pInfo->RequestTypes = RR_BY_POSITION;
             pRequest->error_class = ERROR_CLASS_PROPERTY;
             if (pRequest->array_index == BACNET_ARRAY_ALL) {
-            pRequest->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+                pRequest->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             } else {
                 pRequest->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
             }
@@ -2156,7 +2166,7 @@ bool DeviceGetRRInfo(
             pInfo->RequestTypes = RR_BY_POSITION;
             pRequest->error_class = ERROR_CLASS_PROPERTY;
             if (pRequest->array_index == BACNET_ARRAY_ALL) {
-            pRequest->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+                pRequest->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             } else {
                 pRequest->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
             }

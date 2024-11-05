@@ -34,6 +34,11 @@
 #include "bacnet/basic/bbmd6/h_bbmd6.h"
 #endif
 
+#if defined(BACDL_BSC)
+#include "bacnet/datalink/bsc/bsc-conf.h"
+#include "bacnet/datalink/bsc/bsc-datalink.h"
+#endif
+
 
 #define MAX_HEADER (8)
 #define MAX_MPDU (MAX_HEADER + MAX_PDU)

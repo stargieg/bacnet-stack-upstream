@@ -76,6 +76,10 @@ void dlenv_network_port_init_bip6(void);
 BACNET_STACK_EXPORT
 void dlenv_network_port_init_mstp(void);
 #endif
+#if defined(BACDL_BSC)
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bsc(void);
+#endif
 
 
 BACNET_STACK_EXPORT

@@ -40,6 +40,9 @@
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #endif /* defined(INTRINSIC_REPORTING) */
+#if defined(BACFILE)
+#include "bacnet/basic/object/bacfile.h"
+#endif /* defined(BACFILE) */
 
 static enum {
     DATALINK_NONE = 0,
@@ -47,7 +50,8 @@ static enum {
     DATALINK_ETHERNET,
     DATALINK_BIP,
     DATALINK_BIP6,
-    DATALINK_MSTP
+    DATALINK_MSTP,
+    DATALINK_BSC
 } Datalink_Transport;
 
 /** @file server/main.c  Example server application using the BACnet Stack. */
@@ -90,6 +94,9 @@ static uint8_t BIP6_Rx_Buf[BIP6_MPDU_MAX] = { 0 };
 #if defined(BACDL_MSTP)
 static uint8_t MSTP_Rx_Buf[DLMSTP_MPDU_MAX] = { 0 };
 #endif
+#if defined(BACDL_BSC)
+static uint8_t BSC_Rx_Buf[BSC_MPDU_MAX] = { 0 };
+#endif
 
 /** Initialize the handlers we will utilize.
  * @see Device_Init, apdu_set_unconfirmed_handler, apdu_set_confirmed_handler
@@ -130,6 +137,12 @@ static void Init_Service_Handlers(void)
         SERVICE_CONFIRMED_WRITE_PROP_MULTIPLE, handler_write_property_multiple);
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_READ_RANGE, handler_read_range);
+#if defined(BACFILE)
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_ATOMIC_READ_FILE, handler_atomic_read_file);
+    apdu_set_confirmed_handler(
+        SERVICE_CONFIRMED_ATOMIC_WRITE_FILE, handler_atomic_write_file);
+#endif
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_REINITIALIZE_DEVICE, handler_reinitialize_device);
     apdu_set_unconfirmed_handler(
@@ -163,6 +176,13 @@ static void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_COV_NOTIFICATION,
         trend_log_unconfirmed_cov_notification_handler);
+#if 0
+    apdu_set_unconfirmed_handler(
+        SERVICE_UNCONFIRMED_WRITE_GROUP, handler_write_group);
+    /* add WriteGroup iterator to the Channel objects */
+    Write_Group_Notification.callback = Channel_Write_Group;
+    handler_write_group_notification_add(&Write_Group_Notification);
+#endif
 #if defined(INTRINSIC_REPORTING)
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_ACKNOWLEDGE_ALARM, handler_alarm_ack);
@@ -174,12 +194,10 @@ static void Init_Service_Handlers(void)
 #if defined(BACNET_TIME_MASTER)
     handler_timesync_init();
 #endif
-#if 0
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_CREATE_OBJECT, handler_create_object);
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_DELETE_OBJECT, handler_delete_object);
-#endif
     /* configure the cyclic timers */
     mstimer_set(&BACnet_Task_Timer, 1000UL);
     mstimer_set(&BACnet_TSM_Timer, 50UL);
@@ -290,6 +308,11 @@ int main(int argc, char *argv[])
             printf("MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
 #endif
             break;
+        case DATALINK_BSC:
+#if defined(BACDL_BSC)
+            printf("BSC Socket Max APDU: %d\n", BSC_MPDU_MAX);
+#endif
+            break;
         default:
             printf("No Datalink APDU: %d\n", MAX_APDU);
             break;
@@ -327,6 +350,11 @@ int main(int argc, char *argv[])
                 pdu_len = datalink_receive(&src, &MSTP_Rx_Buf[0], DLMSTP_MPDU_MAX, timeout);
                 break;
 #endif
+#if defined(BACDL_BSC)
+            case DATALINK_BSC:
+                pdu_len = datalink_receive(&src, &BSC_Rx_Buf[0], BSC_MPDU_MAX, timeout);
+                break;
+#endif
             default:
                 break;
         }
@@ -357,6 +385,11 @@ int main(int argc, char *argv[])
 #if defined(BACDL_MSTP)
                 case DATALINK_MSTP:
                     npdu_handler(&src, &MSTP_Rx_Buf[0], pdu_len);
+                    break;
+#endif
+#if defined(BACDL_BSC)
+                case DATALINK_BSC:
+                    npdu_handler(&src, &BSC_Rx_Buf[0], pdu_len);
                     break;
 #endif
                 default:
@@ -394,7 +427,7 @@ int main(int argc, char *argv[])
             address_cache_timer(elapsed_seconds);
         }
         handler_cov_task();
-        #if defined(INTRINSIC_REPORTING)
+#if defined(INTRINSIC_REPORTING)
         if (mstimer_expired(&BACnet_Notification_Timer)) {
             mstimer_reset(&BACnet_Notification_Timer);
             Notification_Class_find_recipient();
