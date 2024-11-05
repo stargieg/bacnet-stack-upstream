@@ -24,6 +24,9 @@ BACNET_STACK_EXPORT
 const char *ucix_get_option(
     struct uci_context *ctx, const char *p, const char *s, const char *o);
 BACNET_STACK_EXPORT
+char *ucix_get_option_char(
+    struct uci_context *ctx, const char *p, const char *s, const char *o);
+BACNET_STACK_EXPORT
 int ucix_get_list(
     char *value[254],
     struct uci_context *ctx,

@@ -107,6 +107,39 @@ const char *ucix_get_option(
     return value;
 }
 
+char *ucix_get_option_char(
+    struct uci_context *ctx, const char *p, const char *s, const char *o)
+{
+    struct uci_element *e = NULL;
+    char *value = NULL;
+    if (ucix_get_ptr(ctx, p, s, o, NULL)) {
+        return NULL;
+    }
+    if (!(ptr.flags & UCI_LOOKUP_COMPLETE)) {
+        return NULL;
+    }
+    e = ptr.last;
+    switch (e->type) {
+        case UCI_TYPE_SECTION:
+            value = uci_to_section(e)->type;
+            break;
+        case UCI_TYPE_OPTION:
+            switch (ptr.o->type) {
+                case UCI_TYPE_STRING:
+                    value = ptr.o->v.string;
+                    break;
+                default:
+                    value = NULL;
+                    break;
+            }
+            break;
+        default:
+            return 0;
+    }
+
+    return value;
+}
+
 int ucix_get_list(
     char *value[254],
     struct uci_context *ctx,
