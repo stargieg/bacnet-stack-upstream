@@ -891,20 +891,42 @@ if(SERVER_UCI)
     src/bacnet/weeklyschedule.h
     src/bacnet/special_event.c
     src/bacnet/special_event.h
+    src/bacnet/secure_connect.c
+    src/bacnet/secure_connect.h
     $<$<BOOL:${BACDL_BIP}>:src/bacnet/basic/bbmd/h_bbmd.c>
     $<$<BOOL:${BACDL_BIP}>:src/bacnet/basic/bbmd/h_bbmd.h>
     $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/h_bbmd6.c>
     $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/h_bbmd6.h>
     $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/vmac.c>
     $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/vmac.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-socket.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-socket.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-util.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-util.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-hub-connector.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-hub-connector.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-hub-function.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-hub-function.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-node-switch.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-node-switch.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-node.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-node.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-datalink.h>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-datalink.c>
     src/bacnet/basic/binding/address.c
     src/bacnet/basic/binding/address.h
     src/bacnet/basic/npdu/h_npdu.c
     src/bacnet/basic/npdu/h_npdu.h
     src/bacnet/basic/npdu/s_router.c
     src/bacnet/basic/npdu/s_router.h
+    src/bacnet/basic/object/bacfile.c
+    src/bacnet/basic/object/bacfile.h
     src/bacnet/basic/object/netport.c
     src/bacnet/basic/object/netport.h
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/basic/object/sc_netport.c>
+    $<$<BOOL:${BACDL_BSC}>:src/bacnet/basic/object/sc_netport.h>
     src/bacnet/basic/service/h_alarm_ack.c
     src/bacnet/basic/service/h_alarm_ack.h
     src/bacnet/basic/service/h_apdu.c
@@ -1189,6 +1211,10 @@ if(SERVER_UCI)
     $<$<BOOL:${BACDL_MSTP}>:${BACNET_PORT_DIRECTORY_PATH}/rs485.h>
     $<$<BOOL:${BACDL_MSTP}>:${BACNET_PORT_DIRECTORY_PATH}/dlmstp.c>
     $<$<BOOL:${BACDL_ETHERNET}>:${BACNET_PORT_DIRECTORY_PATH}/ethernet.c>
+    $<$<BOOL:${BACDL_BSC}>:${BACNET_PORT_DIRECTORY_PATH}/bsc-event.c>
+    $<$<BOOL:${BACDL_BSC}>:${BACNET_PORT_DIRECTORY_PATH}/websocket-cli.c>
+    $<$<BOOL:${BACDL_BSC}>:${BACNET_PORT_DIRECTORY_PATH}/websocket-srv.c>
+    $<$<BOOL:${BACDL_BSC}>:${BACNET_PORT_DIRECTORY_PATH}/websocket-global.c>
     ${BACNET_PORT_DIRECTORY_PATH}/mstimer-init.c)
 
   target_include_directories(
@@ -1208,6 +1234,7 @@ if(SERVER_UCI)
     PUBLIC
     BACNET_PROTOCOL_REVISION=${BACNET_PROTOCOL_REVISION}
     $<$<BOOL:${BACDL_BIP}>:BACDL_BIP>
+    $<$<BOOL:${BACDL_BSC}>:BACDL_BSC>
     $<$<BOOL:${BACDL_BIP6}>:BACDL_BIP6>
     $<$<BOOL:${BACDL_ARCNET}>:BACDL_ARCNET>
     $<$<BOOL:${BACDL_MSTP}>:BACDL_MSTP>
@@ -1219,6 +1246,13 @@ if(SERVER_UCI)
     PRIVATE
     PRINT_ENABLED=1
   )
+  if(BACDL_BSC)
+    target_link_libraries(
+      server-uci
+      PUBLIC
+      Threads::Threads
+      ${LIB_WEBSOCKETS_LIBRARIES})
+  endif()
 
 endif()
 
