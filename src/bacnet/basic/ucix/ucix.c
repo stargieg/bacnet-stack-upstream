@@ -197,12 +197,12 @@ void ucix_set_list(
     uci_delete(ctx, &ptr);
     uci_save(ctx, NULL);
     for (i = 0; i < l; i++) {
-        if (value[i]) {
-            ucix_get_ptr(ctx, p, s, o, value[i]);
+        if (UCI_OK == ucix_get_ptr(ctx, p, s, o, value[i])) {
             uci_add_list(ctx, &ptr);
         } else {
-            ucix_get_ptr(ctx, p, s, o, NULL);
-            uci_add_list(ctx, &ptr);
+            if (UCI_OK == ucix_get_ptr(ctx, p, s, o, NULL)) {
+                uci_add_list(ctx, &ptr);
+            }
         }
     }
 }
