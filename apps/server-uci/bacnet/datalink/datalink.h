@@ -39,6 +39,89 @@
 #include "bacnet/datalink/bsc/bsc-datalink.h"
 #endif
 
+#if 0
+#if defined(BACDL_ETHERNET) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU ETHERNET_MPDU_MAX
+
+#define datalink_init ethernet_init
+#define datalink_send_pdu ethernet_send_pdu
+#define datalink_receive ethernet_receive
+#define datalink_cleanup ethernet_cleanup
+#define datalink_get_broadcast_address ethernet_get_broadcast_address
+#define datalink_get_my_address ethernet_get_my_address
+#define datalink_maintenance_timer(s)
+
+#elif defined(BACDL_ARCNET) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU ARCNET_MPDU_MAX
+
+#define datalink_init arcnet_init
+#define datalink_send_pdu arcnet_send_pdu
+#define datalink_receive arcnet_receive
+#define datalink_cleanup arcnet_cleanup
+#define datalink_get_broadcast_address arcnet_get_broadcast_address
+#define datalink_get_my_address arcnet_get_my_address
+#define datalink_maintenance_timer(s)
+
+#elif defined(BACDL_MSTP) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU DLMSTP_MPDU_MAX
+
+#define datalink_init dlmstp_init
+#define datalink_send_pdu dlmstp_send_pdu
+#define datalink_receive dlmstp_receive
+#define datalink_cleanup dlmstp_cleanup
+#define datalink_get_broadcast_address dlmstp_get_broadcast_address
+#define datalink_get_my_address dlmstp_get_my_address
+#define datalink_maintenance_timer(s)
+
+#elif defined(BACDL_BIP) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU BIP_MPDU_MAX
+
+#define datalink_init bip_init
+#define datalink_send_pdu bip_send_pdu
+#define datalink_receive bip_receive
+#define datalink_cleanup bip_cleanup
+#define datalink_get_broadcast_address bip_get_broadcast_address
+#ifdef BAC_ROUTING
+#ifdef __cplusplus
+extern "C" {
+#endif
+BACNET_STACK_EXPORT
+void routed_get_my_address(BACNET_ADDRESS *my_address);
+#ifdef __cplusplus
+}
+#endif
+#define datalink_get_my_address routed_get_my_address
+#else
+#define datalink_get_my_address bip_get_my_address
+#endif
+#define datalink_maintenance_timer(s) bvlc_maintenance_timer(s)
+
+#elif defined(BACDL_BIP6) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU BIP6_MPDU_MAX
+
+#define datalink_init bip6_init
+#define datalink_send_pdu bip6_send_pdu
+#define datalink_receive bip6_receive
+#define datalink_cleanup bip6_cleanup
+#define datalink_get_broadcast_address bip6_get_broadcast_address
+#define datalink_get_my_address bip6_get_my_address
+#define datalink_maintenance_timer(s) bvlc6_maintenance_timer(s)
+
+#elif defined(BACDL_BSC) && !defined(BACDL_MULTIPLE)
+#define MAX_MPDU BVLC_SC_NPDU_SIZE_CONF
+
+#define datalink_init bsc_init
+#define datalink_send_pdu bsc_send_pdu
+#define datalink_receive bsc_receive
+#define datalink_cleanup bsc_cleanup
+#define datalink_get_broadcast_address bsc_get_broadcast_address
+#define datalink_get_my_address bsc_get_my_address
+#define datalink_maintenance_timer(s) bsc_maintenance_timer(s)
+
+#elif !defined(BACDL_TEST) /* Multiple, none or custom datalink */
+#include "bacnet/npdu.h"
+#endif
+#endif
 
 #define MAX_HEADER (8)
 #define MAX_MPDU (MAX_HEADER + MAX_PDU)
@@ -89,6 +172,9 @@ void datalink_maintenance_timer(uint16_t seconds);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
+/*
+#endif
+*/
 
 /** @defgroup DataLink The BACnet Network (DataLink) Layer
  * <b>6 THE NETWORK LAYER </b><br>

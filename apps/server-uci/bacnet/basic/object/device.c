@@ -30,16 +30,29 @@
 #include "bacnet/basic/binding/address.h"
 /* include the device object */
 #include "bacnet/basic/object/device.h"
+#if 0
+#include "bacnet/basic/object/acc.h"
+#endif
 #include "bacnet/basic/object/ai.h"
 #include "bacnet/basic/object/ao.h"
 #include "bacnet/basic/object/av.h"
 #include "bacnet/basic/object/bi.h"
 #include "bacnet/basic/object/bo.h"
 #include "bacnet/basic/object/bv.h"
+#if 0
+#include "bacnet/basic/object/calendar.h"
+#include "bacnet/basic/object/command.h"
+#include "bacnet/basic/object/lc.h"
+#include "bacnet/basic/object/lsp.h"
+#include "bacnet/basic/object/lsz.h"
+#endif
 #include "bacnet/basic/object/ms-input.h"
 #include "bacnet/basic/object/mso.h"
 #include "bacnet/basic/object/msv.h"
 #include "bacnet/basic/object/schedule.h"
+#if 0
+#include "bacnet/basic/object/structured_view.h"
+#endif
 #include "bacnet/basic/object/trendlog.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
@@ -47,10 +60,32 @@
 #if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h"
 #endif /* defined(BACFILE) */
+#if 0
+#if (BACNET_PROTOCOL_REVISION >= 10)
+#include "bacnet/basic/object/bitstring_value.h"
+#include "bacnet/basic/object/csv.h"
+#include "bacnet/basic/object/iv.h"
+#include "bacnet/basic/object/osv.h"
+#include "bacnet/basic/object/piv.h"
+#include "bacnet/basic/object/time_value.h"
+#endif
+#if (BACNET_PROTOCOL_REVISION >= 14)
+#include "bacnet/basic/object/channel.h"
+#include "bacnet/basic/object/lo.h"
+#endif
+#if (BACNET_PROTOCOL_REVISION >= 16)
+#include "bacnet/basic/object/blo.h"
+#endif
+#endif
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
-
+#if 0
+#if (BACNET_PROTOCOL_REVISION >= 24)
+#include "bacnet/basic/object/color_object.h"
+#include "bacnet/basic/object/color_temperature.h"
+#endif
+#endif
 #include "bacnet/basic/ucix/ucix.h"
 
 /* external prototypes */
@@ -136,6 +171,81 @@ static object_functions_t My_Object_Table[] = {
         Binary_Value_Change_Of_Value_Clear, Binary_Value_Intrinsic_Reporting,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
         NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#if 0
+    { OBJECT_CALENDAR, Calendar_Init, Calendar_Count,
+        Calendar_Index_To_Instance, Calendar_Valid_Instance,
+        Calendar_Object_Name, Calendar_Read_Property,
+        Calendar_Write_Property, Calendar_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Calendar_Create, Calendar_Delete, NULL /* Timer */ },
+#if (BACNET_PROTOCOL_REVISION >= 10)
+    { OBJECT_BITSTRING_VALUE, BitString_Value_Init,
+        BitString_Value_Count, BitString_Value_Index_To_Instance,
+        BitString_Value_Valid_Instance, BitString_Value_Object_Name,
+        BitString_Value_Read_Property, BitString_Value_Write_Property,
+        BitString_Value_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, BitString_Value_Encode_Value_List,
+        BitString_Value_Change_Of_Value, BitString_Value_Change_Of_Value_Clear,
+        NULL /* Intrinsic Reporting */,  NULL /* Add_List_Element */,
+        NULL /* Remove_List_Element */, NULL /* Create */, NULL /* Delete */,
+        NULL /* Timer */ },
+    { OBJECT_CHARACTERSTRING_VALUE, CharacterString_Value_Init,
+        CharacterString_Value_Count, CharacterString_Value_Index_To_Instance,
+        CharacterString_Value_Valid_Instance, CharacterString_Value_Object_Name,
+        CharacterString_Value_Read_Property,
+        CharacterString_Value_Write_Property,
+        CharacterString_Value_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, CharacterString_Value_Encode_Value_List,
+        CharacterString_Value_Change_Of_Value,
+        CharacterString_Value_Change_Of_Value_Clear,
+        NULL /* Intrinsic Reporting */, NULL /* Add_List_Element */,
+        NULL /* Remove_List_Element */, NULL /* Create */, NULL /* Delete */,
+        NULL /* Timer */ },
+    { OBJECT_OCTETSTRING_VALUE, OctetString_Value_Init, OctetString_Value_Count,
+        OctetString_Value_Index_To_Instance, OctetString_Value_Valid_Instance,
+        OctetString_Value_Object_Name, OctetString_Value_Read_Property,
+        OctetString_Value_Write_Property, OctetString_Value_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+    { OBJECT_POSITIVE_INTEGER_VALUE, PositiveInteger_Value_Init,
+        PositiveInteger_Value_Count, PositiveInteger_Value_Index_To_Instance,
+        PositiveInteger_Value_Valid_Instance, PositiveInteger_Value_Object_Name,
+        PositiveInteger_Value_Read_Property,
+        PositiveInteger_Value_Write_Property,
+        PositiveInteger_Value_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
+        NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+    { OBJECT_TIME_VALUE, Time_Value_Init, Time_Value_Count,
+        Time_Value_Index_To_Instance, Time_Value_Valid_Instance,
+        Time_Value_Object_Name, Time_Value_Read_Property,
+        Time_Value_Write_Property, Time_Value_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#endif
+    { OBJECT_COMMAND, Command_Init, Command_Count, Command_Index_To_Instance,
+        Command_Valid_Instance, Command_Object_Name, Command_Read_Property,
+        Command_Write_Property, Command_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+    { OBJECT_INTEGER_VALUE, Integer_Value_Init, Integer_Value_Count,
+        Integer_Value_Index_To_Instance, Integer_Value_Valid_Instance,
+        Integer_Value_Object_Name, Integer_Value_Read_Property,
+        Integer_Value_Write_Property, Integer_Value_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#endif
 #if defined(INTRINSIC_REPORTING)
     { OBJECT_NOTIFICATION_CLASS, Notification_Class_Init,
         Notification_Class_Count, Notification_Class_Index_To_Instance,
@@ -144,8 +254,35 @@ static object_functions_t My_Object_Table[] = {
         Notification_Class_Property_Lists, NULL /* ReadRangeInfo */,
         NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
         NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */,
+        NULL /* Remove_List_Element */, NULL /* Create */,
+        NULL /* Delete */, NULL /* Timer */ },
+#endif
+#if 0
+    { OBJECT_LIFE_SAFETY_POINT, Life_Safety_Point_Init, Life_Safety_Point_Count,
+        Life_Safety_Point_Index_To_Instance, Life_Safety_Point_Valid_Instance,
+        Life_Safety_Point_Object_Name, Life_Safety_Point_Read_Property,
+        Life_Safety_Point_Write_Property, Life_Safety_Point_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
-        NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+        Life_Safety_Point_Create, Life_Safety_Point_Delete, NULL /* Timer */ },
+    { OBJECT_LIFE_SAFETY_ZONE, Life_Safety_Zone_Init, Life_Safety_Zone_Count,
+        Life_Safety_Zone_Index_To_Instance, Life_Safety_Zone_Valid_Instance,
+        Life_Safety_Zone_Object_Name, Life_Safety_Zone_Read_Property,
+        Life_Safety_Zone_Write_Property, Life_Safety_Zone_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Life_Safety_Zone_Create, Life_Safety_Zone_Delete, NULL /* Timer */ },
+    { OBJECT_LOAD_CONTROL, Load_Control_Init, Load_Control_Count,
+        Load_Control_Index_To_Instance, Load_Control_Valid_Instance,
+        Load_Control_Object_Name, Load_Control_Read_Property,
+        Load_Control_Write_Property, Load_Control_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Load_Control_Create, Load_Control_Delete, Load_Control_Timer},
 #endif
     { OBJECT_MULTI_STATE_INPUT, Multistate_Input_Init, Multistate_Input_Count,
         Multistate_Input_Index_To_Instance, Multistate_Input_Valid_Instance,
@@ -156,11 +293,12 @@ static object_functions_t My_Object_Table[] = {
         Multistate_Input_Change_Of_Value_Clear, Multistate_Input_Intrinsic_Reporting,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
         NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
-    { OBJECT_MULTI_STATE_OUTPUT, Multistate_Output_Init, Multistate_Output_Count,
-        Multistate_Output_Index_To_Instance, Multistate_Output_Valid_Instance,
-        Multistate_Output_Object_Name, Multistate_Output_Read_Property,
-        Multistate_Output_Write_Property, Multistate_Output_Property_Lists,
-        NULL /* ReadRangeInfo */, NULL /* Iterator */,
+    { OBJECT_MULTI_STATE_OUTPUT, Multistate_Output_Init,
+        Multistate_Output_Count, Multistate_Output_Index_To_Instance,
+        Multistate_Output_Valid_Instance, Multistate_Output_Object_Name,
+        Multistate_Output_Read_Property, Multistate_Output_Write_Property,
+        Multistate_Output_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */,
         Multistate_Output_Encode_Value_List, Multistate_Output_Change_Of_Value,
         Multistate_Output_Change_Of_Value_Clear, Multistate_Output_Intrinsic_Reporting,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
@@ -182,6 +320,57 @@ static object_functions_t My_Object_Table[] = {
         NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
         NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#if 0
+#if (BACNET_PROTOCOL_REVISION >= 14)
+    { OBJECT_LIGHTING_OUTPUT, Lighting_Output_Init, Lighting_Output_Count,
+        Lighting_Output_Index_To_Instance, Lighting_Output_Valid_Instance,
+        Lighting_Output_Object_Name, Lighting_Output_Read_Property,
+        Lighting_Output_Write_Property, Lighting_Output_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Lighting_Output_Create, Lighting_Output_Delete, Lighting_Output_Timer },
+    { OBJECT_CHANNEL, Channel_Init, Channel_Count, Channel_Index_To_Instance,
+        Channel_Valid_Instance, Channel_Object_Name, Channel_Read_Property,
+        Channel_Write_Property, Channel_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Channel_Create, Channel_Delete, NULL /* Timer */ },
+#endif
+#if (BACNET_PROTOCOL_REVISION >= 16)
+    { OBJECT_BINARY_LIGHTING_OUTPUT, Binary_Lighting_Output_Init,
+        Binary_Lighting_Output_Count, Binary_Lighting_Output_Index_To_Instance,
+        Binary_Lighting_Output_Valid_Instance,
+        Binary_Lighting_Output_Object_Name,
+        Binary_Lighting_Output_Read_Property,
+        Binary_Lighting_Output_Write_Property,
+        Binary_Lighting_Output_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
+        NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Binary_Lighting_Output_Create, Binary_Lighting_Output_Delete,
+        Binary_Lighting_Output_Timer },
+#endif
+#if (BACNET_PROTOCOL_REVISION >= 24)
+    { OBJECT_COLOR, Color_Init, Color_Count, Color_Index_To_Instance,
+        Color_Valid_Instance, Color_Object_Name, Color_Read_Property,
+        Color_Write_Property, Color_Property_Lists, NULL /* ReadRangeInfo */,
+        NULL /* Iterator */, NULL /* Value_Lists */, NULL /* COV */,
+        NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Color_Create, Color_Delete, Color_Timer },
+    { OBJECT_COLOR_TEMPERATURE, Color_Temperature_Init, Color_Temperature_Count,
+        Color_Temperature_Index_To_Instance, Color_Temperature_Valid_Instance,
+        Color_Temperature_Object_Name, Color_Temperature_Read_Property,
+        Color_Temperature_Write_Property, Color_Temperature_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Color_Temperature_Create, Color_Temperature_Delete,
+        Color_Temperature_Timer },
+#endif
+#endif
 #if defined(BACFILE)
     { OBJECT_FILE, bacfile_init, bacfile_count, bacfile_index_to_instance,
         bacfile_valid_instance, bacfile_object_name, bacfile_read_property,
@@ -196,9 +385,27 @@ static object_functions_t My_Object_Table[] = {
         Schedule_Object_Name, Schedule_Read_Property, Schedule_Write_Property,
         Schedule_Property_Lists, NULL /* ReadRangeInfo */, NULL /* Iterator */,
         NULL /* Value_Lists */, NULL /* COV */, NULL /* COV Clear */,
-        NULL /* Intrinsic Reporting */,
+        NULL /* Intrinsic Reporting */, NULL /* Add_List_Element */,
+        NULL /* Remove_List_Element */, NULL /* Create */, NULL /* Delete */,
+        NULL /* Timer */ },
+#if 0
+    { OBJECT_STRUCTURED_VIEW, Structured_View_Init, Structured_View_Count,
+        Structured_View_Index_To_Instance, Structured_View_Valid_Instance,
+        Structured_View_Object_Name, Structured_View_Read_Property,
+        NULL /* Write_Property */, Structured_View_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */,  NULL /* Intrinsic Reporting */,
+        NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
+        Structured_View_Create, Structured_View_Delete, NULL /* Timer */ },
+    { OBJECT_ACCUMULATOR, Accumulator_Init, Accumulator_Count,
+        Accumulator_Index_To_Instance, Accumulator_Valid_Instance,
+        Accumulator_Object_Name, Accumulator_Read_Property,
+        Accumulator_Write_Property, Accumulator_Property_Lists,
+        NULL /* ReadRangeInfo */, NULL /* Iterator */, NULL /* Value_Lists */,
+        NULL /* COV */, NULL /* COV Clear */, NULL /* Intrinsic Reporting */,
         NULL /* Add_List_Element */, NULL /* Remove_List_Element */,
         NULL /* Create */, NULL /* Delete */, NULL /* Timer */ },
+#endif
     { MAX_BACNET_OBJECT_TYPE, NULL /* Init */, NULL /* Count */,
         NULL /* Index_To_Instance */, NULL /* Valid_Instance */,
         NULL /* Object_Name */, NULL /* Read_Property */,
@@ -327,6 +534,7 @@ static const int Device_Properties_Optional[] = {
 #endif
     PROP_DESCRIPTION, PROP_LOCAL_TIME, PROP_UTC_OFFSET, PROP_LOCAL_DATE,
     PROP_DAYLIGHT_SAVINGS_STATUS, PROP_LOCATION, PROP_ACTIVE_COV_SUBSCRIPTIONS,
+    PROP_SERIAL_NUMBER,
 #if defined(BACNET_TIME_MASTER)
     PROP_TIME_SYNCHRONIZATION_RECIPIENTS, PROP_TIME_SYNCHRONIZATION_INTERVAL,
     PROP_ALIGN_INTERVALS, PROP_INTERVAL_OFFSET,
@@ -399,6 +607,8 @@ static char Application_Software_Version[MAX_DEV_VER_LEN + 1] = "1.0";
 static const char *BACnet_Version = BACNET_VERSION_TEXT;
 static char Location[MAX_DEV_LOC_LEN + 1] = "USA";
 static char Description[MAX_DEV_DESC_LEN + 1] = "server";
+static char Serial_Number[MAX_DEV_DESC_LEN + 1] =
+    "BACnetDMcN56RBkeDJuNfxn3M44tfC2Y";
 /* static uint8_t Protocol_Version = 1; - constant, not settable */
 /* static uint8_t Protocol_Revision = 4; - constant, not settable */
 /* Protocol_Services_Supported - dynamically generated */
@@ -444,6 +654,24 @@ static write_property_function Device_Write_Property_Store_Callback;
 static bool Device_Router_Mode = false;
 #endif
 
+/**
+ * @brief Sets the ReinitializeDevice password
+ *
+ * The password shall be a null terminated C string of up to
+ * 20 ASCII characters for those devices that require the password.
+ *
+ * For those devices that do not require a password, set to NULL or
+ * point to a zero length C string (null terminated).
+ *
+ * @param the ReinitializeDevice password; can be NULL or empty string
+ */
+bool Device_Reinitialize_Password_Set(const char *password)
+{
+    Reinit_Password = password;
+
+    return true;
+}
+
 /** Commands a Device re-initialization, to a given state.
  * The request's password must match for the operation to succeed.
  * This implementation provides a framework, but doesn't
@@ -460,13 +688,45 @@ static bool Device_Router_Mode = false;
 bool Device_Reinitialize(BACNET_REINITIALIZE_DEVICE_DATA *rd_data)
 {
     bool status = false;
+    bool password_success = false;
+    unsigned i;
 
-    /* Note: you could use a mix of state and password to multiple things */
-    if (characterstring_ansi_same(&rd_data->password, Reinit_Password)) {
+    /* From 16.4.1.1.2 Password
+        This optional parameter shall be a CharacterString of up to
+        20 characters. For those devices that require the password as a
+        protection, the service request shall be denied if the parameter
+        is absent or if the password is incorrect. For those devices that
+        do not require a password, this parameter shall be ignored.*/
+    if (Reinit_Password && strlen(Reinit_Password) > 0) {
+        if (characterstring_utf8_length(&rd_data->password) > 20) {
+            rd_data->error_class = ERROR_CLASS_SERVICES;
+            rd_data->error_code = ERROR_CODE_PARAMETER_OUT_OF_RANGE;
+        } else if (characterstring_ansi_same(
+                       &rd_data->password, Reinit_Password)) {
+            password_success = true;
+        } else {
+            rd_data->error_class = ERROR_CLASS_SECURITY;
+            rd_data->error_code = ERROR_CODE_PASSWORD_FAILURE;
+        }
+    } else {
+        password_success = true;
+    }
+    if (password_success) {
         switch (rd_data->state) {
             case BACNET_REINIT_COLDSTART:
+                dcc_set_status_duration(COMMUNICATION_ENABLE, 0);
+                /* note: you probably want to restart *after* the
+                   simple ack has been sent from the return handler
+                   so just set a flag from here */
+                Reinitialize_State = rd_data->state;
+                status = true;
+                break;
             case BACNET_REINIT_WARMSTART:
                 dcc_set_status_duration(COMMUNICATION_ENABLE, 0);
+                for (i = 0; i < Network_Port_Count(); i++) {
+                    Network_Port_Changes_Pending_Activate(
+                        Network_Port_Index_To_Instance(i));
+                }
                 /* note: you probably want to restart *after* the
                    simple ack has been sent from the return handler
                    so just set a flag from here */
@@ -487,14 +747,20 @@ bool Device_Reinitialize(BACNET_REINITIALIZE_DEVICE_DATA *rd_data)
                         ERROR_CODE_OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED;
                 }
                 break;
+            case BACNET_REINIT_ACTIVATE_CHANGES:
+                /* note: activate changes *after* the simple ack is sent */
+                for (i = 0; i < Network_Port_Count(); i++) {
+                    Network_Port_Changes_Pending_Activate(
+                        Network_Port_Index_To_Instance(i));
+                }
+                Reinitialize_State = rd_data->state;
+                status = true;
+                break;
             default:
                 rd_data->error_class = ERROR_CLASS_SERVICES;
                 rd_data->error_code = ERROR_CODE_PARAMETER_OUT_OF_RANGE;
                 break;
         }
-    } else {
-        rd_data->error_class = ERROR_CLASS_SECURITY;
-        rd_data->error_code = ERROR_CODE_PASSWORD_FAILURE;
     }
 
     return status;
@@ -746,6 +1012,35 @@ bool Device_Set_Location(const char *name, size_t length)
     if (length < sizeof(Location)) {
         memmove(Location, name, length);
         Location[length] = 0;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Get the device serial-number property value.
+ * @return The device serial-number, as a character string.
+ */
+const char *Device_Serial_Number(void)
+{
+    return Serial_Number;
+}
+
+/**
+ * @brief Set the device serial-number property value.
+ * @param str [in] The new device serial-number, as a character string.
+ * @param length [in] The number of characters in the string.
+ * @return true if the device serial-number was set, false if the value was
+ *  too long to store in the object.
+ */
+bool Device_Serial_Number_Set(const char *str, size_t length)
+{
+    bool status = false; /*return value */
+
+    if (length < sizeof(Serial_Number)) {
+        memmove(Serial_Number, str, length);
+        Serial_Number[length] = 0;
         status = true;
     }
 
@@ -1282,7 +1577,17 @@ int Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 #endif
         case PROP_ACTIVE_COV_SUBSCRIPTIONS:
-            apdu_len = handler_cov_encode_subscriptions(&apdu[0], apdu_max);
+            if ((apdu_len = handler_cov_encode_subscriptions(
+                     &apdu[0], apdu_max)) < 0) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                apdu_len = BACNET_STATUS_ABORT;
+            }
+            break;
+        case PROP_SERIAL_NUMBER:
+            characterstring_init_ansi(&char_string, Serial_Number);
+            apdu_len =
+                encode_application_character_string(&apdu[0], &char_string);
             break;
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
@@ -2130,6 +2435,11 @@ void Device_Init(object_functions_t *object_table)
         }
         pObject++;
     }
+#if 0
+#if (BACNET_PROTOCOL_REVISION >= 14)
+    Channel_Write_Property_Internal_Callback_Set(Device_Write_Property);
+#endif
+#endif
 }
 
 bool DeviceGetRRInfo(

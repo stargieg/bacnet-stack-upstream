@@ -195,10 +195,10 @@ typedef struct devObj_s {
 extern "C" {
 #endif /* __cplusplus */
 
-    BACNET_STACK_EXPORT
+BACNET_STACK_EXPORT
 void Device_Init(object_functions_t *object_table);
 
-    BACNET_STACK_EXPORT
+BACNET_STACK_EXPORT
 void Device_Timer(uint16_t milliseconds);
 
 BACNET_STACK_EXPORT
@@ -207,6 +207,8 @@ BACNET_STACK_EXPORT
 bool Device_Reinitialize_State_Set(BACNET_REINITIALIZED_STATE state);
 BACNET_STACK_EXPORT
 BACNET_REINITIALIZED_STATE Device_Reinitialized_State(void);
+BACNET_STACK_EXPORT
+bool Device_Reinitialize_Password_Set(const char *password);
 
 BACNET_STACK_EXPORT
 rr_info_function Device_Objects_RR_Info(BACNET_OBJECT_TYPE object_type);
@@ -235,7 +237,7 @@ bool Device_Interval_Offset_Set(uint32_t value);
 
 BACNET_STACK_EXPORT
 void Device_Property_Lists(
-        const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int **pRequired, const int **pOptional, const int **pProprietary);
 BACNET_STACK_EXPORT
 void Device_Objects_Property_List(
     BACNET_OBJECT_TYPE object_type,
@@ -265,6 +267,14 @@ BACNET_STACK_EXPORT
 bool Device_Set_Object_Instance_Number(uint32_t object_id);
 BACNET_STACK_EXPORT
 bool Device_Valid_Object_Instance_Number(uint32_t object_id);
+
+BACNET_STACK_EXPORT
+void Device_UUID_Init(void);
+BACNET_STACK_EXPORT
+void Device_UUID_Set(const uint8_t *new_uuid, size_t length);
+BACNET_STACK_EXPORT
+void Device_UUID_Get(uint8_t *uuid, size_t length);
+
 BACNET_STACK_EXPORT
 unsigned Device_Object_List_Count(void);
 BACNET_STACK_EXPORT
@@ -335,6 +345,11 @@ BACNET_STACK_EXPORT
 const char *Device_Location(void);
 BACNET_STACK_EXPORT
 bool Device_Set_Location(const char *name, size_t length);
+
+BACNET_STACK_EXPORT
+const char *Device_Serial_Number(void);
+BACNET_STACK_EXPORT
+bool Device_Serial_Number_Set(const char *name, size_t length);
 
 /* some stack-centric constant values - no set methods */
 BACNET_STACK_EXPORT
