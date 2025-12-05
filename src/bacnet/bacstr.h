@@ -45,6 +45,8 @@ BACNET_STACK_EXPORT
 bool bitstring_bit(const BACNET_BIT_STRING *bit_string, uint8_t bit_number);
 BACNET_STACK_EXPORT
 uint8_t bitstring_bits_used(const BACNET_BIT_STRING *bit_string);
+BACNET_STACK_EXPORT
+bool bitstring_bits_used_set(BACNET_BIT_STRING *bit_string, uint8_t bits_used);
 /* returns the number of bytes that a bit string is using */
 BACNET_STACK_EXPORT
 uint8_t bitstring_bytes_used(const BACNET_BIT_STRING *bit_string);
@@ -81,13 +83,14 @@ BACNET_STACK_EXPORT
 bool characterstring_init_ansi(
     BACNET_CHARACTER_STRING *char_string, const char *value);
 BACNET_STACK_EXPORT
-size_t characterstring_strnlen(const char *str, size_t maxlen);
-BACNET_STACK_EXPORT
 bool characterstring_init_ansi_safe(
     BACNET_CHARACTER_STRING *char_string, const char *value, size_t tmax);
 BACNET_STACK_EXPORT
 bool characterstring_copy(
     BACNET_CHARACTER_STRING *dest, const BACNET_CHARACTER_STRING *src);
+BACNET_STACK_EXPORT
+size_t characterstring_copy_value(
+    char *dest, size_t dest_max_len, const BACNET_CHARACTER_STRING *src);
 BACNET_STACK_EXPORT
 bool characterstring_ansi_copy(
     char *dest, size_t dest_max_len, const BACNET_CHARACTER_STRING *src);
@@ -141,6 +144,9 @@ BACNET_STACK_EXPORT
 bool octetstring_init_ascii_hex(
     BACNET_OCTET_STRING *octet_string, const char *ascii_hex);
 BACNET_STACK_EXPORT
+bool octetstring_init_ascii_epics(
+    BACNET_OCTET_STRING *octet_string, const char *arg);
+BACNET_STACK_EXPORT
 bool octetstring_copy(
     BACNET_OCTET_STRING *dest, const BACNET_OCTET_STRING *src);
 BACNET_STACK_EXPORT
@@ -168,6 +174,70 @@ BACNET_STACK_EXPORT
 bool octetstring_value_same(
     const BACNET_OCTET_STRING *octet_string1,
     const BACNET_OCTET_STRING *octet_string2);
+
+BACNET_STACK_EXPORT
+int bacnet_strcmp(const char *a, const char *b);
+BACNET_STACK_EXPORT
+int bacnet_stricmp(const char *a, const char *b);
+BACNET_STACK_EXPORT
+int bacnet_strncmp(const char *a, const char *b, size_t length);
+BACNET_STACK_EXPORT
+int bacnet_strnicmp(const char *a, const char *b, size_t length);
+
+BACNET_STACK_EXPORT
+size_t bacnet_strnlen(const char *str, size_t maxlen);
+
+BACNET_STACK_EXPORT
+bool bacnet_strtoul(const char *str, unsigned long *long_value);
+BACNET_STACK_EXPORT
+bool bacnet_strtol(const char *str, long *long_value);
+BACNET_STACK_EXPORT
+bool bacnet_strtof(const char *str, float *float_value);
+BACNET_STACK_EXPORT
+bool bacnet_strtod(const char *str, double *double_value);
+BACNET_STACK_EXPORT
+bool bacnet_strtold(const char *str, long double *long_double_value);
+
+BACNET_STACK_EXPORT
+bool bacnet_string_to_uint8(const char *str, uint8_t *uint8_value);
+BACNET_STACK_EXPORT
+bool bacnet_string_to_uint16(const char *str, uint16_t *uint16_value);
+BACNET_STACK_EXPORT
+bool bacnet_string_to_uint32(const char *str, uint32_t *uint32_value);
+BACNET_STACK_EXPORT
+bool bacnet_string_to_int32(const char *str, int32_t *int32_value);
+BACNET_STACK_EXPORT
+bool bacnet_string_to_bool(const char *str, bool *bool_value);
+BACNET_STACK_EXPORT
+bool bacnet_string_to_unsigned(
+    const char *str, BACNET_UNSIGNED_INTEGER *unsigned_int);
+
+BACNET_STACK_EXPORT
+char *bacnet_dtoa(double value, char *buffer, size_t size, unsigned precision);
+BACNET_STACK_EXPORT
+char *bacnet_itoa(int value, char *buffer, size_t size);
+BACNET_STACK_EXPORT
+char *bacnet_ltoa(long value, char *buffer, size_t size);
+BACNET_STACK_EXPORT
+char *bacnet_utoa(unsigned value, char *buffer, size_t size);
+BACNET_STACK_EXPORT
+char *bacnet_ultoa(unsigned long value, char *buffer, size_t size);
+BACNET_STACK_EXPORT
+char *
+bacnet_snprintf_to_ascii(char *buffer, size_t count, const char *format, ...);
+BACNET_STACK_EXPORT
+int bacnet_snprintf(
+    char *buffer, size_t count, int offset, const char *format, ...);
+
+BACNET_STACK_EXPORT
+char *bacnet_ltrim(char *str, const char *trimmedchars);
+BACNET_STACK_EXPORT
+char *bacnet_rtrim(char *str, const char *trimmedchars);
+BACNET_STACK_EXPORT
+char *bacnet_trim(char *str, const char *trimmedchars);
+
+BACNET_STACK_EXPORT
+char *bacnet_stptok(const char *s, char *tok, size_t toklen, const char *brk);
 
 #ifdef __cplusplus
 }

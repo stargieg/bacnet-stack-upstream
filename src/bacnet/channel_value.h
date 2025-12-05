@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief BACnet single precision REAL encode and decode functions
+ * @brief BACnet Channel Value data type
  * @author Steve Karg <skarg@users.sourceforge.net>
  * @date 2012
  * @copyright SPDX-License-Identifier: MIT
@@ -13,7 +13,8 @@
 #include <stddef.h>
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
-#include "bacnet/lighting.h"
+#include "bacnet/bacstr.h"
+#include "bacnet/datetime.h"
 #include "bacnet/lighting.h"
 
 /* BACNET_CHANNEL_VALUE decodes WriteProperty service requests
@@ -27,20 +28,45 @@
     defined(CHANNEL_ENUMERATED) || defined(CHANNEL_DATE) ||             \
     defined(CHANNEL_TIME) || defined(CHANNEL_OBJECT_ID) ||              \
     defined(CHANNEL_LIGHTING_COMMAND) || defined(CHANNEL_XY_COLOR) ||   \
-    defined(CHANNEL_COLOR_COMMAND))
+    defined(CHANNEL_COLOR_COMMAND) || defined(CHANNEL_VALUE_ALL))
 #define CHANNEL_NUMERIC
+#elif defined(CHANNEL_VALUE_ALL)
+#undef CHANNEL_NUMERIC
+#define CHANNEL_NUMERIC
+#undef CHANNEL_OCTET_STRING
+#define CHANNEL_OCTET_STRING
+#undef CHANNEL_CHARACTER_STRING
+#define CHANNEL_CHARACTER_STRING
+#undef CHANNEL_BIT_STRING
+#define CHANNEL_BIT_STRING
+#undef CHANNEL_DATE
+#define CHANNEL_DATE
+#undef CHANNEL_TIME
+#define CHANNEL_TIME
+#undef CHANNEL_OBJECT_ID
+#define CHANNEL_OBJECT_ID
 #endif
 
 #if defined(CHANNEL_NUMERIC)
+#undef CHANNEL_NULL
 #define CHANNEL_NULL
+#undef CHANNEL_BOOLEAN
 #define CHANNEL_BOOLEAN
+#undef CHANNEL_UNSIGNED
 #define CHANNEL_UNSIGNED
+#undef CHANNEL_SIGNED
 #define CHANNEL_SIGNED
+#undef CHANNEL_REAL
 #define CHANNEL_REAL
+#undef CHANNEL_DOUBLE
 #define CHANNEL_DOUBLE
+#undef CHANNEL_ENUMERATED
 #define CHANNEL_ENUMERATED
+#undef CHANNEL_LIGHTING_COMMAND
 #define CHANNEL_LIGHTING_COMMAND
+#undef CHANNEL_COLOR_COMMAND
 #define CHANNEL_COLOR_COMMAND
+#undef CHANNEL_XY_COLOR
 #define CHANNEL_XY_COLOR
 #endif
 

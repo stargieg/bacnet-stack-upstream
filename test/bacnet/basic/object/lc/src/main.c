@@ -1,13 +1,10 @@
-/*
- * Copyright (c) 2020 Legrand North America, LLC.
- *
- * SPDX-License-Identifier: MIT
- */
-
-/* @file
+/**
+ * @file
  * @brief test BACnet load control object
+ * @author Steve Karg <skarg@users.sourceforge.net>
+ * @date 2007
+ * @copyright SPDX-License-Identifier: MIT
  */
-
 #include <zephyr/ztest.h>
 #include <bacnet/bacdcode.h>
 #include <bacnet/bacstr.h>
@@ -643,7 +640,7 @@ static void test_Load_Control_Read_Write_Property(void)
     uint32_t object_instance = 123;
     unsigned index;
     bool status = false;
-    const int skip_fail_property_list[] = { -1 };
+    const int32_t skip_fail_property_list[] = { -1 };
 
     test_setup(object_instance);
     status = Load_Control_Valid_Instance(object_instance);

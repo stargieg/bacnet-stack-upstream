@@ -15,9 +15,8 @@
 #include "bacnet/basic/sys/debug.h"
 #include "websocket-global.h"
 
-#define DEBUG_WEBSOCKET_CLIENT 0
-
-#if DEBUG_WEBSOCKET_CLIENT == 1
+#undef DEBUG_PRINTF
+#if DEBUG_WEBSOCKET_CLIENT
 #define DEBUG_PRINTF debug_printf
 #else
 #undef DEBUG_ENABLED

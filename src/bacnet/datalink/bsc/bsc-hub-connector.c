@@ -16,9 +16,8 @@
 #include "bacnet/basic/object/sc_netport.h"
 #include "bacnet/bactext.h"
 
-#define DEBUG_BSC_HUB_CONNECTOR 0
-
-#if DEBUG_BSC_HUB_CONNECTOR == 1
+#undef DEBUG_PRINTF
+#if DEBUG_BSC_HUB_CONNECTOR
 #define DEBUG_PRINTF debug_printf
 #else
 #undef DEBUG_ENABLED
@@ -446,19 +445,17 @@ BSC_SC_RET bsc_hub_connector_start(
             "bsc_hub_connector_start() <<< ret = BSC_SC_NO_RESOURCES\n");
         return BSC_SC_NO_RESOURCES;
     }
-
     c->reconnect_timeout_s = reconnect_timeout_s;
     c->primary_url[0] = 0;
     c->failover_url[0] = 0;
     c->user_arg = user_arg;
-    strcpy((char *)c->primary_url, primaryURL);
-
+    snprintf((char *)c->primary_url, sizeof(c->primary_url), "%s", primaryURL);
     if (failoverURL) {
-        strcpy((char *)c->failover_url, failoverURL);
+        snprintf(
+            (char *)c->failover_url, sizeof(c->failover_url), "%s",
+            failoverURL);
     }
-
     c->event_func = event_func;
-
     bsc_init_ctx_cfg(
         BSC_SOCKET_CTX_INITIATOR, &c->cfg, BSC_WEBSOCKET_HUB_PROTOCOL, 0, NULL,
         ca_cert_chain, ca_cert_chain_size, cert_chain, cert_chain_size, key,

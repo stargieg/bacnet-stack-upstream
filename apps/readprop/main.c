@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <time.h> /* for time */
 #if (__STDC_VERSION__ >= 199901L) && defined(__STDC_ISO_10646__)
 #include <locale.h>
@@ -280,7 +279,10 @@ int main(int argc, char *argv[])
             }
         } else if (strcmp(argv[argi], "--dnet") == 0) {
             if (++argi < argc) {
-                dnet = strtol(argv[argi], NULL, 0);
+                if (!bacnet_strtol(argv[argi], &dnet)) {
+                    fprintf(stderr, "dnet=%s invalid\n", argv[argi]);
+                    return 1;
+                }
                 if ((dnet >= 0) && (dnet <= BACNET_BROADCAST_NETWORK)) {
                     specific_address = true;
                 }
@@ -335,35 +337,10 @@ int main(int argc, char *argv[])
     }
     address_init();
     if (specific_address) {
-        bacnet_address_init(&dest, &mac, dnet, &adr);
-        if (adr.len && mac.len) {
-            memcpy(&dest.mac[0], &mac.adr[0], mac.len);
-            dest.mac_len = mac.len;
-            memcpy(&dest.adr[0], &adr.adr[0], adr.len);
-            dest.len = adr.len;
-            if ((dnet >= 0) && (dnet <= BACNET_BROADCAST_NETWORK)) {
-                dest.net = dnet;
-            } else {
-                dest.net = BACNET_BROADCAST_NETWORK;
-            }
-        } else if (mac.len) {
-            memcpy(&dest.mac[0], &mac.adr[0], mac.len);
-            dest.mac_len = mac.len;
-            dest.len = 0;
-            if ((dnet >= 0) && (dnet <= BACNET_BROADCAST_NETWORK)) {
-                dest.net = dnet;
-            } else {
-                dest.net = 0;
-            }
-        } else {
-            if ((dnet >= 0) && (dnet <= BACNET_BROADCAST_NETWORK)) {
-                dest.net = dnet;
-            } else {
-                dest.net = BACNET_BROADCAST_NETWORK;
-            }
-            dest.mac_len = 0;
-            dest.len = 0;
+        if ((dnet < 0) || (dnet > BACNET_BROADCAST_NETWORK)) {
+            dnet = BACNET_BROADCAST_NETWORK;
         }
+        bacnet_address_init(&dest, &mac, dnet, &adr);
         address_add(Target_Device_Object_Instance, MAX_APDU, &dest);
     }
     /* setup my info */

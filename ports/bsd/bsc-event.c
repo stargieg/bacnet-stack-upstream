@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief Implementation of mutex abstraction used in BACNet secure connect.
+ * @brief Implementation of port specific API used in BACNet secure connect.
  * @author Kirill Neznamov <kirill.neznamov@dsr-corporation.com>
  * @date August 2022
  * @copyright SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
@@ -11,13 +11,11 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <errno.h>
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/datalink/bsc/bsc-event.h"
 
-#define DEBUG_BSC_EVENT 0
-
-#if DEBUG_BSC_EVENT == 1
+#undef DEBUG_PRINTF
+#if DEBUG_BSC_EVENT
 #define DEBUG_PRINTF printf
 #else
 #undef DEBUG_ENABLED
@@ -95,10 +93,9 @@ void bsc_event_wait(BSC_EVENT *ev)
     if (!ev->counter) {
         ev->v = false;
         DEBUG_PRINTF("bsc_event_wait() reset ev\n");
-    }
-    else {
-       DEBUG_PRINTF("bsc_event_wait() wake up other waiting threads\n");
-       pthread_cond_broadcast(&ev->cond);
+    } else {
+        DEBUG_PRINTF("bsc_event_wait() wake up other waiting threads\n");
+        pthread_cond_broadcast(&ev->cond);
     }
     DEBUG_PRINTF("bsc_event_wait() <<< ev = %p\n", ev);
     pthread_mutex_unlock(&ev->mutex);
@@ -115,8 +112,9 @@ bool bsc_event_timedwait(BSC_EVENT *ev, unsigned int ms_timeout)
     to.tv_sec += to.tv_nsec / 1000000000;
     to.tv_nsec %= 1000000000;
 
-    DEBUG_PRINTF("bsc_event_timedwait() >>> before lock ev = %p ev->v = %d\n",
-        ev, ev->v);
+    DEBUG_PRINTF(
+        "bsc_event_timedwait() >>> before lock ev = %p ev->v = %d\n", ev,
+        ev->v);
 
     pthread_mutex_lock(&ev->mutex);
 
@@ -133,8 +131,8 @@ bool bsc_event_timedwait(BSC_EVENT *ev, unsigned int ms_timeout)
         }
     }
 
-    if(ev->v) {
-        if(r!=0) {
+    if (ev->v) {
+        if (r != 0) {
             DEBUG_PRINTF("Fired!!! r = %d\n", r);
         }
         r = 0;
@@ -144,13 +142,11 @@ bool bsc_event_timedwait(BSC_EVENT *ev, unsigned int ms_timeout)
     DEBUG_PRINTF("bsc_event_timedwait() counter %zu\n", ev->counter);
 
     if (!ev->counter) {
-        DEBUG_PRINTF(
-            "bsc_event_timedwait() event is reset, err = %d\n", r);
+        DEBUG_PRINTF("bsc_event_timedwait() event is reset, err = %d\n", r);
         ev->v = false;
-    }
-    else {
-       DEBUG_PRINTF("bsc_event_timedwait() wake up other waiting threads\n");
-       pthread_cond_broadcast(&ev->cond);
+    } else {
+        DEBUG_PRINTF("bsc_event_timedwait() wake up other waiting threads\n");
+        pthread_cond_broadcast(&ev->cond);
     }
 
     DEBUG_PRINTF(
@@ -180,4 +176,26 @@ void bsc_wait(int seconds)
 void bsc_wait_ms(int mseconds)
 {
     usleep(mseconds * 1000);
+}
+
+void bsc_generate_random_vmac(BACNET_SC_VMAC_ADDRESS *p)
+{
+    arc4random_buf(p->address, BVLC_SC_VMAC_SIZE);
+
+    /* According H.7.3 EUI-48 and Random-48 VMAC Address:
+       The Random-48 VMAC is a 6-octet VMAC address in which the least
+       significant 4 bits (Bit 3 to Bit 0) in the first octet shall be
+       B'0010' (X'2'), and all other 44 bits are randomly selected to be
+       0 or 1. */
+    p->address[0] = (p->address[0] & 0xF0) | 0x02;
+
+    debug_printf_hex(
+        0, p->address, BVLC_SC_VMAC_SIZE, "bsc_generate_random_vmac:");
+}
+
+void bsc_generate_random_uuid(BACNET_SC_UUID *p)
+{
+    arc4random_buf(p->uuid, BVLC_SC_UUID_SIZE);
+    debug_printf_hex(
+        0, p->uuid, BVLC_SC_UUID_SIZE, "bsc_generate_random_uuid:");
 }

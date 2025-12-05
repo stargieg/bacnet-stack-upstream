@@ -22,7 +22,9 @@ extern "C" {
 
 BACNET_STACK_EXPORT
 void CharacterString_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Valid_Instance(uint32_t object_instance);
@@ -49,6 +51,8 @@ bool CharacterString_Value_Object_Name(
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Name_Set(
     uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
+const char *CharacterString_Value_Name_ASCII(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Present_Value(
@@ -56,11 +60,18 @@ bool CharacterString_Value_Present_Value(
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Present_Value_Set(
     uint32_t object_instance, const BACNET_CHARACTER_STRING *value);
+
+BACNET_STACK_EXPORT
+const char *CharacterString_Value_Description(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Description_Set(
-    uint32_t object_instance, const char *text_string);
+    uint32_t object_instance, const char *new_descr);
+
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Out_Of_Service(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void CharacterString_Value_Out_Of_Service_Set(
+    uint32_t object_instance, bool value);
 
 BACNET_STACK_EXPORT
 bool CharacterString_Value_Change_Of_Value(uint32_t instance);
@@ -70,6 +81,18 @@ BACNET_STACK_EXPORT
 bool CharacterString_Value_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list);
 
+BACNET_STACK_EXPORT
+void *CharacterString_Value_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void CharacterString_Value_Context_Set(uint32_t object_instance, void *context);
+
+BACNET_STACK_EXPORT
+uint32_t CharacterString_Value_Create(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool CharacterString_Value_Delete(uint32_t object_instance);
+
+BACNET_STACK_EXPORT
+void CharacterString_Value_Cleanup(void);
 BACNET_STACK_EXPORT
 void CharacterString_Value_Init(void);
 

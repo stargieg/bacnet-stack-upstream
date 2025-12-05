@@ -33,6 +33,7 @@
 #define LOAD_CONTROL_TASK_INTERVAL_MS 1000UL
 
 struct object_data {
+    void *Context;
     const char *Object_Name;
     const char *Description;
     /* indicates the current load shedding state of the object */
@@ -96,7 +97,7 @@ static OS_Keylist Object_List;
 
 /* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Load_Control_Properties_Required[] = {
+static const int32_t Load_Control_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,
@@ -115,19 +116,21 @@ static const int Load_Control_Properties_Required[] = {
     -1
 };
 
-static const int Load_Control_Properties_Optional[] = {
+static const int32_t Load_Control_Properties_Optional[] = {
     PROP_DESCRIPTION,
     PROP_FULL_DUTY_BASELINE,
     -1
 };
 
-static const int Load_Control_Properties_Proprietary[] = {
+static const int32_t Load_Control_Properties_Proprietary[] = {
     -1
 };
 /* clang-format on */
 
 void Load_Control_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Load_Control_Properties_Required;
@@ -244,8 +247,8 @@ bool Load_Control_Object_Name(
                 characterstring_init_ansi(object_name, pObject->Object_Name);
         } else {
             snprintf(
-                name_text, sizeof(name_text), "LOAD_CONTROL-%u",
-                object_instance);
+                name_text, sizeof(name_text), "LOAD_CONTROL-%lu",
+                (unsigned long)object_instance);
             status = characterstring_init_ansi(object_name, name_text);
         }
     }
@@ -1074,15 +1077,6 @@ int Load_Control_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) &&
-        (rpdata->object_property != PROP_SHED_LEVEL_DESCRIPTIONS) &&
-        (rpdata->object_property != PROP_SHED_LEVELS) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -1360,7 +1354,14 @@ static bool Load_Control_Shed_Levels_Write(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     entry = Keylist_Data_Delete_By_Index(
                         pObject->Shed_Level_List, index);
                     key = (uint32_t)unsigned_value;
-                    Keylist_Data_Add(pObject->Shed_Level_List, key, entry);
+                    index =
+                        Keylist_Data_Add(pObject->Shed_Level_List, key, entry);
+                    if (index < 0) {
+                        wp_data->error_class = ERROR_CLASS_PROPERTY;
+                        wp_data->error_code =
+                            ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+                        return false;
+                    }
                 } else {
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
@@ -1379,7 +1380,13 @@ static bool Load_Control_Shed_Levels_Write(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 entry = Keylist_Data_Delete_By_Index(
                     pObject->Shed_Level_List, index);
                 key = (uint32_t)unsigned_value;
-                Keylist_Data_Add(pObject->Shed_Level_List, key, entry);
+                index = Keylist_Data_Add(pObject->Shed_Level_List, key, entry);
+                if (index < 0) {
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+                    return false;
+                }
+
             } else {
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
@@ -1464,15 +1471,6 @@ bool Load_Control_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    /*  only array properties can have array options */
-    if ((wp_data->object_property != PROP_SHED_LEVELS) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        debug_printf(
-            "Load_Control_Write_Property() failure detected point C\n");
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     switch (wp_data->object_property) {
@@ -1670,6 +1668,38 @@ bool Load_Control_Shed_Level_Array(
 }
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Load_Control_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Load_Control_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates a Load Control object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -1685,6 +1715,9 @@ uint32_t Load_Control_Create(uint32_t object_instance)
     struct shed_level_data *entry;
     unsigned i = 0;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {

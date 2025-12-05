@@ -100,8 +100,6 @@ static void Init_Service_Handlers(void)
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_SUBSCRIBE_COV, handler_cov_subscribe);
     apdu_set_unconfirmed_handler(
-        SERVICE_UNCONFIRMED_COV_NOTIFICATION, handler_ucov_notification);
-    apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_WRITE_GROUP, handler_write_group);
     /* handle communication so we can shutup when asked */
     apdu_set_confirmed_handler(
@@ -215,7 +213,7 @@ static void bacnet_output_init(void)
 {
     unsigned i = 0;
     uint8_t led_max;
-    uint32_t object_instance = 1;
+    uint32_t object_instance = 0, member_element = 0;
     BACNET_COLOR_COMMAND command = { 0 };
     BACNET_OBJECT_ID object_id;
     uint32_t light_channel_instance = 1;
@@ -225,12 +223,21 @@ static void bacnet_output_init(void)
 
     Channel_Create(light_channel_instance);
     Channel_Name_Set(light_channel_instance, "Lights");
+    Channel_Number_Set(light_channel_instance, 1);
+    Channel_Control_Groups_Element_Set(light_channel_instance, 1, 1);
     Channel_Create(color_channel_instance);
     Channel_Name_Set(color_channel_instance, "Colors");
+    Channel_Number_Set(color_channel_instance, 2);
+    Channel_Control_Groups_Element_Set(color_channel_instance, 1, 2);
     Channel_Create(temp_channel_instance);
     Channel_Name_Set(temp_channel_instance, "Color-Temperatures");
+    Channel_Number_Set(temp_channel_instance, 3);
+    Channel_Control_Groups_Element_Set(temp_channel_instance, 1, 3);
+    /* configure outputs and bindings */
     led_max = blinkt_led_count();
     for (i = 0; i < led_max; i++) {
+        object_instance = 1 + i;
+        member_element = 1 + i;
         /* color */
         Color_Create(object_instance);
         Color_Write_Enable(object_instance);
@@ -250,7 +257,7 @@ static void bacnet_output_init(void)
         member.deviceIdentifier.type = OBJECT_DEVICE;
         member.deviceIdentifier.instance = Device_Object_Instance_Number();
         Channel_Reference_List_Member_Element_Set(
-            color_channel_instance, 1 + i, &member);
+            color_channel_instance, member_element, &member);
 
         /* color temperature */
         Color_Temperature_Create(object_instance);
@@ -268,7 +275,7 @@ static void bacnet_output_init(void)
         member.deviceIdentifier.type = OBJECT_DEVICE;
         member.deviceIdentifier.instance = Device_Object_Instance_Number();
         Channel_Reference_List_Member_Element_Set(
-            temp_channel_instance, 1 + i, &member);
+            temp_channel_instance, member_element, &member);
 
         /* lighting output */
         Lighting_Output_Create(object_instance);
@@ -286,9 +293,7 @@ static void bacnet_output_init(void)
         member.deviceIdentifier.type = OBJECT_DEVICE;
         member.deviceIdentifier.instance = Device_Object_Instance_Number();
         Channel_Reference_List_Member_Element_Set(
-            light_channel_instance, 1 + i, &member);
-
-        object_instance = 1 + i;
+            light_channel_instance, member_element, &member);
     }
     Color_Write_Present_Value_Callback_Set(Color_Write_Value_Handler);
     Color_Temperature_Write_Present_Value_Callback_Set(
@@ -376,13 +381,19 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[argi], "--device") == 0) {
             if (++argi < argc) {
-                device_id = strtol(argv[argi], NULL, 0);
+                if (!bacnet_string_to_uint32(argv[argi], &device_id)) {
+                    fprintf(stderr, "device-instance=%s invalid\n", argv[argi]);
+                    return 1;
+                }
             }
         } else if (strcmp(argv[argi], "--test") == 0) {
             blinkt_test = true;
         } else {
             if (target_args == 0) {
-                device_id = strtol(argv[argi], NULL, 0);
+                if (!bacnet_string_to_uint32(argv[argi], &device_id)) {
+                    fprintf(stderr, "device-instance=%s invalid\n", argv[argi]);
+                    return 1;
+                }
                 target_args++;
             }
         }

@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include "bacnet/indtext.h"
 #include "bacnet/bacenum.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/bactext.h"
 
 static const char *ASHRAE_Reserved_String = "Reserved for Use by ASHRAE";
@@ -16,90 +17,101 @@ static const char *Vendor_Proprietary_String = "Vendor Proprietary Value";
 
 /* Search for a text value first based on the corresponding text list, then by
  * attempting to convert to an integer value. */
-static bool bactext_strtol_index(
-    INDTEXT_DATA *istring, const char *search_name, unsigned *found_index)
+static bool bactext_string_to_uint32_index(
+    INDTEXT_DATA *istring, const char *search_name, uint32_t *found_index)
 {
-    char *endptr;
-    long value;
-
     if (indtext_by_istring(istring, search_name, found_index) == true) {
         return true;
-    } else {
-        value = strtol(search_name, &endptr, 0);
-        if (endptr == search_name) {
-            /* No digits found */
-            return false;
-        } else if (*endptr != '\0') {
-            /* Extra text found */
-            return false;
-        } else {
-            *found_index = (unsigned)value;
-            return true;
-        }
     }
+
+    return bacnet_string_to_uint32(search_name, found_index);
 }
 
 INDTEXT_DATA bacnet_confirmed_service_names[] = {
-    { SERVICE_CONFIRMED_ACKNOWLEDGE_ALARM, "Acknowledge-Alarm" },
-    { SERVICE_CONFIRMED_COV_NOTIFICATION, "COV-Notification" },
-    { SERVICE_CONFIRMED_EVENT_NOTIFICATION, "Event-Notification" },
-    { SERVICE_CONFIRMED_GET_ALARM_SUMMARY, "Get-Alarm-Summary" },
-    { SERVICE_CONFIRMED_GET_ENROLLMENT_SUMMARY, "Get-Enrollment-Summary" },
-    { SERVICE_CONFIRMED_SUBSCRIBE_COV, "Subscribe-COV" },
-    { SERVICE_CONFIRMED_ATOMIC_READ_FILE, "Atomic-Read-File" },
-    { SERVICE_CONFIRMED_ATOMIC_WRITE_FILE, "Atomic-Write-File" },
-    { SERVICE_CONFIRMED_ADD_LIST_ELEMENT, "Add-List-Element" },
-    { SERVICE_CONFIRMED_REMOVE_LIST_ELEMENT, "Remove-List-Element" },
-    { SERVICE_CONFIRMED_CREATE_OBJECT, "Create-Object" },
-    { SERVICE_CONFIRMED_DELETE_OBJECT, "Delete-Object" },
-    { SERVICE_CONFIRMED_READ_PROPERTY, "Read-Property" },
-    { SERVICE_CONFIRMED_READ_PROP_CONDITIONAL, "Read-Property-Conditional" },
-    { SERVICE_CONFIRMED_READ_PROP_MULTIPLE, "Read-Property-Multiple" },
-    { SERVICE_CONFIRMED_WRITE_PROPERTY, "Write-Property" },
-    { SERVICE_CONFIRMED_WRITE_PROP_MULTIPLE, "Write-Property-Multiple" },
+    { SERVICE_CONFIRMED_ACKNOWLEDGE_ALARM, "AcknowledgeAlarm" },
+    { SERVICE_CONFIRMED_COV_NOTIFICATION, "ConfirmedCOVNotification" },
+    { SERVICE_CONFIRMED_EVENT_NOTIFICATION, "ConfirmedEventNotification" },
+    { SERVICE_CONFIRMED_GET_ALARM_SUMMARY, "GetAlarmSummary" },
+    { SERVICE_CONFIRMED_GET_ENROLLMENT_SUMMARY, "GetEnrollmentSummary" },
+    { SERVICE_CONFIRMED_SUBSCRIBE_COV, "SubscribeCOV" },
+    { SERVICE_CONFIRMED_ATOMIC_READ_FILE, "AtomicReadFile" },
+    { SERVICE_CONFIRMED_ATOMIC_WRITE_FILE, "AtomicWriteFile" },
+    { SERVICE_CONFIRMED_ADD_LIST_ELEMENT, "AddListElement" },
+    { SERVICE_CONFIRMED_REMOVE_LIST_ELEMENT, "RemoveListElement" },
+    { SERVICE_CONFIRMED_CREATE_OBJECT, "CreateObject" },
+    { SERVICE_CONFIRMED_DELETE_OBJECT, "DeleteObject" },
+    { SERVICE_CONFIRMED_READ_PROPERTY, "ReadProperty" },
+    { SERVICE_CONFIRMED_READ_PROP_CONDITIONAL, "ReadPropertyConditional" },
+    { SERVICE_CONFIRMED_READ_PROP_MULTIPLE, "ReadPropertyMultiple" },
+    { SERVICE_CONFIRMED_WRITE_PROPERTY, "WriteProperty" },
+    { SERVICE_CONFIRMED_WRITE_PROP_MULTIPLE, "WritePropertyMultiple" },
     { SERVICE_CONFIRMED_DEVICE_COMMUNICATION_CONTROL,
-      "Device-Communication-Control" },
-    { SERVICE_CONFIRMED_PRIVATE_TRANSFER, "Private-Transfer" },
-    { SERVICE_CONFIRMED_TEXT_MESSAGE, "Text-Message" },
-    { SERVICE_CONFIRMED_REINITIALIZE_DEVICE, "Reinitialize-Device" },
-    { SERVICE_CONFIRMED_VT_OPEN, "VT-Open" },
-    { SERVICE_CONFIRMED_VT_CLOSE, "VT-Close" },
-    { SERVICE_CONFIRMED_VT_DATA, "VT-Data" },
+      "DeviceCommunicationControl" },
+    { SERVICE_CONFIRMED_PRIVATE_TRANSFER, "ConfirmedPrivateTransfer" },
+    { SERVICE_CONFIRMED_TEXT_MESSAGE, "ConfirmedTextMessage" },
+    { SERVICE_CONFIRMED_REINITIALIZE_DEVICE, "ReinitializeDevice" },
+    { SERVICE_CONFIRMED_VT_OPEN, "VTOpen" },
+    { SERVICE_CONFIRMED_VT_CLOSE, "VTClose" },
+    { SERVICE_CONFIRMED_VT_DATA, "VTData" },
     { SERVICE_CONFIRMED_AUTHENTICATE, "Authenticate" },
-    { SERVICE_CONFIRMED_REQUEST_KEY, "Request-Key" },
-    { SERVICE_CONFIRMED_READ_RANGE, "Read-Range" },
-    { SERVICE_CONFIRMED_LIFE_SAFETY_OPERATION, "Life-Safety_Operation" },
-    { SERVICE_CONFIRMED_SUBSCRIBE_COV_PROPERTY, "Subscribe-COV-Property" },
-    { SERVICE_CONFIRMED_GET_EVENT_INFORMATION, "Get-Event-Information" },
+    { SERVICE_CONFIRMED_REQUEST_KEY, "RequestKey" },
+    { SERVICE_CONFIRMED_READ_RANGE, "ReadRange" },
+    { SERVICE_CONFIRMED_LIFE_SAFETY_OPERATION, "LifeSafetyOperation" },
+    { SERVICE_CONFIRMED_SUBSCRIBE_COV_PROPERTY, "SubscribeCOVProperty" },
+    { SERVICE_CONFIRMED_GET_EVENT_INFORMATION, "GetEventInformation" },
+    { SERVICE_CONFIRMED_SUBSCRIBE_COV_PROPERTY_MULTIPLE,
+      "SubscribeCOVPropertyMultiple" },
+    { SERVICE_CONFIRMED_COV_NOTIFICATION_MULTIPLE,
+      "ConfirmedCOVNotificationMultiple" },
+    { SERVICE_CONFIRMED_AUDIT_NOTIFICATION, "ConfirmedAuditNotification" },
+    { SERVICE_CONFIRMED_AUTH_REQUEST, "ConfirmedAuthRequest" },
     { 0, NULL }
 };
 
-const char *bactext_confirmed_service_name(unsigned index)
+const char *bactext_confirmed_service_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_confirmed_service_names, index, ASHRAE_Reserved_String);
 }
 
+const char *bactext_confirmed_service_name_default(
+    uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_confirmed_service_names, index, default_string);
+}
+
 INDTEXT_DATA bacnet_unconfirmed_service_names[] = {
     { SERVICE_UNCONFIRMED_I_AM, "I-Am" },
     { SERVICE_UNCONFIRMED_I_HAVE, "I-Have" },
-    { SERVICE_UNCONFIRMED_COV_NOTIFICATION, "COV-Notification" },
-    { SERVICE_UNCONFIRMED_EVENT_NOTIFICATION, "Event-Notification" },
-    { SERVICE_UNCONFIRMED_PRIVATE_TRANSFER, "Private-Transfer" },
-    { SERVICE_UNCONFIRMED_TEXT_MESSAGE, "Text-Message" },
-    { SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION, "Time-Synchronization" },
+    { SERVICE_UNCONFIRMED_COV_NOTIFICATION, "UnconfirmedCOVNotification" },
+    { SERVICE_UNCONFIRMED_EVENT_NOTIFICATION, "UnconfirmedEventNotification" },
+    { SERVICE_UNCONFIRMED_PRIVATE_TRANSFER, "UnconfirmedPrivateTransfer" },
+    { SERVICE_UNCONFIRMED_TEXT_MESSAGE, "UnconfirmedTextMessage" },
+    { SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION, "TimeSynchronization" },
     { SERVICE_UNCONFIRMED_WHO_HAS, "Who-Has" },
     { SERVICE_UNCONFIRMED_WHO_IS, "Who-Is" },
-    { SERVICE_UNCONFIRMED_UTC_TIME_SYNCHRONIZATION,
-      "UTC-Time-Synchronization" },
-    { SERVICE_UNCONFIRMED_WRITE_GROUP, "Write-Group" },
+    { SERVICE_UNCONFIRMED_UTC_TIME_SYNCHRONIZATION, "UTCTimeSynchronization" },
+    { SERVICE_UNCONFIRMED_WRITE_GROUP, "WriteGroup" },
+    { SERVICE_UNCONFIRMED_COV_NOTIFICATION_MULTIPLE,
+      "UnconfirmedCOVNotificationMultiple" },
+    { SERVICE_UNCONFIRMED_AUDIT_NOTIFICATION, "UnconfirmedAuditNotification" },
+    { SERVICE_UNCONFIRMED_WHO_AM_I, "Who-Am-I" },
+    { SERVICE_UNCONFIRMED_YOU_ARE, "You-Are" },
     { 0, NULL }
 };
 
-const char *bactext_unconfirmed_service_name(unsigned index)
+const char *bactext_unconfirmed_service_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_unconfirmed_service_names, index, ASHRAE_Reserved_String);
+}
+
+const char *bactext_unconfirmed_service_name_default(
+    uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_unconfirmed_service_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_application_tag_names[] = {
@@ -130,6 +142,8 @@ INDTEXT_DATA bacnet_application_tag_names[] = {
       "BACnetDeviceObjectPropertyReference" },
     { BACNET_APPLICATION_TAG_DEVICE_OBJECT_REFERENCE,
       "BACnetDeviceObjectReference" },
+    { BACNET_APPLICATION_TAG_OBJECT_PROPERTY_REFERENCE,
+      "BACnetObjectPropertyReference" },
     { BACNET_APPLICATION_TAG_DESTINATION, "BACnetDestination" },
     { BACNET_APPLICATION_TAG_RECIPIENT, "BACnetRecipient" },
     { BACNET_APPLICATION_TAG_COV_SUBSCRIPTION, "BACnetCOVSubscription" },
@@ -142,22 +156,38 @@ INDTEXT_DATA bacnet_application_tag_names[] = {
     { BACNET_APPLICATION_TAG_HOST_N_PORT, "BACnetHostNPort" },
     { BACNET_APPLICATION_TAG_XY_COLOR, "BACnetxyColor" },
     { BACNET_APPLICATION_TAG_COLOR_COMMAND, "BACnetColorCommand" },
+    { BACNET_APPLICATION_TAG_SC_FAILED_CONNECTION_REQUEST,
+      "BACnetSCFailedConnectionRequest" },
+    { BACNET_APPLICATION_TAG_SC_HUB_FUNCTION_CONNECTION_STATUS,
+      "BACnetSCHubFunctionConnection" },
+    { BACNET_APPLICATION_TAG_SC_DIRECT_CONNECTION_STATUS,
+      "BACnetSCDirectConnection" },
+    { BACNET_APPLICATION_TAG_SC_HUB_CONNECTION_STATUS,
+      "BACnetSCHubConnection" },
     { BACNET_APPLICATION_TAG_BDT_ENTRY, "BACnetBDTEntry" },
     { BACNET_APPLICATION_TAG_FDT_ENTRY, "BACnetFDTEntry" },
     { BACNET_APPLICATION_TAG_ACTION_COMMAND, "BACnetActionCommand" },
     { BACNET_APPLICATION_TAG_SCALE, "BACnetScale" },
     { BACNET_APPLICATION_TAG_SHED_LEVEL, "BACnetShedLevel" },
+    { BACNET_APPLICATION_TAG_ACCESS_RULE, "BACnetAccessRule" },
+    { BACNET_APPLICATION_TAG_CHANNEL_VALUE, "BACnetChannelValue" },
+    { BACNET_APPLICATION_TAG_LOG_RECORD, "BACnetLogRecord" },
+    { BACNET_APPLICATION_TAG_PROPERTY_VALUE, "BACnetPropertyValue" },
+    { BACNET_APPLICATION_TAG_TIMER_VALUE, "BACnetTimerStateChangeValue" },
+    { BACNET_APPLICATION_TAG_ADDRESS_BINDING, "BACnetAddressBinding" },
+    { BACNET_APPLICATION_TAG_NO_VALUE, "BACnetNoValue" },
+    { BACNET_APPLICATION_TAG_ABSTRACT_SYNTAX, "ABSTRACT-SYNTAX" },
     { 0, NULL }
 };
 
-const char *bactext_application_tag_name(unsigned index)
+const char *bactext_application_tag_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_application_tag_names, index, ASHRAE_Reserved_String);
 }
 
 bool bactext_application_tag_index(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_application_tag_names, search_name, found_index);
@@ -195,7 +225,7 @@ INDTEXT_DATA bacnet_object_type_names[] = {
     { OBJECT_LOAD_CONTROL, "load-control" },
     { OBJECT_STRUCTURED_VIEW, "structured-view" },
     { OBJECT_ACCESS_DOOR, "access-door" },
-    { OBJECT_LIGHTING_OUTPUT, "lighting-output" },
+    { OBJECT_TIMER, "timer" },
     { OBJECT_ACCESS_CREDENTIAL, "access-credential" },
     { OBJECT_ACCESS_POINT, "access-point" },
     { OBJECT_ACCESS_RIGHTS, "access-rights" },
@@ -235,22 +265,115 @@ INDTEXT_DATA bacnet_object_type_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_object_type_name(unsigned index)
+INDTEXT_DATA bacnet_object_type_names_capitalized[] = {
+    { OBJECT_ANALOG_INPUT, "Analog Input" },
+    { OBJECT_ANALOG_OUTPUT, "Analog Output" },
+    { OBJECT_ANALOG_VALUE, "Analog Value" },
+    { OBJECT_BINARY_INPUT, "Binary Input" },
+    { OBJECT_BINARY_OUTPUT, "Binary Output" },
+    { OBJECT_BINARY_VALUE, "Binary Value" },
+    { OBJECT_CALENDAR, "Calendar" },
+    { OBJECT_COMMAND, "Command" },
+    { OBJECT_DEVICE, "Device" },
+    { OBJECT_EVENT_ENROLLMENT, "Event Enrollment" },
+    { OBJECT_FILE, "File" },
+    { OBJECT_GROUP, "Group" },
+    { OBJECT_LOOP, "Loop" },
+    { OBJECT_MULTI_STATE_INPUT, "Multi-state Input" },
+    { OBJECT_MULTI_STATE_OUTPUT, "Multi-state Output" },
+    { OBJECT_NOTIFICATION_CLASS, "Notification Class" },
+    { OBJECT_PROGRAM, "Program" },
+    { OBJECT_SCHEDULE, "Schedule" },
+    { OBJECT_AVERAGING, "Averaging" },
+    { OBJECT_MULTI_STATE_VALUE, "Multi-state Value" },
+    { OBJECT_TRENDLOG, "Trend Log" },
+    { OBJECT_LIFE_SAFETY_POINT, "Life Safety Point" },
+    { OBJECT_LIFE_SAFETY_ZONE, "Life Safety Zone" },
+    { OBJECT_ACCUMULATOR, "Accumulator" },
+    { OBJECT_PULSE_CONVERTER, "Pulse Converter" },
+    { OBJECT_EVENT_LOG, "Event Log" },
+    { OBJECT_GLOBAL_GROUP, "Global Group" },
+    { OBJECT_TREND_LOG_MULTIPLE, "Trend Log Multiple" },
+    { OBJECT_LOAD_CONTROL, "Load Control" },
+    { OBJECT_STRUCTURED_VIEW, "Structured View" },
+    { OBJECT_ACCESS_DOOR, "Access Door" },
+    { OBJECT_TIMER, "Timer" },
+    { OBJECT_ACCESS_CREDENTIAL, "Access Credential" },
+    { OBJECT_ACCESS_POINT, "Access Point" },
+    { OBJECT_ACCESS_RIGHTS, "Access Rights" },
+    { OBJECT_ACCESS_USER, "Access User" },
+    { OBJECT_ACCESS_ZONE, "Access Zone" },
+    { OBJECT_CREDENTIAL_DATA_INPUT, "Credential Data Input" },
+    { OBJECT_NETWORK_SECURITY, "Network Security" },
+    { OBJECT_BITSTRING_VALUE, "Bitstring Value" },
+    { OBJECT_CHARACTERSTRING_VALUE, "Characterstring Value" },
+    { OBJECT_DATE_PATTERN_VALUE, "Date Pattern Value" },
+    { OBJECT_DATE_VALUE, "Date Value" },
+    { OBJECT_DATETIME_PATTERN_VALUE, "Datetime Pattern Value" },
+    { OBJECT_DATETIME_VALUE, "Datetime Value" },
+    { OBJECT_INTEGER_VALUE, "Integer Value" },
+    { OBJECT_LARGE_ANALOG_VALUE, "Large Analog Value" },
+    { OBJECT_OCTETSTRING_VALUE, "Octetstring Value" },
+    { OBJECT_POSITIVE_INTEGER_VALUE, "Positive Integer Value" },
+    { OBJECT_TIME_PATTERN_VALUE, "Time Pattern Value" },
+    { OBJECT_TIME_VALUE, "Time Value" },
+    { OBJECT_NOTIFICATION_FORWARDER, "Notification Forwarder" },
+    { OBJECT_ALERT_ENROLLMENT, "Alert Enrollment" },
+    { OBJECT_CHANNEL, "Channel" },
+    { OBJECT_LIGHTING_OUTPUT, "Lighting Output" },
+    { OBJECT_BINARY_LIGHTING_OUTPUT, "Binary Lighting Output" },
+    { OBJECT_NETWORK_PORT, "Network Port" },
+    { OBJECT_ELEVATOR_GROUP, "Elevator Group" },
+    { OBJECT_ESCALATOR, "Escalator" },
+    { OBJECT_LIFT, "Lift" },
+    { OBJECT_STAGING, "Staging" },
+    { OBJECT_AUDIT_LOG, "Audit Log" },
+    { OBJECT_AUDIT_REPORTER, "Audit Reporter" },
+    { OBJECT_COLOR, "Color" },
+    { OBJECT_COLOR_TEMPERATURE, "Color Temperature" },
+    /* Enumerated values 0-127 are reserved for definition by ASHRAE.
+       Enumerated values 128-1023 may be used by others subject to
+       the procedures and constraints described in Clause 23. */
+    { 0, NULL }
+};
+
+const char *bactext_object_type_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_object_type_names, index, OBJECT_PROPRIETARY_MIN,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
 }
 
-bool bactext_object_type_index(const char *search_name, unsigned *found_index)
+const char *
+bactext_object_type_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_object_type_names, index, default_string);
+}
+
+const char *bactext_object_type_name_capitalized(uint32_t index)
+{
+    return indtext_by_index_split_default(
+        bacnet_object_type_names_capitalized, index, OBJECT_PROPRIETARY_MIN,
+        ASHRAE_Reserved_String, Vendor_Proprietary_String);
+}
+
+const char *bactext_object_type_name_capitalized_default(
+    uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_object_type_names_capitalized, index, default_string);
+}
+
+bool bactext_object_type_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_object_type_names, search_name, found_index);
 }
 
-bool bactext_object_type_strtol(const char *search_name, unsigned *found_index)
+bool bactext_object_type_strtol(const char *search_name, uint32_t *found_index)
 {
-    return bactext_strtol_index(
+    return bactext_string_to_uint32_index(
         bacnet_object_type_names, search_name, found_index);
 }
 
@@ -279,7 +402,7 @@ INDTEXT_DATA bacnet_property_names[] = {
     { PROP_CONTROLLED_VARIABLE_UNITS, "controlled-variable-units" },
     { PROP_CONTROLLED_VARIABLE_VALUE, "controlled-variable-value" },
     { PROP_COV_INCREMENT, "cov-increment" },
-    { PROP_DATE_LIST, "datelist" },
+    { PROP_DATE_LIST, "date-list" },
     { PROP_DAYLIGHT_SAVINGS_STATUS, "daylight-savings-status" },
     { PROP_DEADBAND, "deadband" },
     { PROP_DERIVATIVE_CONSTANT, "derivative-constant" },
@@ -455,6 +578,7 @@ INDTEXT_DATA bacnet_property_names[] = {
     { PROP_INTERVAL_OFFSET, "interval-offset" },
     { PROP_LAST_RESTART_REASON, "last-restart-reason" },
     { PROP_LOGGING_TYPE, "logging-type" },
+    { PROP_RESTART_NOTIFICATION_RECIPIENTS, "restart-notification-recipients" },
     { PROP_TIME_OF_DEVICE_RESTART, "time-of-device-restart" },
     { PROP_TIME_SYNCHRONIZATION_INTERVAL, "time-synchronization-interval" },
     { PROP_TRIGGER, "trigger" },
@@ -789,10 +913,22 @@ INDTEXT_DATA bacnet_property_names[] = {
     { PROP_HIGH_END_TRIM, "high-end-trim" },
     { PROP_LOW_END_TRIM, "low-end-trim" },
     { PROP_TRIM_FADE_TIME, "trim-fade-time" },
+    { PROP_DEVICE_ADDRESS_PROXY_ENABLE, "device-address-proxy-enable" },
+    { PROP_DEVICE_ADDRESS_PROXY_TABLE, "device-address-proxy-table" },
+    { PROP_DEVICE_ADDRESS_PROXY_TIMEOUT, "device-address-proxy-timeout" },
+    { PROP_DEFAULT_ON_VALUE, "default-on-value" },
+    { PROP_LAST_ON_VALUE, "last-on-value" },
+    { PROP_AUTHORIZATION_CACHE, "authorization-cache" },
+    { PROP_AUTHORIZATION_GROUPS, "authorization-groups" },
+    { PROP_AUTHORIZATION_POLICY, "authorization-policy" },
+    { PROP_AUTHORIZATION_SCOPE, "authorization-scope" },
+    { PROP_AUTHORIZATION_SERVER, "authorization-server" },
+    { PROP_AUTHORIZATION_STATUS, "authorization-status" },
+    { PROP_MAX_PROXIED_I_AMS_PER_SECOND, "max-proxied-i-ams-per-second" },
     { 0, NULL }
 };
 
-bool bactext_property_name_proprietary(unsigned index)
+bool bactext_property_name_proprietary(uint32_t index)
 {
     bool status = false;
 
@@ -804,7 +940,7 @@ bool bactext_property_name_proprietary(unsigned index)
     return status;
 }
 
-const char *bactext_property_name(unsigned index)
+const char *bactext_property_name(uint32_t index)
 {
     /* Enumerated values 0-511 are reserved for definition by ASHRAE.
        Enumerated values 512-4194303 may be used by others subject to the
@@ -818,25 +954,25 @@ const char *bactext_property_name(unsigned index)
 }
 
 const char *
-bactext_property_name_default(unsigned index, const char *default_string)
+bactext_property_name_default(uint32_t index, const char *default_string)
 {
     return indtext_by_index_default(
         bacnet_property_names, index, default_string);
 }
 
-unsigned bactext_property_id(const char *name)
+uint32_t bactext_property_id(const char *name)
 {
     return indtext_by_istring_default(bacnet_property_names, name, 0);
 }
 
-bool bactext_property_index(const char *search_name, unsigned *found_index)
+bool bactext_property_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(bacnet_property_names, search_name, found_index);
 }
 
-bool bactext_property_strtol(const char *search_name, unsigned *found_index)
+bool bactext_property_strtol(const char *search_name, uint32_t *found_index)
 {
-    return bactext_strtol_index(
+    return bactext_string_to_uint32_index(
         bacnet_property_names, search_name, found_index);
 }
 
@@ -1269,13 +1405,28 @@ INDTEXT_DATA bacnet_engineering_unit_names[] = {
     { UNITS_SITE_UNIT8, "site-unit8" },
     { UNITS_SITE_UNIT9, "site-unit9" },
     { UNITS_SITE_UNIT10, "site-unit10" },
+    { UNITS_GRAINS_OF_WATER_PER_POUND_DRY_AIR,
+      "grains-of-water-per-pound-dry-air" },
+    { UNITS_DEGREE_HOURS_CELSIUS, "degree-hours-celsius" },
+    { UNITS_DEGREE_HOURS_FAHRENHEIT, "degree-hours-fahrenheit" },
+    { UNITS_DEGREE_MINUTES_CELSIUS, "degree-minutes-celsius" },
+    { UNITS_DEGREE_MINUTES_FAHRENHEIT, "degree-minutes-fahrenheit" },
+    { UNITS_DEGREE_SECONDS_CELSIUS, "degree-seconds-celsius" },
+    { UNITS_DEGREE_SECONDS_FAHRENHEIT, "degree-seconds-fahrenheit" },
+    { UNITS_MICROSECONDS, "microseconds" },
+    { UNITS_NANOSECONDS, "nanoseconds" },
+    { UNITS_PICOSECONDS, "picoseconds" },
+    { UNITS_PARTICLES_PER_CUBIC_FOOT, "particles-per-cubic-foot" },
+    { UNITS_PARTICLES_PER_CUBIC_METER, "particles-per-cubic-meter" },
+    { UNITS_PICOCURIES_PER_LITER, "picocuries-per-liter" },
+    { UNITS_BECQUERELS_PER_CUBIC_METER, "becquerels-per-cubic-meter" },
     { 0, NULL }
     /* Enumerated values 0-255 and 47808-49999 are reserved for definition by
        ASHRAE. Enumerated values 256-47807 and 50000-65535 may be used by others
        subject to the procedures and constraints described in Clause 23. */
 };
 
-bool bactext_engineering_unit_name_proprietary(unsigned index)
+bool bactext_engineering_unit_name_proprietary(uint32_t index)
 {
     bool status = false;
 
@@ -1291,7 +1442,7 @@ bool bactext_engineering_unit_name_proprietary(unsigned index)
     return status;
 }
 
-const char *bactext_engineering_unit_name(unsigned index)
+const char *bactext_engineering_unit_name(uint32_t index)
 {
     if (bactext_engineering_unit_name_proprietary(index)) {
         return Vendor_Proprietary_String;
@@ -1303,8 +1454,15 @@ const char *bactext_engineering_unit_name(unsigned index)
     return ASHRAE_Reserved_String;
 }
 
+const char *bactext_engineering_unit_name_default(
+    uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_engineering_unit_names, index, default_string);
+}
+
 bool bactext_engineering_unit_index(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_engineering_unit_names, search_name, found_index);
@@ -1327,11 +1485,18 @@ INDTEXT_DATA bacnet_reject_reason_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_reject_reason_name(unsigned index)
+const char *bactext_reject_reason_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_reject_reason_names, index, REJECT_REASON_PROPRIETARY_FIRST,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
+}
+
+const char *
+bactext_reject_reason_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_reject_reason_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_abort_reason_names[] = {
@@ -1353,11 +1518,18 @@ INDTEXT_DATA bacnet_abort_reason_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_abort_reason_name(unsigned index)
+const char *bactext_abort_reason_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_abort_reason_names, index, ABORT_REASON_PROPRIETARY_FIRST,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
+}
+
+const char *
+bactext_abort_reason_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_abort_reason_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_error_class_names[] = {
@@ -1372,11 +1544,18 @@ INDTEXT_DATA bacnet_error_class_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_error_class_name(unsigned index)
+const char *bactext_error_class_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_error_class_names, index, ERROR_CLASS_PROPRIETARY_FIRST,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
+}
+
+const char *
+bactext_error_class_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_error_class_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_error_code_names[] = {
@@ -1620,16 +1799,47 @@ INDTEXT_DATA bacnet_error_code_names[] = {
     { ERROR_CODE_CERTIFICATE_REVOKED, "certificate-revoked" },
     { ERROR_CODE_UNKNOWN_SECURITY_KEY, "unknown-security-key" },
     { ERROR_CODE_REFERENCED_PORT_IN_ERROR, "referenced-port-in-error" },
+    { ERROR_CODE_NOT_ENABLED, "not-enabled" },
+    { ERROR_CODE_ADJUST_SCOPE_REQUIRED, "adjust-scope-required" },
+    { ERROR_CODE_AUTH_SCOPE_REQUIRED, "auth-scope-required" },
+    { ERROR_CODE_BIND_SCOPE_REQUIRED, "bind-scope-required" },
+    { ERROR_CODE_CONFIG_SCOPE_REQUIRED, "config-scope-required" },
+    { ERROR_CODE_CONTROL_SCOPE_REQUIRED, "control-scope-required" },
+    { ERROR_CODE_EXTENDED_SCOPE_REQUIRED, "extended-scope-required" },
+    { ERROR_CODE_INCORRECT_CLIENT, "incorrect-client" },
+    { ERROR_CODE_INSTALL_SCOPE_REQUIRED, "install-scope-required" },
+    { ERROR_CODE_INSUFFICIENT_SCOPE, "insufficient-scope" },
+    { ERROR_CODE_NO_DEFAULT_SCOPE, "no-default-scope" },
+    { ERROR_CODE_NO_POLICY, "no-policy" },
+    { ERROR_CODE_REVOKED_TOKEN, "revoked-token" },
+    { ERROR_CODE_OVERRIDE_SCOPE_REQUIRED, "override-scope-required" },
+    { ERROR_CODE_INACTIVE_TOKEN, "inactive-token" },
+    { ERROR_CODE_UNKNOWN_AUDIENCE, "unknown-audience" },
+    { ERROR_CODE_UNKNOWN_CLIENT, "unknown-client" },
+    { ERROR_CODE_UNKNOWN_SCOPE, "unknown-scope" },
+    { ERROR_CODE_VIEW_SCOPE_REQUIRED, "view-scope-required" },
+    { ERROR_CODE_INCORRECT_AUDIENCE, "incorrect-audience" },
+    { ERROR_CODE_INCORRECT_CLIENT_ORIGIN, "incorrect-client-origin" },
+    { ERROR_CODE_INVALID_ARRAY_SIZE, "invalid-array-size" },
+    { ERROR_CODE_INCORRECT_ISSUER, "incorrect-issuer" },
+    { ERROR_CODE_INVALID_TOKEN, "invalid-token" },
     /* Enumerated values 256-65535 may be used by others subject to */
     /* the procedures and constraints described in Clause 23. */
     { 0, NULL }
 };
 
-const char *bactext_error_code_name(unsigned index)
+const char *bactext_error_code_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_error_code_names, index, ERROR_CODE_PROPRIETARY_FIRST,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
+}
+
+const char *
+bactext_error_code_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_error_code_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_month_names[] = {
@@ -1641,10 +1851,16 @@ INDTEXT_DATA bacnet_month_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_month_name(unsigned index)
+const char *bactext_month_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_month_names, index, ASHRAE_Reserved_String);
+}
+
+const char *
+bactext_month_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(bacnet_month_names, index, default_string);
 }
 
 INDTEXT_DATA bacnet_week_of_month_names[] = {
@@ -1654,10 +1870,17 @@ INDTEXT_DATA bacnet_week_of_month_names[] = {
     { 255, "any week of this month" }, { 0, NULL }
 };
 
-const char *bactext_week_of_month_name(unsigned index)
+const char *bactext_week_of_month_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_week_of_month_names, index, ASHRAE_Reserved_String);
+}
+
+const char *
+bactext_week_of_month_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_week_of_month_names, index, default_string);
 }
 
 /* note: different than DaysOfWeek bit string where 0=monday */
@@ -1669,10 +1892,17 @@ INDTEXT_DATA bacnet_day_of_week_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_day_of_week_name(unsigned index)
+const char *bactext_day_of_week_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_day_of_week_names, index, ASHRAE_Reserved_String);
+}
+
+const char *
+bactext_day_of_week_name_default(uint32_t index, const char *default_string)
+{
+    return indtext_by_index_default(
+        bacnet_day_of_week_names, index, default_string);
 }
 
 /* note: different than DayOfWeek bit string where 1=monday */
@@ -1687,33 +1917,41 @@ INDTEXT_DATA bacnet_days_of_week_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_days_of_week_name(unsigned index)
+const char *bactext_days_of_week_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_days_of_week_names, index, ASHRAE_Reserved_String);
 }
 
-bool bactext_days_of_week_index(const char *search_name, unsigned *found_index)
+bool bactext_days_of_week_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_days_of_week_names, search_name, found_index);
 }
 
-INDTEXT_DATA bacnet_notify_type_names[] = { { NOTIFY_ALARM, "alarm" },
-                                            { NOTIFY_EVENT, "event" },
-                                            { NOTIFY_ACK_NOTIFICATION,
-                                              "ack-notification" },
-                                            { 0, NULL } };
+INDTEXT_DATA bacnet_notify_type_names[] = {
+    /* BACnetNotifyType enumerations */
+    { NOTIFY_ALARM, "alarm" },
+    { NOTIFY_EVENT, "event" },
+    { NOTIFY_ACK_NOTIFICATION, "ack-notification" },
+    { 0, NULL }
+};
 
-const char *bactext_notify_type_name(unsigned index)
+const char *bactext_notify_type_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_notify_type_names, index, ASHRAE_Reserved_String);
 }
 
-bool bactext_notify_type_index(const char *search_name, unsigned *found_index)
+bool bactext_notify_type_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
+        bacnet_notify_type_names, search_name, found_index);
+}
+
+bool bactext_notify_type_strtol(const char *search_name, uint32_t *found_index)
+{
+    return bactext_string_to_uint32_index(
         bacnet_notify_type_names, search_name, found_index);
 }
 
@@ -1724,14 +1962,14 @@ INDTEXT_DATA bacnet_event_transition_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_event_transition_name(unsigned index)
+const char *bactext_event_transition_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_event_transition_names, index, ASHRAE_Reserved_String);
 }
 
 bool bactext_event_transition_index(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_event_transition_names, search_name, found_index);
@@ -1741,26 +1979,27 @@ INDTEXT_DATA bacnet_event_state_names[] = {
     { EVENT_STATE_NORMAL, "normal" },
     { EVENT_STATE_FAULT, "fault" },
     { EVENT_STATE_OFFNORMAL, "offnormal" },
-    { EVENT_STATE_HIGH_LIMIT, "high limit" },
-    { EVENT_STATE_LOW_LIMIT, "low limit" },
+    { EVENT_STATE_HIGH_LIMIT, "high-limit" },
+    { EVENT_STATE_LOW_LIMIT, "low-limit" },
+    { EVENT_STATE_LIFE_SAFETY_ALARM, "life-safety-alarm" },
     { 0, NULL }
 };
 
-const char *bactext_event_state_name(unsigned index)
+const char *bactext_event_state_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_event_state_names, index, ASHRAE_Reserved_String);
 }
 
-bool bactext_event_state_index(const char *search_name, unsigned *found_index)
+bool bactext_event_state_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_event_state_names, search_name, found_index);
 }
 
-bool bactext_event_state_strtol(const char *search_name, unsigned *found_index)
+bool bactext_event_state_strtol(const char *search_name, uint32_t *found_index)
 {
-    return bactext_strtol_index(
+    return bactext_string_to_uint32_index(
         bacnet_event_state_names, search_name, found_index);
 }
 
@@ -1774,11 +2013,11 @@ INDTEXT_DATA bacnet_event_type_names[] = {
     { EVENT_CHANGE_OF_LIFE_SAFETY, "change-of-life-safety" },
     { EVENT_EXTENDED, "extended" },
     { EVENT_BUFFER_READY, "buffer-ready" },
-    { EVENT_UNSIGNED_RANGE, "unsigned-range" },
+    { EVENT_UNSIGNED_RANGE, "uint32_t-range" },
     { EVENT_ACCESS_EVENT, "access-event" },
     { EVENT_DOUBLE_OUT_OF_RANGE, "double-out-of-range" },
     { EVENT_SIGNED_OUT_OF_RANGE, "signed-out-of-range" },
-    { EVENT_UNSIGNED_OUT_OF_RANGE, "unsigned-out-of-range" },
+    { EVENT_UNSIGNED_OUT_OF_RANGE, "uint32_t-out-of-range" },
     { EVENT_CHANGE_OF_CHARACTERSTRING, "change-of-characterstring" },
     { EVENT_CHANGE_OF_STATUS_FLAGS, "change-of-status-flags" },
     { EVENT_CHANGE_OF_RELIABILITY, "change-of-reliability" },
@@ -1788,16 +2027,22 @@ INDTEXT_DATA bacnet_event_type_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_event_type_name(unsigned index)
+const char *bactext_event_type_name(uint32_t index)
 {
     return indtext_by_index_split_default(
         bacnet_event_type_names, index, EVENT_PROPRIETARY_MIN,
         ASHRAE_Reserved_String, Vendor_Proprietary_String);
 }
 
-bool bactext_event_type_index(const char *search_name, unsigned *found_index)
+bool bactext_event_type_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
+        bacnet_event_type_names, search_name, found_index);
+}
+
+bool bactext_event_type_strtol(const char *search_name, uint32_t *found_index)
+{
+    return bactext_string_to_uint32_index(
         bacnet_event_type_names, search_name, found_index);
 }
 
@@ -1805,14 +2050,14 @@ INDTEXT_DATA bacnet_binary_present_value_names[] = {
     { BINARY_INACTIVE, "inactive" }, { BINARY_ACTIVE, "active" }, { 0, NULL }
 };
 
-const char *bactext_binary_present_value_name(unsigned index)
+const char *bactext_binary_present_value_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_binary_present_value_names, index, ASHRAE_Reserved_String);
 }
 
 bool bactext_binary_present_value_index(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_binary_present_value_names, search_name, found_index);
@@ -1822,7 +2067,7 @@ INDTEXT_DATA bacnet_binary_polarity_names[] = { { POLARITY_NORMAL, "normal" },
                                                 { POLARITY_REVERSE, "reverse" },
                                                 { 0, NULL } };
 
-const char *bactext_binary_polarity_name(unsigned index)
+const char *bactext_binary_polarity_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_binary_polarity_names, index, ASHRAE_Reserved_String);
@@ -1859,7 +2104,7 @@ INDTEXT_DATA bacnet_reliability_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_reliability_name(unsigned index)
+const char *bactext_reliability_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_reliability_names, index, ASHRAE_Reserved_String);
@@ -1875,7 +2120,7 @@ INDTEXT_DATA bacnet_device_status_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_device_status_name(unsigned index)
+const char *bactext_device_status_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_device_status_names, index, ASHRAE_Reserved_String);
@@ -1889,13 +2134,13 @@ INDTEXT_DATA bacnet_segmentation_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_segmentation_name(unsigned index)
+const char *bactext_segmentation_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_segmentation_names, index, ASHRAE_Reserved_String);
 }
 
-bool bactext_segmentation_index(const char *search_name, unsigned *found_index)
+bool bactext_segmentation_index(const char *search_name, uint32_t *found_index)
 {
     return indtext_by_istring(
         bacnet_segmentation_names, search_name, found_index);
@@ -1914,10 +2159,20 @@ INDTEXT_DATA bacnet_node_type_names[] = {
     { BACNET_NODE_PROPERTY, "property" },
     { BACNET_NODE_FUNCTIONAL, "functional" },
     { BACNET_NODE_OTHER, "other" },
+    { BACNET_NODE_SUBSYSTEM, "subsystem" },
+    { BACNET_NODE_BUILDING, "building" },
+    { BACNET_NODE_FLOOR, "floor" },
+    { BACNET_NODE_SECTION, "section" },
+    { BACNET_NODE_MODULE, "module" },
+    { BACNET_NODE_TREE, "tree" },
+    { BACNET_NODE_MEMBER, "member" },
+    { BACNET_NODE_PROTOCOL, "protocol" },
+    { BACNET_NODE_ROOM, "room" },
+    { BACNET_NODE_ZONE, "zone" },
     { 0, NULL }
 };
 
-const char *bactext_node_type_name(unsigned index)
+const char *bactext_node_type_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_node_type_names, index, ASHRAE_Reserved_String);
@@ -1940,7 +2195,7 @@ INDTEXT_DATA network_layer_msg_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_network_layer_msg_name(unsigned index)
+const char *bactext_network_layer_msg_name(uint32_t index)
 {
     if (index <= 0x7F) {
         return indtext_by_index_default(
@@ -1952,7 +2207,71 @@ const char *bactext_network_layer_msg_name(unsigned index)
     }
 }
 
-INDTEXT_DATA life_safety_state_names[] = {
+INDTEXT_DATA bactext_life_safety_mode_names[] = {
+    { LIFE_SAFETY_MODE_OFF, "off" },
+    { LIFE_SAFETY_MODE_ON, "on" },
+    { LIFE_SAFETY_MODE_TEST, "test" },
+    { LIFE_SAFETY_MODE_MANNED, "manned" },
+    { LIFE_SAFETY_MODE_UNMANNED, "unmanned" },
+    { LIFE_SAFETY_MODE_ARMED, "armed" },
+    { LIFE_SAFETY_MODE_DISARMED, "disarmed" },
+    { LIFE_SAFETY_MODE_PREARMED, "prearmed" },
+    { LIFE_SAFETY_MODE_SLOW, "slow" },
+    { LIFE_SAFETY_MODE_FAST, "fast" },
+    { LIFE_SAFETY_MODE_DISCONNECTED, "disconnected" },
+    { LIFE_SAFETY_MODE_ENABLED, "enabled" },
+    { LIFE_SAFETY_MODE_DISABLED, "disabled" },
+    { LIFE_SAFETY_MODE_AUTOMATIC_RELEASE_DISABLED,
+      "automatic-release-disabled" },
+    { LIFE_SAFETY_MODE_DEFAULT, "default" },
+    { LIFE_SAFETY_MODE_ACTIVATED_OEO_ALARM, "activated-oeo-alarm" },
+    { LIFE_SAFETY_MODE_ACTIVATED_OEO_EVACUATE, "activated-oeo-evactuate" },
+    { LIFE_SAFETY_MODE_ACTIVATED_OEO_PHASE1_RECALL,
+      "activated-oeo-phase1-recall" },
+    { LIFE_SAFETY_MODE_ACTIVATED_OEO_UNAVAILABLE, "activated-oeo-unavailable" },
+    { LIFE_SAFETY_MODE_DEACTIVATED, "deactivated" },
+    { 0, NULL }
+};
+
+const char *bactext_life_safety_mode_name(uint32_t index)
+{
+    if (index < LIFE_SAFETY_MODE_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_life_safety_mode_names, index, ASHRAE_Reserved_String);
+    } else if (index <= LIFE_SAFETY_MODE_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetLifeSafetyMode";
+    }
+}
+
+INDTEXT_DATA bactext_life_safety_operation_names[] = {
+    { LIFE_SAFETY_OP_NONE, "none" },
+    { LIFE_SAFETY_OP_SILENCE, "silence" },
+    { LIFE_SAFETY_OP_SILENCE_AUDIBLE, "silence-audible" },
+    { LIFE_SAFETY_OP_SILENCE_VISUAL, "silence-visual" },
+    { LIFE_SAFETY_OP_RESET, "reset" },
+    { LIFE_SAFETY_OP_RESET_ALARM, "reset-alarm" },
+    { LIFE_SAFETY_OP_RESET_FAULT, "reset-fault" },
+    { LIFE_SAFETY_OP_UNSILENCE, "unsilence" },
+    { LIFE_SAFETY_OP_UNSILENCE_AUDIBLE, "unsilence-audible" },
+    { LIFE_SAFETY_OP_UNSILENCE_VISUAL, "unsilence-visual" },
+    { 0, NULL }
+};
+
+const char *bactext_life_safety_operation_name(uint32_t index)
+{
+    if (index < LIFE_SAFETY_OP_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_life_safety_operation_names, index, ASHRAE_Reserved_String);
+    } else if (index <= LIFE_SAFETY_OP_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetLifeSafetyOperation";
+    }
+}
+
+INDTEXT_DATA bactext_life_safety_state_names[] = {
     { LIFE_SAFETY_STATE_QUIET, "quiet" },
     { LIFE_SAFETY_STATE_PRE_ALARM, "pre-alarm" },
     { LIFE_SAFETY_STATE_ALARM, "alarm" },
@@ -1977,20 +2296,53 @@ INDTEXT_DATA life_safety_state_names[] = {
     { LIFE_SAFETY_STATE_GENERAL_ALARM, "general-alarm" },
     { LIFE_SAFETY_STATE_SUPERVISORY, "supervisory" },
     { LIFE_SAFETY_STATE_TEST_SUPERVISORY, "test-supervisory" },
+    { LIFE_SAFETY_STATE_NON_DEFAULT_MODE, "non-default-mode" },
+    { LIFE_SAFETY_STATE_OEO_UNAVAILABLE, "oeo-unavailable" },
+    { LIFE_SAFETY_STATE_OEO_ALARM, "oeo-alarm" },
+    { LIFE_SAFETY_STATE_OEO_PHASE1_RECALL, "oeo-phase1-recall" },
+    { LIFE_SAFETY_STATE_OEO_EVACUATE, "oeo-evacuate" },
+    { LIFE_SAFETY_STATE_OEO_UNAFFECTED, "oeo-unaffected" },
+    { LIFE_SAFETY_STATE_TEST_OEO_UNAVAILABLE, "test-oeo-unavailable" },
+    { LIFE_SAFETY_STATE_TEST_OEO_ALARM, "test-oeo-alarm" },
+    { LIFE_SAFETY_STATE_TEST_OEO_PHASE1_RECALL, "test-oeo-phase1-recall" },
+    { LIFE_SAFETY_STATE_TEST_OEO_EVACUATE, "test-oeo-evacuate" },
+    { LIFE_SAFETY_STATE_TEST_OEO_UNAFFECTED, "test-oeo-unaffected" },
     { 0, NULL }
 };
 
-const char *bactext_life_safety_state_name(unsigned index)
+const char *bactext_life_safety_state_name(uint32_t index)
 {
-    if (index < MAX_LIFE_SAFETY_STATE) {
+    if (index < LIFE_SAFETY_STATE_PROPRIETARY_MIN) {
         return indtext_by_index_default(
-            life_safety_state_names, index, ASHRAE_Reserved_String);
+            bactext_life_safety_state_names, index, ASHRAE_Reserved_String);
+    } else if (index <= LIFE_SAFETY_STATE_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
     } else {
         return "Invalid BACnetLifeSafetyState";
     }
 }
 
-INDTEXT_DATA lighting_in_progress[] = {
+INDTEXT_DATA bactext_silenced_state_names[] = {
+    { SILENCED_STATE_UNSILENCED, "unsilenced" },
+    { SILENCED_STATE_AUDIBLE_SILENCED, "audible-silenced" },
+    { SILENCED_STATE_VISIBLE_SILENCED, "visible-silenced" },
+    { SILENCED_STATE_ALL_SILENCED, "all-silenced" },
+    { 0, NULL }
+};
+
+const char *bactext_silenced_state_name(uint32_t index)
+{
+    if (index < SILENCED_STATE_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_silenced_state_names, index, ASHRAE_Reserved_String);
+    } else if (index <= SILENCED_STATE_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetSilencedState";
+    }
+}
+
+INDTEXT_DATA bacnet_lighting_in_progress_names[] = {
     { BACNET_LIGHTING_IDLE, "idle" },
     { BACNET_LIGHTING_FADE_ACTIVE, "fade" },
     { BACNET_LIGHTING_RAMP_ACTIVE, "ramp" },
@@ -2000,29 +2352,29 @@ INDTEXT_DATA lighting_in_progress[] = {
     { 0, NULL }
 };
 
-const char *bactext_lighting_in_progress(unsigned index)
+const char *bactext_lighting_in_progress(uint32_t index)
 {
     if (index < MAX_BACNET_LIGHTING_IN_PROGRESS) {
         return indtext_by_index_default(
-            lighting_in_progress, index, ASHRAE_Reserved_String);
+            bacnet_lighting_in_progress_names, index, ASHRAE_Reserved_String);
     } else {
         return "Invalid BACnetLightingInProgress";
     }
 }
 
-INDTEXT_DATA lighting_transition[] = {
+INDTEXT_DATA bacnet_lighting_transition_names[] = {
     { BACNET_LIGHTING_TRANSITION_NONE, "none" },
     { BACNET_LIGHTING_TRANSITION_FADE, "fade" },
     { BACNET_LIGHTING_TRANSITION_RAMP, "ramp" },
     { 0, NULL }
 };
 
-const char *bactext_lighting_transition(unsigned index)
+const char *bactext_lighting_transition(uint32_t index)
 {
-    if (index < BACNET_LIGHTING_TRANSITION_PROPRIETARY_FIRST) {
+    if (index < BACNET_LIGHTING_TRANSITION_PROPRIETARY_MIN) {
         return indtext_by_index_default(
-            lighting_transition, index, ASHRAE_Reserved_String);
-    } else if (index <= BACNET_LIGHTING_TRANSITION_PROPRIETARY_LAST) {
+            bacnet_lighting_transition_names, index, ASHRAE_Reserved_String);
+    } else if (index <= BACNET_LIGHTING_TRANSITION_PROPRIETARY_MAX) {
         return Vendor_Proprietary_String;
     } else {
         return "Invalid BACnetLightingTransition";
@@ -2041,15 +2393,19 @@ INDTEXT_DATA bacnet_lighting_operation_names[] = {
     { BACNET_LIGHTS_WARN_OFF, "warn-off" },
     { BACNET_LIGHTS_WARN_RELINQUISH, "warn-relinquish" },
     { BACNET_LIGHTS_STOP, "stop" },
+    { BACNET_LIGHTS_RESTORE_ON, "restore-on" },
+    { BACNET_LIGHTS_DEFAULT_ON, "default-on" },
+    { BACNET_LIGHTS_TOGGLE_RESTORE, "toggle-restore" },
+    { BACNET_LIGHTS_TOGGLE_DEFAULT, "toggle-default" },
     { 0, NULL }
 };
 
-const char *bactext_lighting_operation_name(unsigned index)
+const char *bactext_lighting_operation_name(uint32_t index)
 {
-    if (index < BACNET_LIGHTS_PROPRIETARY_FIRST) {
+    if (index < BACNET_LIGHTS_PROPRIETARY_MIN) {
         return indtext_by_index_default(
             bacnet_lighting_operation_names, index, ASHRAE_Reserved_String);
-    } else if (index <= BACNET_LIGHTS_PROPRIETARY_LAST) {
+    } else if (index <= BACNET_LIGHTS_PROPRIETARY_MAX) {
         return Vendor_Proprietary_String;
     } else {
         return "Invalid BACnetLightingOperation";
@@ -2057,9 +2413,9 @@ const char *bactext_lighting_operation_name(unsigned index)
 }
 
 bool bactext_lighting_operation_strtol(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
-    return bactext_strtol_index(
+    return bactext_string_to_uint32_index(
         bacnet_lighting_operation_names, search_name, found_index);
 }
 
@@ -2070,10 +2426,11 @@ INDTEXT_DATA bacnet_binary_lighting_pv_names[] = {
     { BINARY_LIGHTING_PV_WARN_OFF, "warn-off" },
     { BINARY_LIGHTING_PV_WARN_RELINQUISH, "warn-relinquish" },
     { BINARY_LIGHTING_PV_STOP, "stop" },
+    { BINARY_LIGHTING_PV_TOGGLE, "toggle" },
     { 0, NULL }
 };
 
-const char *bactext_binary_lighting_pv_name(unsigned index)
+const char *bactext_binary_lighting_pv_name(uint32_t index)
 {
     if (index < BINARY_LIGHTING_PV_PROPRIETARY_MIN) {
         return indtext_by_index_default(
@@ -2086,9 +2443,9 @@ const char *bactext_binary_lighting_pv_name(unsigned index)
 }
 
 bool bactext_binary_lighting_pv_names_strtol(
-    const char *search_name, unsigned *found_index)
+    const char *search_name, uint32_t *found_index)
 {
-    return bactext_strtol_index(
+    return bactext_string_to_uint32_index(
         bacnet_binary_lighting_pv_names, search_name, found_index);
 }
 
@@ -2103,7 +2460,7 @@ INDTEXT_DATA bacnet_color_operation_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_color_operation_name(unsigned index)
+const char *bactext_color_operation_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_color_operation_names, index, ASHRAE_Reserved_String);
@@ -2116,7 +2473,7 @@ INDTEXT_DATA bacnet_device_communications_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_device_communications_name(unsigned index)
+const char *bactext_device_communications_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_device_communications_names, index, ASHRAE_Reserved_String);
@@ -2130,7 +2487,7 @@ INDTEXT_DATA bacnet_shed_state_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_shed_state_name(unsigned index)
+const char *bactext_shed_state_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_shed_state_names, index, ASHRAE_Reserved_String);
@@ -2143,8 +2500,674 @@ INDTEXT_DATA bacnet_shed_level_type_names[] = {
     { 0, NULL }
 };
 
-const char *bactext_shed_level_type_name(unsigned index)
+const char *bactext_shed_level_type_name(uint32_t index)
 {
     return indtext_by_index_default(
         bacnet_shed_level_type_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bacnet_log_datum_names[] = {
+    { BACNET_LOG_DATUM_STATUS, "status" },
+    { BACNET_LOG_DATUM_BOOLEAN, "boolean" },
+    { BACNET_LOG_DATUM_REAL, "real" },
+    { BACNET_LOG_DATUM_ENUMERATED, "enumerated" },
+    { BACNET_LOG_DATUM_UNSIGNED, "uint32_t" },
+    { BACNET_LOG_DATUM_SIGNED, "signed" },
+    { BACNET_LOG_DATUM_BITSTRING, "bitstring" },
+    { BACNET_LOG_DATUM_NULL, "null" },
+    { BACNET_LOG_DATUM_FAILURE, "failure" },
+    { BACNET_LOG_DATUM_TIME_CHANGE, "time-change" },
+    { BACNET_LOG_DATUM_ANY, "any" },
+    { 0, NULL }
+};
+
+const char *bactext_log_datum_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bacnet_log_datum_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_restart_reason_names[] = {
+    { RESTART_REASON_UNKNOWN, "unknown" },
+    { RESTART_REASON_COLDSTART, "coldstart" },
+    { RESTART_REASON_WARMSTART, "warmstart" },
+    { RESTART_REASON_DETECTED_POWER_LOST, "detected-power-lost" },
+    { RESTART_REASON_DETECTED_POWER_OFF, "detected-power-off" },
+    { RESTART_REASON_HARDWARE_WATCHDOG, "hardware-watchdog" },
+    { RESTART_REASON_SOFTWARE_WATCHDOG, "software-watchdog" },
+    { RESTART_REASON_SUSPENDED, "suspended" },
+    { RESTART_REASON_ACTIVATE_CHANGES, "activate-changes" },
+    { 0, NULL }
+};
+
+const char *bactext_restart_reason_name(uint32_t index)
+{
+    if (index < RESTART_REASON_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_restart_reason_names, index, ASHRAE_Reserved_String);
+    } else if (index <= RESTART_REASON_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetRestartReason";
+    }
+}
+
+INDTEXT_DATA bactext_network_port_type_names[] = {
+    { PORT_TYPE_ETHERNET, "ethernet" },
+    { PORT_TYPE_ARCNET, "arcnet" },
+    { PORT_TYPE_MSTP, "mstp" },
+    { PORT_TYPE_PTP, "ptp" },
+    { PORT_TYPE_LONTALK, "lontalk" },
+    { PORT_TYPE_BIP, "ipv4" },
+    { PORT_TYPE_ZIGBEE, "zigbee" },
+    { PORT_TYPE_VIRTUAL, "virtual" },
+    { PORT_TYPE_NON_BACNET, "non-bacnet" },
+    { PORT_TYPE_BIP6, "ipv6" },
+    { PORT_TYPE_SERIAL, "serial" },
+    { PORT_TYPE_BSC, "secure-connect" },
+    { PORT_TYPE_BSC_INTERIM, "secure-connect-interim" },
+    { 0, NULL }
+};
+
+const char *bactext_network_port_type_name(uint32_t index)
+{
+    if (index <= PORT_TYPE_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_network_port_type_names, index, ASHRAE_Reserved_String);
+    } else if (index <= PORT_TYPE_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetNetworkType";
+    }
+}
+
+INDTEXT_DATA bactext_network_number_quality_names[] = {
+    { PORT_QUALITY_UNKNOWN, "unknown" },
+    { PORT_QUALITY_LEARNED, "learned" },
+    { PORT_QUALITY_LEARNED_CONFIGURED, "learned-configured" },
+    { PORT_QUALITY_CONFIGURED, "configured" },
+    { 0, NULL }
+};
+
+const char *bactext_network_number_quality_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_network_number_quality_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_protocol_level_names[] = {
+    { BACNET_PROTOCOL_LEVEL_PHYSICAL, "physical" },
+    { BACNET_PROTOCOL_LEVEL_PROTOCOL, "protocol" },
+    { BACNET_PROTOCOL_LEVEL_BACNET_APPLICATION, "bacnet-application" },
+    { BACNET_PROTOCOL_LEVEL_NON_BACNET_APPLICATION, "non-bacnet-application" },
+    { 0, NULL }
+};
+
+const char *bactext_protocol_level_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_protocol_level_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_network_port_command_names[] = {
+    { PORT_COMMAND_IDLE, "idle" },
+    { PORT_COMMAND_DISCARD_CHANGES, "discard-changes" },
+    { PORT_COMMAND_RENEW_FD_REGISTRATION, "renew-fd-registration" },
+    { PORT_COMMAND_RESTART_SLAVE_DISCOVERY, "restart-slave-discovery" },
+    { PORT_COMMAND_RENEW_DHCP, "renew-dhcp" },
+    { PORT_COMMAND_RESTART_AUTONEGOTIATION, "restart-autonegotiation" },
+    { PORT_COMMAND_DISCONNECT, "disconnect" },
+    { PORT_COMMAND_RESTART_PORT, "restart-port" },
+    { PORT_COMMAND_RESTART_DISCOVERY, "restart-discovery" },
+    { PORT_COMMAND_GENERATE_CSR_FILE, "generate-csr-file" },
+    { PORT_COMMAND_VALIDATE_CHANGES, "validate-changes" },
+    { 0, NULL }
+};
+
+const char *bactext_network_port_command_name(uint32_t index)
+{
+    if (index < PORT_COMMAND_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_network_port_command_names, index, ASHRAE_Reserved_String);
+    } else if (index <= PORT_COMMAND_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetNetworkPortCommand";
+    }
+}
+
+INDTEXT_DATA bactext_authentication_decision_names[] = {
+    { BACNET_AUTHENTICATION_DECISION_ALLOW_MATCH, "allow-match" },
+    { BACNET_AUTHENTICATION_DECISION_DENY_MISMATCH, "deny-mismatch" },
+    { BACNET_AUTHENTICATION_DECISION_DENY_NON_RELAY, "deny-non-relay" },
+    { 0, NULL }
+};
+
+const char *bactext_authentication_decision_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_authentication_decision_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_authorization_posture_names[] = {
+    { BACNET_AUTHORIZATION_POSTURE_OPEN, "open" },
+    { BACNET_AUTHORIZATION_POSTURE_PROPRIETARY, "proprietary" },
+    { BACNET_AUTHORIZATION_POSTURE_CONFIGURED, "configured" },
+    { BACNET_AUTHORIZATION_POSTURE_MISCONFIGURED_PARTIAL,
+      "misconfigured-partial" },
+    { BACNET_AUTHORIZATION_POSTURE_MISCONFIGURED_TOTAL, "misconfigured-total" },
+    { 0, NULL }
+};
+
+const char *bactext_authorization_posture_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_authorization_posture_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_fault_type_names[] = {
+    { BACNET_FAULT_TYPE_NONE, "none" },
+    { BACNET_FAULT_TYPE_CHARACTERSTRING, "characterstring" },
+    { BACNET_FAULT_TYPE_EXTENDED, "extended" },
+    { BACNET_FAULT_TYPE_LIFE_SAFETY, "life-safety" },
+    { BACNET_FAULT_TYPE_STATE, "state" },
+    { BACNET_FAULT_TYPE_STATUS_FLAGS, "status-flags" },
+    { BACNET_FAULT_TYPE_OUT_OF_RANGE, "out-of-range" },
+    { BACNET_FAULT_TYPE_LISTED, "listed" },
+    { 0, NULL }
+};
+
+const char *bactext_fault_type_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_fault_type_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bacnet_priority_filter_names[] = {
+    { BACNET_PRIORITY_FILTER_MANUAL_LIFE_SAFETY, "manual-life-safety" },
+    { BACNET_PRIORITY_FILTER_AUTOMATIC_LIFE_SAFETY, "automatic-life-safety" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_3, "priority-3" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_4, "priority-5" },
+    { BACNET_PRIORITY_FILTER_CRITICAL_EQUIPMENT_CONTROLS,
+      "critical-equipment-controls" },
+    { BACNET_PRIORITY_FILTER_MINIMUM_ON_OFF, "minimum-on-off" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_7, "priority-7" },
+    { BACNET_PRIORITY_FILTER_MANUAL_OPERATOR, "manual-operator" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_9, "priority-9" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_10, "priority-10" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_11, "priority-11" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_12, "priority-12" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_13, "priority-13" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_14, "priority-14" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_15, "priority-15" },
+    { BACNET_PRIORITY_FILTER_PRIORITY_16, "priority-16" },
+    { 0, NULL }
+};
+
+const char *bacnet_priority_filter_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bacnet_priority_filter_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_result_flags_names[] = {
+    { RESULT_FLAG_FIRST_ITEM, "first-item" },
+    { RESULT_FLAG_LAST_ITEM, "last-item" },
+    { RESULT_FLAG_MORE_ITEMS, "more-items" },
+    { 0, NULL }
+};
+
+const char *bactext_result_flags_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_result_flags_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_success_filter_names[] = {
+    { BACNET_SUCCESS_FILTER_ALL, "all" },
+    { BACNET_SUCCESS_FILTER_SUCCESS_ONLY, "success-only" },
+    { BACNET_SUCCESS_FILTER_FAILURES_ONLY, "failures-only" },
+    { 0, NULL }
+};
+
+const char *bactext_success_filter_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_success_filter_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_logging_type_names[] = {
+    /* BACnetLoggingType enumerations */
+    { LOGGING_TYPE_POLLED, "polled" },
+    { LOGGING_TYPE_COV, "cov" },
+    { LOGGING_TYPE_TRIGGERED, "triggered" },
+    { 0, NULL }
+};
+
+const char *bactext_logging_type_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_logging_type_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_program_request_names[] = {
+    { PROGRAM_REQUEST_READY, "ready" },
+    { PROGRAM_REQUEST_LOAD, "load" },
+    { PROGRAM_REQUEST_RUN, "run" },
+    { PROGRAM_REQUEST_HALT, "halt" },
+    { PROGRAM_REQUEST_RESTART, "restart" },
+    { PROGRAM_REQUEST_UNLOAD, "unload" },
+    { 0, NULL }
+};
+
+const char *bactext_program_request_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_program_request_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_program_state_names[] = {
+    /* BACnetProgramState enumerations */
+    { PROGRAM_STATE_IDLE, "idle" },
+    { PROGRAM_STATE_LOADING, "loading" },
+    { PROGRAM_STATE_RUNNING, "running" },
+    { PROGRAM_STATE_WAITING, "waiting" },
+    { PROGRAM_STATE_HALTED, "halted" },
+    { PROGRAM_STATE_UNLOADING, "unloading" },
+    { 0, NULL }
+};
+
+const char *bactext_program_state_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_program_state_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_program_error_names[] = {
+    /* BACnetProgramError enumerations */
+    { PROGRAM_ERROR_NORMAL, "normal" },
+    { PROGRAM_ERROR_LOAD_FAILED, "load-failed" },
+    { PROGRAM_ERROR_INTERNAL, "internal" },
+    { PROGRAM_ERROR_PROGRAM, "program" },
+    { PROGRAM_ERROR_OTHER, "other" },
+    { 0, NULL }
+};
+
+const char *bactext_program_error_name(uint32_t index)
+{
+    if (index < PROGRAM_ERROR_PROPRIETARY_MIN) {
+        return indtext_by_index_default(
+            bactext_program_error_names, index, ASHRAE_Reserved_String);
+    } else if (index <= PROGRAM_ERROR_PROPRIETARY_MAX) {
+        return Vendor_Proprietary_String;
+    } else {
+        return "Invalid BACnetProgramError";
+    }
+}
+
+INDTEXT_DATA bactext_timer_state_names[] = {
+    /* BACnetTimerState enumerations */
+    { TIMER_STATE_IDLE, "idle" },
+    { TIMER_STATE_RUNNING, "running" },
+    { TIMER_STATE_EXPIRED, "expired" },
+    { 0, NULL }
+};
+
+const char *bactext_timer_state_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_timer_state_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_timer_transition_names[] = {
+    /* BACnetTimerTransition enumerations */
+    { TIMER_TRANSITION_NONE, "none" },
+    { TIMER_TRANSITION_IDLE_TO_RUNNING, "idle-to-running" },
+    { TIMER_TRANSITION_RUNNING_TO_IDLE, "running-to-idle" },
+    { TIMER_TRANSITION_RUNNING_TO_RUNNING, "running-to-running" },
+    { TIMER_TRANSITION_RUNNING_TO_EXPIRED, "running-to-expired" },
+    { TIMER_TRANSITION_FORCED_TO_EXPIRED, "forced-to-expired" },
+    { TIMER_TRANSITION_EXPIRED_TO_IDLE, "expired-to-idle" },
+    { TIMER_TRANSITION_EXPIRED_TO_RUNNING, "expired-to-running" },
+    { 0, NULL }
+};
+
+const char *bactext_timer_transition_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_timer_transition_names, index, ASHRAE_Reserved_String);
+}
+
+INDTEXT_DATA bactext_boolean_value_names[] = { { false, "false" },
+                                               { true, "true" },
+                                               { 0, NULL } };
+
+const char *bactext_boolean_value_name(uint32_t index)
+{
+    return indtext_by_index_default(
+        bactext_boolean_value_names, index, ASHRAE_Reserved_String);
+}
+
+bool bactext_property_states_strtoul(
+    BACNET_PROPERTY_STATES property_state,
+    const char *search_name,
+    uint32_t *found_index)
+{
+    bool status = false;
+
+    switch (property_state) {
+        case PROP_STATE_BOOLEAN_VALUE:
+            status = bactext_string_to_uint32_index(
+                bactext_boolean_value_names, search_name, found_index);
+            break;
+        case PROP_STATE_BINARY_VALUE:
+            status = bactext_string_to_uint32_index(
+                bacnet_binary_present_value_names, search_name, found_index);
+            break;
+        case PROP_STATE_EVENT_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_event_type_names, search_name, found_index);
+            break;
+        case PROP_STATE_POLARITY:
+            status = bactext_string_to_uint32_index(
+                bacnet_binary_polarity_names, search_name, found_index);
+            break;
+        case PROP_STATE_PROGRAM_CHANGE:
+            status = bactext_string_to_uint32_index(
+                bactext_program_request_names, search_name, found_index);
+            break;
+        case PROP_STATE_PROGRAM_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_program_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_REASON_FOR_HALT:
+            status = bactext_string_to_uint32_index(
+                bactext_program_error_names, search_name, found_index);
+            break;
+        case PROP_STATE_RELIABILITY:
+            status = bactext_string_to_uint32_index(
+                bacnet_reliability_names, search_name, found_index);
+            break;
+        case PROP_STATE_EVENT_STATE:
+            status = bactext_string_to_uint32_index(
+                bacnet_event_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_SYSTEM_STATUS:
+            status = bactext_string_to_uint32_index(
+                bacnet_device_status_names, search_name, found_index);
+            break;
+        case PROP_STATE_UNITS:
+            status = bactext_string_to_uint32_index(
+                bacnet_engineering_unit_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIFE_SAFETY_MODE:
+            status = bactext_string_to_uint32_index(
+                bactext_life_safety_mode_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIFE_SAFETY_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_life_safety_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_RESTART_REASON:
+            status = bactext_string_to_uint32_index(
+                bactext_restart_reason_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIFE_SAFETY_OPERATION:
+            status = bactext_string_to_uint32_index(
+                bactext_life_safety_operation_names, search_name, found_index);
+            break;
+        case PROP_STATE_NODE_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_node_type_names, search_name, found_index);
+            break;
+        case PROP_STATE_NOTIFY_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_notify_type_names, search_name, found_index);
+            break;
+        case PROP_STATE_SHED_STATE:
+            status = bactext_string_to_uint32_index(
+                bacnet_shed_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_SILENCED_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_silenced_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIGHTING_IN_PROGRESS:
+            status = bactext_string_to_uint32_index(
+                bacnet_lighting_in_progress_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIGHTING_OPERATION:
+            status = bactext_string_to_uint32_index(
+                bacnet_lighting_operation_names, search_name, found_index);
+            break;
+        case PROP_STATE_LIGHTING_TRANSITION:
+            status = bactext_string_to_uint32_index(
+                bacnet_lighting_transition_names, search_name, found_index);
+            break;
+        case PROP_STATE_BINARY_LIGHTING_VALUE:
+            status = bactext_string_to_uint32_index(
+                bacnet_binary_lighting_pv_names, search_name, found_index);
+            break;
+        case PROP_STATE_TIMER_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_timer_state_names, search_name, found_index);
+            break;
+        case PROP_STATE_TIMER_TRANSITION:
+            status = bactext_string_to_uint32_index(
+                bactext_timer_transition_names, search_name, found_index);
+            break;
+        case PROP_STATE_NETWORK_PORT_COMMAND:
+            status = bactext_string_to_uint32_index(
+                bactext_network_port_command_names, search_name, found_index);
+            break;
+        case PROP_STATE_NETWORK_TYPE:
+            status = bactext_string_to_uint32_index(
+                bactext_network_port_type_names, search_name, found_index);
+            break;
+        case PROP_STATE_NETWORK_NUMBER_QUALITY:
+            status = bactext_string_to_uint32_index(
+                bactext_network_number_quality_names, search_name, found_index);
+            break;
+        case PROP_STATE_PROTOCOL_LEVEL:
+            status = bactext_string_to_uint32_index(
+                bactext_protocol_level_names, search_name, found_index);
+            break;
+        case PROP_STATE_ACTION:
+        case PROP_STATE_DOOR_SECURED_STATUS:
+        case PROP_STATE_DOOR_STATUS:
+        case PROP_STATE_DOOR_VALUE:
+        case PROP_STATE_FILE_ACCESS_METHOD:
+        case PROP_STATE_LOCK_STATUS:
+        case PROP_STATE_MAINTENANCE:
+        case PROP_STATE_SECURITY_LEVEL:
+        case PROP_STATE_ACCESS_EVENT:
+        case PROP_STATE_ZONE_OCCUPANCY_STATE:
+        case PROP_STATE_ACCESS_CRED_DISABLE_REASON:
+        case PROP_STATE_ACCESS_CRED_DISABLE:
+        case PROP_STATE_AUTHENTICATION_STATUS:
+        case PROP_STATE_BACKUP_STATE:
+        case PROP_STATE_WRITE_STATUS:
+        case PROP_STATE_INTEGER_VALUE:
+        case PROP_STATE_BACNET_IP_MODE:
+        case PROP_STATE_ESCALATOR_OPERATION_DIRECTION:
+        case PROP_STATE_ESCALATOR_FAULT:
+        case PROP_STATE_ESCALATOR_MODE:
+        case PROP_STATE_LIFT_CAR_DIRECTION:
+        case PROP_STATE_LIFT_CAR_DOOR_COMMAND:
+        case PROP_STATE_LIFT_CAR_DRIVE_STATUS:
+        case PROP_STATE_LIFT_CAR_MODE:
+        case PROP_STATE_LIFT_GROUP_MODE:
+        case PROP_STATE_LIFT_FAULT:
+        case PROP_STATE_AUDIT_LEVEL:
+        case PROP_STATE_AUDIT_OPERATION:
+        case PROP_STATE_EXTENDED_VALUE:
+        case PROP_STATE_DOOR_ALARM_STATE:
+        case PROP_STATE_UNSIGNED_VALUE:
+        default:
+            status = bacnet_string_to_uint32(search_name, found_index);
+            break;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given enumerated object property string,
+ *  find the enumeration value
+ * @param object_type - object type identifier
+ * @param property - object property identifier
+ * @param search_name - text string for which is searched
+ * @param found_index - if found, the value is set to this variable
+ * @return true if the string is found and found_index is set
+ * @return false if the string is not found and found_index is not set
+ */
+bool bactext_object_property_strtoul(
+    BACNET_OBJECT_TYPE object_type,
+    BACNET_PROPERTY_ID object_property,
+    const char *search_name,
+    uint32_t *found_index)
+{
+    bool status = false;
+
+    switch (object_property) {
+        case PROP_PROPERTY_LIST:
+            status = bactext_string_to_uint32_index(
+                bacnet_property_names, search_name, found_index);
+            break;
+        case PROP_OBJECT_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_object_type_names, search_name, found_index);
+            break;
+        case PROP_EVENT_STATE:
+            status = bactext_string_to_uint32_index(
+                bacnet_event_state_names, search_name, found_index);
+            break;
+        case PROP_UNITS:
+        case PROP_CONTROLLED_VARIABLE_UNITS:
+        case PROP_DERIVATIVE_CONSTANT_UNITS:
+        case PROP_INTEGRAL_CONSTANT_UNITS:
+        case PROP_PROPORTIONAL_CONSTANT_UNITS:
+        case PROP_OUTPUT_UNITS:
+        case PROP_CAR_LOAD_UNITS:
+            status = bactext_string_to_uint32_index(
+                bacnet_engineering_unit_names, search_name, found_index);
+            break;
+        case PROP_POLARITY:
+            status = bactext_string_to_uint32_index(
+                bacnet_binary_polarity_names, search_name, found_index);
+            break;
+        case PROP_PRESENT_VALUE:
+        case PROP_RELINQUISH_DEFAULT:
+            switch (object_type) {
+                case OBJECT_BINARY_INPUT:
+                case OBJECT_BINARY_OUTPUT:
+                case OBJECT_BINARY_VALUE:
+                    status = bactext_string_to_uint32_index(
+                        bacnet_binary_present_value_names, search_name,
+                        found_index);
+                    break;
+                case OBJECT_BINARY_LIGHTING_OUTPUT:
+                    status = bactext_string_to_uint32_index(
+                        bacnet_binary_lighting_pv_names, search_name,
+                        found_index);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case PROP_RELIABILITY:
+            status = bactext_string_to_uint32_index(
+                bacnet_reliability_names, search_name, found_index);
+            break;
+        case PROP_SYSTEM_STATUS:
+            status = bactext_string_to_uint32_index(
+                bacnet_device_status_names, search_name, found_index);
+            break;
+        case PROP_SEGMENTATION_SUPPORTED:
+            status = bactext_string_to_uint32_index(
+                bacnet_segmentation_names, search_name, found_index);
+            break;
+        case PROP_NODE_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_node_type_names, search_name, found_index);
+            break;
+        case PROP_TRANSITION:
+            status = bactext_string_to_uint32_index(
+                bacnet_lighting_transition_names, search_name, found_index);
+            break;
+        case PROP_IN_PROGRESS:
+            status = bactext_string_to_uint32_index(
+                bacnet_lighting_in_progress_names, search_name, found_index);
+            break;
+        case PROP_LOGGING_TYPE:
+            status = bactext_string_to_uint32_index(
+                bactext_logging_type_names, search_name, found_index);
+            break;
+        case PROP_MODE:
+        case PROP_ACCEPTED_MODES:
+            status = bactext_string_to_uint32_index(
+                bactext_life_safety_mode_names, search_name, found_index);
+            break;
+        case PROP_OPERATION_EXPECTED:
+            status = bactext_string_to_uint32_index(
+                bactext_life_safety_operation_names, search_name, found_index);
+            break;
+        case PROP_TRACKING_VALUE:
+            switch (object_type) {
+                case OBJECT_LIFE_SAFETY_POINT:
+                case OBJECT_LIFE_SAFETY_ZONE:
+                    status = bactext_string_to_uint32_index(
+                        bactext_life_safety_state_names, search_name,
+                        found_index);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case PROP_PROGRAM_CHANGE:
+            status = bactext_string_to_uint32_index(
+                bactext_program_request_names, search_name, found_index);
+            break;
+        case PROP_PROGRAM_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_program_state_names, search_name, found_index);
+            break;
+        case PROP_REASON_FOR_HALT:
+            status = bactext_string_to_uint32_index(
+                bactext_program_error_names, search_name, found_index);
+            break;
+        case PROP_NETWORK_NUMBER_QUALITY:
+            status = bactext_string_to_uint32_index(
+                bactext_network_number_quality_names, search_name, found_index);
+            break;
+        case PROP_NETWORK_TYPE:
+            status = bactext_string_to_uint32_index(
+                bactext_network_port_type_names, search_name, found_index);
+            break;
+        case PROP_PROTOCOL_LEVEL:
+            status = bactext_string_to_uint32_index(
+                bactext_protocol_level_names, search_name, found_index);
+            break;
+        case PROP_EVENT_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_event_type_names, search_name, found_index);
+            break;
+        case PROP_NOTIFY_TYPE:
+            status = bactext_string_to_uint32_index(
+                bacnet_notify_type_names, search_name, found_index);
+            break;
+        case PROP_TIMER_STATE:
+            status = bactext_string_to_uint32_index(
+                bactext_timer_state_names, search_name, found_index);
+            break;
+        case PROP_LAST_STATE_CHANGE:
+            status = bactext_string_to_uint32_index(
+                bactext_timer_transition_names, search_name, found_index);
+            break;
+        default:
+            status = bacnet_string_to_uint32(search_name, found_index);
+            break;
+    }
+
+    return status;
 }

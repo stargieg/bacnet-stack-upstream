@@ -1,13 +1,14 @@
-/*
- * Copyright (c) 2020 Legrand North America, LLC.
- *
- * SPDX-License-Identifier: MIT
- */
-
-/* @file
+/**
+ * @file
  * @brief test of bsc-socket interface
+ * @author Steve Karg <skarg@users.sourceforge.net>
+ * @author Kirill Neznamov <kirill.neznamov@dsr-corporation.com>
+ * @author Mikhail Antropov <michail.antropov@dsr-corporation.com>
+ * @author Ondřej Hruška <ondra@ondrovo.com>
+ * @author Patrick Grimm <patrick@lunatiki.de>
+ * @date 2020
+ * @copyright SPDX-License-Identifier: MIT
  */
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -23,7 +24,8 @@
 #include <bacnet/datalink/bsc/bsc-util.h>
 #include <bacnet/datalink/bsc/bsc-event.h>
 #include <bacnet/bacdef.h>
-#include "bacnet/basic/sys/debug.h"
+#include <bacnet/basic/sys/debug.h>
+#include <bacfile-posix.h>
 
 unsigned char ca_key[] = { 0x2d,
                            0x2d,
@@ -9995,15 +9997,16 @@ static void test_sc_parameters(void)
     memset(&hubf_uuid, 0x1, sizeof(hubf_uuid));
     memset(&hubf_vmac, 0x2, sizeof(hubf_vmac));
 
-    sprintf(
-        primary_url, "wss://%s:%d", BACNET_WEBSOCKET_SERVER_ADDR,
-        BACNET_WEBSOCKET_SERVER_PORT);
-    sprintf(
-        secondary_url, "wss://%s:%d", BACNET_WEBSOCKET_SERVER_ADDR,
-        BACNET_WEBSOCKET_SERVER_PORT2);
+    snprintf(
+        primary_url, sizeof(primary_url), "wss://%s:%d",
+        BACNET_WEBSOCKET_SERVER_ADDR, BACNET_WEBSOCKET_SERVER_PORT);
+    snprintf(
+        secondary_url, sizeof(secondary_url), "wss://%s:%d",
+        BACNET_WEBSOCKET_SERVER_ADDR, BACNET_WEBSOCKET_SERVER_PORT2);
 
     // prepare
     bacfile_init();
+    bacfile_posix_init();
     netport_object_init(
         SC_DATALINK_INSTANCE, ca_cert, sizeof(ca_cert), server_cert,
         sizeof(server_cert), server_key, sizeof(server_key),
@@ -10017,7 +10020,9 @@ static void test_sc_parameters(void)
 
     // check
     zassert_equal(
-        bsc_conf.ca_cert_chain_size, sizeof(ca_cert) + ZERO_BYTE, NULL);
+        bsc_conf.ca_cert_chain_size, sizeof(ca_cert) + ZERO_BYTE,
+        "ca_cert=%zu actual=%zu", bsc_conf.ca_cert_chain_size,
+        sizeof(ca_cert) + ZERO_BYTE);
     zassert_mem_equal(bsc_conf.ca_cert_chain, ca_cert, sizeof(ca_cert), NULL);
     zassert_equal(
         bsc_conf.cert_chain_size, sizeof(server_cert) + ZERO_BYTE, NULL);
@@ -10113,8 +10118,8 @@ static void test_sc_datalink(void)
     uint8_t npdu[128];
     BACNET_ADDRESS from;
     BVLC_SC_DECODED_MESSAGE message;
-    BACNET_ERROR_CODE error;
-    BACNET_ERROR_CLASS class;
+    uint16_t error_class;
+    uint16_t error_code;
     const char *err_desc;
     BACNET_ADDRESS dest;
     uint8_t big_npdu[BVLC_SC_NPDU_SIZE_CONF + 100];
@@ -10132,18 +10137,30 @@ static void test_sc_datalink(void)
     memset(&uuid3, 0x35, sizeof(uuid3));
     memset(&vmac3, 0x36, sizeof(vmac3));
 
-    sprintf(primary_url3, "wss://%s:%d", BACNET_LOCALHOST, BACNET_CLOSED_PORT);
-    sprintf(
-        secondary_url3, "wss://%s:%d", BACNET_LOCALHOST, BACNET_CLOSED_PORT);
-    sprintf(primary_url2, "wss://%s:%d", BACNET_LOCALHOST, BACNET_HUB_PORT);
-    sprintf(secondary_url2, "wss://%s:%d", BACNET_LOCALHOST, BACNET_HUB_PORT);
-    sprintf(primary_url1, "wss://%s:%d", BACNET_LOCALHOST, BACNET_HUB_PORT);
-    sprintf(secondary_url1, "wss://%s:%d", BACNET_LOCALHOST, BACNET_HUB_PORT);
-    sprintf(
-        direct_url, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        primary_url3, sizeof(primary_url3), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_CLOSED_PORT);
+    snprintf(
+        secondary_url3, sizeof(secondary_url3), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_CLOSED_PORT);
+    snprintf(
+        primary_url2, sizeof(primary_url2), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_HUB_PORT);
+    snprintf(
+        secondary_url2, sizeof(secondary_url2), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_HUB_PORT);
+    snprintf(
+        primary_url1, sizeof(primary_url1), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_HUB_PORT);
+    snprintf(
+        secondary_url1, sizeof(secondary_url1), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_HUB_PORT);
+    snprintf(
+        direct_url, sizeof(direct_url), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_DIRECT_SERVER_PORT);
 
     bacfile_init();
+    bacfile_posix_init();
     netport_object_init(
         SC_DATALINK_INSTANCE, ca_cert, sizeof(ca_cert), server_cert,
         sizeof(server_cert), server_key, sizeof(server_key),
@@ -10152,7 +10169,7 @@ static void test_sc_datalink(void)
 
     init_node_ev(&node_ev2);
     init_node_ev(&node_ev3);
-    zassert_equal(bsc_cert_files_check(), true, NULL);
+    zassert_equal(bsc_cert_files_check(SC_DATALINK_INSTANCE), true, NULL);
     zassert_equal(bsc_init(NULL), true, NULL);
     zassert_equal(bsc_init(NULL), false, NULL);
     memset(broadcast, 0xFF, sizeof(broadcast));
@@ -10268,7 +10285,8 @@ static void test_sc_datalink(void)
     zassert_equal(
         wait_node_ev(&node_ev2, BSC_NODE_EVENT_RECEIVED_NPDU, node2), true, 0);
     ret = bvlc_sc_decode_message(
-        node_ev2.pdu, node_ev2.pdu_len, &message, &error, &class, &err_desc);
+        node_ev2.pdu, node_ev2.pdu_len, &message, &error_code, &error_class,
+        &err_desc);
     zassert_equal(ret, true, NULL);
     zassert_equal(len, message.payload.encapsulated_npdu.npdu_len, NULL);
     ret = memcmp(npdu, message.payload.encapsulated_npdu.npdu, len);
@@ -10284,7 +10302,8 @@ static void test_sc_datalink(void)
     zassert_equal(
         wait_node_ev(&node_ev2, BSC_NODE_EVENT_RECEIVED_NPDU, node2), true, 0);
     ret = bvlc_sc_decode_message(
-        node_ev2.pdu, node_ev2.pdu_len, &message, &error, &class, &err_desc);
+        node_ev2.pdu, node_ev2.pdu_len, &message, &error_code, &error_class,
+        &err_desc);
     zassert_equal(ret, true, NULL);
     zassert_equal(len, message.payload.encapsulated_npdu.npdu_len, NULL);
     ret = memcmp(npdu, message.payload.encapsulated_npdu.npdu, len);
@@ -10381,26 +10400,26 @@ static void test_sc_datalink_properties(void)
     memset(&uuid4, 0x7, sizeof(uuid4));
     memset(&vmac4, 0x8, sizeof(vmac4));
 
-    sprintf(
-        primary_url3, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        primary_url3, sizeof(primary_url3), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        secondary_url3, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        secondary_url3, sizeof(secondary_url3), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        primary_url2, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        primary_url2, sizeof(primary_url2), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        secondary_url2, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        secondary_url2, sizeof(secondary_url2), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        primary_url1, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        primary_url1, sizeof(primary_url1), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        secondary_url1, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        secondary_url1, sizeof(secondary_url1), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
-    sprintf(
-        direct_url, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        direct_url, sizeof(direct_url), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_DIRECT_SERVER_PORT);
 
     bacfile_init();
@@ -10413,7 +10432,7 @@ static void test_sc_datalink_properties(void)
     init_node_ev(&node_ev2);
     init_node_ev(&node_ev3);
     init_node_ev(&node_ev4);
-    zassert_equal(bsc_cert_files_check(), true, NULL);
+    zassert_equal(bsc_cert_files_check(SC_DATALINK_INSTANCE), true, NULL);
     zassert_equal(bsc_init(NULL), true, NULL);
 
     conf2.ca_cert_chain = ca_cert;
@@ -10707,9 +10726,11 @@ static void test_sc_datalink_failed_requests(void)
     memset(&uuid2, 0x43, sizeof(uuid2));
     memset(&vmac2, 0x42, sizeof(vmac2));
 
-    sprintf(primary_url2, "wss://%s:%d", BACNET_LOCALHOST, BACNET_CLOSED_PORT);
-    sprintf(
-        secondary_url2, "wss://%s:%d", BACNET_LOCALHOST,
+    snprintf(
+        primary_url2, sizeof(primary_url2), "wss://%s:%d", BACNET_LOCALHOST,
+        BACNET_CLOSED_PORT);
+    snprintf(
+        secondary_url2, sizeof(secondary_url2), "wss://%s:%d", BACNET_LOCALHOST,
         SC_NETPORT_HUB_SERVER_PORT);
 
     bacfile_init();

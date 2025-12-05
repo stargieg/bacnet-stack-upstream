@@ -36,18 +36,18 @@ static uint8_t Out_Of_Service[MAX_BINARY_OUTPUTS];
 static uint8_t Polarity[MAX_BINARY_OUTPUTS];
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Binary_Output_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
+static const int32_t Binary_Output_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME, PROP_OBJECT_TYPE, PROP_PRESENT_VALUE, PROP_STATUS_FLAGS,
     PROP_EVENT_STATE, PROP_OUT_OF_SERVICE, PROP_POLARITY, PROP_PRIORITY_ARRAY,
     PROP_RELINQUISH_DEFAULT, -1 };
 
-static const int Binary_Output_Properties_Optional[] = { PROP_ACTIVE_TEXT,
+static const int32_t Binary_Output_Properties_Optional[] = { PROP_ACTIVE_TEXT,
     PROP_INACTIVE_TEXT, -1 };
 
-static const int Binary_Output_Properties_Proprietary[] = { -1 };
+static const int32_t Binary_Output_Properties_Proprietary[] = { -1 };
 
 void Binary_Output_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired, const int32_t **pOptional, const int32_t **pProprietary)
 {
     if (pRequired)
         *pRequired = Binary_Output_Properties_Required;
@@ -181,7 +181,7 @@ bool Binary_Output_Out_Of_Service(uint32_t instance)
 bool Binary_Output_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
-    static char text_string[16] = "BO-0"; /* okay for single thread */
+    char text_string[16] = "BO-0";
     bool status = false;
 
     if (object_instance < MAX_BINARY_OUTPUTS) {
@@ -314,13 +314,6 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->object_property != PROP_PRIORITY_ARRAY) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -342,13 +335,6 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    if ((wp_data->object_property != PROP_PRIORITY_ARRAY) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        /*  only array properties can have array options */
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     switch (wp_data->object_property) {

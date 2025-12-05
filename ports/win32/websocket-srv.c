@@ -13,13 +13,12 @@
 #include "bacnet/basic/sys/debug.h"
 #include "websocket-global.h"
 
-#define DEBUG_WEBSOCKET_SERVER 0
-
-#if DEBUG_WEBSOCKET_SERVER == 1
+#undef DEBUG_PRINTF
+#if DEBUG_WEBSOCKET_SERVER
 #define DEBUG_PRINTF debug_printf
 #else
 #undef DEBUG_ENABLED
-#define DEBUG_PRINTF(...)
+#define DEBUG_PRINTF debug_printf_disabled
 #endif
 
 #define BSC_RX_BUFFER_LEN BSC_WEBSOCKET_RX_BUFFER_LEN

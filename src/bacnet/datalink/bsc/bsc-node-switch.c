@@ -16,9 +16,8 @@
 #include "bacnet/npdu.h"
 #include "bacnet/bacenum.h"
 
-#define DEBUG_BSC_NODE_SWITCH 0
-
-#if DEBUG_BSC_NODE_SWITCH == 1
+#undef DEBUG_PRINTF
+#if DEBUG_BSC_NODE_SWITCH
 #define DEBUG_PRINTF debug_printf
 #else
 #undef DEBUG_ENABLED
@@ -267,9 +266,10 @@ copy_urls(BSC_NODE_SWITCH_CTX *ctx, int index, BSC_ADDRESS_RESOLUTION *r)
     int i;
     for (i = 0; i < r->urls_num; i++) {
         ctx->initiator.urls[index].utf8_urls[i][0] = 0;
-        strcpy(
+        snprintf(
             (char *)&ctx->initiator.urls[index].utf8_urls[i][0],
-            (char *)&r->utf8_urls[i][0]);
+            sizeof(ctx->initiator.urls[index].utf8_urls[i]), "%s",
+            (char *)r->utf8_urls[i]);
     }
     ctx->initiator.urls[index].urls_cnt = r->urls_num;
 }
@@ -287,7 +287,9 @@ copy_urls2(BSC_NODE_SWITCH_CTX *ctx, int index, char **urls, size_t urls_cnt)
     size_t i;
     for (i = 0; i < urls_cnt; i++) {
         ctx->initiator.urls[index].utf8_urls[i][0] = 0;
-        strcpy((char *)&ctx->initiator.urls[index].utf8_urls[i][0], urls[i]);
+        snprintf(
+            (char *)&ctx->initiator.urls[index].utf8_urls[i][0],
+            sizeof(ctx->initiator.urls[index].utf8_urls[i]), "%s", urls[i]);
     }
     ctx->initiator.urls[index].urls_cnt = urls_cnt;
 }
@@ -406,8 +408,8 @@ static void node_switch_acceptor_socket_event(
 {
     uint8_t *p_pdu;
     BSC_NODE_SWITCH_CTX *ctx;
-    BACNET_ERROR_CODE error;
-    BACNET_ERROR_CLASS class;
+    uint16_t error_class;
+    uint16_t error_code;
     const char *err_desc;
     bool res = true;
 
@@ -427,7 +429,8 @@ static void node_switch_acceptor_socket_event(
                 memcpy(p_pdu, pdu, pdu_len);
                 pdu_len = bvlc_sc_set_orig(&p_pdu, pdu_len, &c->vmac);
                 res = bvlc_sc_decode_message(
-                    p_pdu, pdu_len, decoded_pdu, &error, &class, &err_desc);
+                    p_pdu, pdu_len, decoded_pdu, &error_code, &error_class,
+                    &err_desc);
                 if (res) {
                     ctx->event_func(
                         BSC_NODE_SWITCH_EVENT_RECEIVED, ctx, ctx->user_arg,
@@ -718,8 +721,8 @@ static void node_switch_initiator_socket_event(
     uint8_t *p_pdu = NULL;
     BSC_NODE_SWITCH_CTX *ns;
     int elem;
-    BACNET_ERROR_CODE error;
-    BACNET_ERROR_CLASS class;
+    uint16_t error_class;
+    uint16_t error_code;
     const char *err_desc;
     bool res;
 
@@ -742,7 +745,8 @@ static void node_switch_initiator_socket_event(
                 memcpy(p_pdu, pdu, pdu_len);
                 pdu_len = bvlc_sc_set_orig(&p_pdu, pdu_len, &c->vmac);
                 res = bvlc_sc_decode_message(
-                    p_pdu, pdu_len, decoded_pdu, &error, &class, &err_desc);
+                    p_pdu, pdu_len, decoded_pdu, &error_code, &error_class,
+                    &err_desc);
                 if (res) {
                     ns->event_func(
                         BSC_NODE_SWITCH_EVENT_RECEIVED, ns, ns->user_arg, NULL,
