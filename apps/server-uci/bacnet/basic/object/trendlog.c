@@ -35,8 +35,6 @@
 #include "bacnet/basic/object/bacfile.h" /* object list dependency */
 #endif
 
-#define PRINTF debug_perror
-
 /* max number of COV properties decoded in a COV notification */
 #ifndef MAX_COV_PROPERTIES
 #define MAX_COV_PROPERTIES 8
@@ -281,7 +279,7 @@ static void uci_list(const char *sec_idx,
         PID = Keylist_Count(Object_List); PID++; PID = PID*2;
         pObject->max_apdu = 0;
         pObject->cov_data.covSubscribeToProperty = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "subscribetoproperty", ictx->Object.cov_data.covSubscribeToProperty);
-        pObject->cov_data.monitoredProperty.propertyIdentifier = PROP_PRESENT_VALUE;
+        pObject->cov_data.monitoredProperty.property_identifier = PROP_PRESENT_VALUE;
         pObject->cov_data.monitoredObjectIdentifier = pObject->Source.objectIdentifier;
         pObject->cov_data.subscriberProcessIdentifier = PID;
         pObject->cov_data.cancellationRequest = false;

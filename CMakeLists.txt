@@ -973,6 +973,8 @@ if(SERVER_UCI)
     src/bacnet/bacerror.h
     src/bacnet/bacint.c
     src/bacnet/bacint.h
+    src/bacnet/baclog.c
+    src/bacnet/baclog.h
     src/bacnet/bacprop.c
     src/bacnet/bacprop.h
     src/bacnet/bacpropstates.c
@@ -1021,6 +1023,8 @@ if(SERVER_UCI)
     src/bacnet/basic/binding/address.h
     src/bacnet/basic/npdu/h_npdu.c
     src/bacnet/basic/npdu/h_npdu.h
+    $<$<BOOL:${BAC_ROUTING}>:src/bacnet/basic/npdu/h_routed_npdu.c>
+    $<$<BOOL:${BAC_ROUTING}>:src/bacnet/basic/npdu/h_routed_npdu.h>
     src/bacnet/basic/npdu/s_router.c
     src/bacnet/basic/npdu/s_router.h
     src/bacnet/basic/object/bacfile.c
@@ -1145,6 +1149,8 @@ if(SERVER_UCI)
     src/bacnet/basic/service/s_uevent.h
     src/bacnet/basic/service/s_upt.c
     src/bacnet/basic/service/s_upt.h
+    src/bacnet/basic/service/s_whoami.c
+    src/bacnet/basic/service/s_whoami.h
     src/bacnet/basic/service/s_whohas.c
     src/bacnet/basic/service/s_whohas.h
     src/bacnet/basic/service/s_whois.c
@@ -1155,13 +1161,23 @@ if(SERVER_UCI)
     src/bacnet/basic/service/s_wpm.h
     src/bacnet/basic/service/s_write_group.c
     src/bacnet/basic/service/s_write_group.h
+    src/bacnet/basic/service/s_youare.c
+    src/bacnet/basic/service/s_youare.h
     src/bacnet/basic/services.h
     src/bacnet/basic/sys/bigend.c
     src/bacnet/basic/sys/bigend.h
+    src/bacnet/basic/sys/bramfs.c
+    src/bacnet/basic/sys/bramfs.h
+    src/bacnet/basic/sys/bsramfs.c
+    src/bacnet/basic/sys/bsramfs.h
+    src/bacnet/basic/sys/color_rgb.c
+    src/bacnet/basic/sys/color_rgb.h
     src/bacnet/basic/sys/days.c
     src/bacnet/basic/sys/days.h
     src/bacnet/basic/sys/debug.c
     src/bacnet/basic/sys/debug.h
+    src/bacnet/basic/sys/dst.c
+    src/bacnet/basic/sys/dst.h
     src/bacnet/basic/sys/fifo.c
     src/bacnet/basic/sys/fifo.h
     src/bacnet/basic/sys/filename.c
@@ -1171,6 +1187,8 @@ if(SERVER_UCI)
     src/bacnet/basic/sys/keylist.h
     src/bacnet/basic/sys/linear.c
     src/bacnet/basic/sys/linear.h
+    src/bacnet/basic/sys/lighting_command.c
+    src/bacnet/basic/sys/lighting_command.h
     src/bacnet/basic/sys/mstimer.c
     src/bacnet/basic/sys/mstimer.h
     src/bacnet/basic/sys/ringbuf.c
@@ -1194,15 +1212,15 @@ if(SERVER_UCI)
     src/bacnet/datalink/bacsec.c
     src/bacnet/datalink/bacsec.h
     src/bacnet/datalink/bip6.h
-    $<$<BOOL:${BACDL_BIP}>:src/bacnet/datalink/bip.h>
-    $<$<BOOL:${BACDL_BIP6}>:src/bacnet/datalink/bvlc6.c>
-    $<$<BOOL:${BACDL_BIP6}>:src/bacnet/datalink/bvlc6.h>
-    $<$<BOOL:${BACDL_BIP}>:src/bacnet/datalink/bvlc.h>
-    $<$<BOOL:${BACDL_BIP}>:src/bacnet/datalink/bvlc.c>
-    $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/crc.h>
-    $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/crc.c>
-    $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/cobs.h>
-    $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/cobs.c>
+    src/bacnet/datalink/bip.h
+    src/bacnet/datalink/bvlc6.c
+    src/bacnet/datalink/bvlc6.h
+    src/bacnet/datalink/bvlc.h
+    src/bacnet/datalink/bvlc.c
+    src/bacnet/datalink/crc.h
+    src/bacnet/datalink/crc.c
+    src/bacnet/datalink/cobs.h
+    src/bacnet/datalink/cobs.c
     src/bacnet/datalink/dlmstp.h
     src/bacnet/datalink/ethernet.h
     $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/mstp.c>
@@ -1256,11 +1274,15 @@ if(SERVER_UCI)
     src/bacnet/rp.h
     src/bacnet/rpm.c
     src/bacnet/rpm.h
+    src/bacnet/timer_value.c
+    src/bacnet/timer_value.h
     src/bacnet/timestamp.c
     src/bacnet/timestamp.h
     src/bacnet/timesync.c
     src/bacnet/timesync.h
     src/bacnet/version.h
+    src/bacnet/whoami.c
+    src/bacnet/whoami.h
     src/bacnet/whohas.c
     src/bacnet/whohas.h
     src/bacnet/whois.c
@@ -1271,6 +1293,9 @@ if(SERVER_UCI)
     src/bacnet/wpm.h
     src/bacnet/write_group.c
     src/bacnet/write_group.h
+    src/bacnet/youare.c
+    src/bacnet/youare.h
+    $<$<BOOL:${BAC_ROUTING}>:src/bacnet/basic/object/gateway/gw_device.c>
     src/bacnet/basic/ucix/ucix.c
     src/bacnet/basic/ucix/ucix.h
     apps/server-uci/main.c
@@ -1705,3 +1730,5 @@ message(STATUS "BACNET: BACDL_ARCNET:...................\"${BACDL_ARCNET}\"")
 message(STATUS "BACNET: BACDL_MSTP:.....................\"${BACDL_MSTP}\"")
 message(STATUS "BACNET: BACDL_ZIGBEE:...................\"${BACDL_ZIGBEE}\"")
 message(STATUS "BACNET: BACDL_ETHERNET:.................\"${BACDL_ETHERNET}\"")
+message(STATUS "BACNET: Selected optioss:")
+message(STATUS "BACNET: BAC_ROUTING:....................\"${BAC_ROUTING}\"")

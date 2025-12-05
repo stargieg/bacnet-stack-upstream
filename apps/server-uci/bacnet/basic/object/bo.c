@@ -30,6 +30,7 @@
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
@@ -39,11 +40,6 @@
 #endif
 /* me! */
 #include "bo.h"
-
-#include "bacnet/basic/sys/debug.h"
-#if !defined(PRINT)
-#define PRINT debug_perror
-#endif
 
 static const char *sec = "bacnet_bo";
 static const char *type = "bo";
@@ -2147,7 +2143,7 @@ void Binary_Output_Intrinsic_Reporting(
         }
 
         /* add data from notification class */
-        PRINT(
+        debug_printf(
             "Binary-Value[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
