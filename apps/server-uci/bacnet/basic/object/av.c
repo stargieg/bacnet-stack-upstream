@@ -49,6 +49,7 @@ struct object_data {
     uint8_t Reliability;
     const char *Object_Name;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State:3;
     uint32_t Time_Delay;
@@ -58,6 +59,7 @@ struct object_data {
     float Deadband;
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    bool Event_Detection_Enable:true;
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
@@ -90,6 +92,7 @@ struct object_data_t {
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
     unsigned Notify_Type:1;
+    bool Event_Detection_Enable:true;
 #endif /* INTRINSIC_REPORTING */
 };
 
@@ -103,7 +106,7 @@ static analog_value_write_present_value_callback
 
 /* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Analog_Value_Properties_Required[] = {
+static const int32_t Analog_Value_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME, PROP_OBJECT_TYPE,
     PROP_PRESENT_VALUE, PROP_STATUS_FLAGS, PROP_EVENT_STATE,
     PROP_OUT_OF_SERVICE, PROP_UNITS, PROP_PRIORITY_ARRAY,
@@ -114,18 +117,19 @@ static const int Analog_Value_Properties_Required[] = {
     -1
 };
 
-static const int Analog_Value_Properties_Optional[] = {
+static const int32_t Analog_Value_Properties_Optional[] = {
     PROP_DESCRIPTION, PROP_RELIABILITY, PROP_COV_INCREMENT,
     PROP_MIN_PRES_VALUE, PROP_MAX_PRES_VALUE, PROP_RESOLUTION,
 #if defined(INTRINSIC_REPORTING)
-    PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS, PROP_HIGH_LIMIT, PROP_LOW_LIMIT,
-    PROP_DEADBAND, PROP_LIMIT_ENABLE, PROP_EVENT_ENABLE, PROP_ACKED_TRANSITIONS,
-    PROP_NOTIFY_TYPE, PROP_EVENT_TIME_STAMPS,
+    PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS, PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT, PROP_DEADBAND, PROP_LIMIT_ENABLE, PROP_EVENT_ENABLE,
+    PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE, PROP_EVENT_TIME_STAMPS,
+    PROP_EVENT_DETECTION_ENABLE,
 #endif
     -1
 };
 
-static const int Analog_Value_Properties_Proprietary[] = {
+static const int32_t Analog_Value_Properties_Proprietary[] = {
     -1
 };
 
@@ -181,7 +185,9 @@ static int snprintf_res(char *value_c, int value_c_len, float resolution, float 
  * @param pProprietary - Pointer to the pointer of properitary values.
  */
 void Analog_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Analog_Value_Properties_Required;
@@ -450,6 +456,57 @@ unsigned Analog_Value_Event_State(uint32_t object_instance)
 }
 
 /**
+ * For a given object instance-number, gets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Value_Event_Detection_Enable(uint32_t object_instance)
+{
+    bool retval = false;
+#if !defined(INTRINSIC_REPORTING)
+    (void)object_instance;
+#else
+    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
+
+    if (pObject) {
+        retval = pObject->Event_Detection_Enable;
+    }
+#endif
+
+    return retval;
+}
+
+/**
+ * For a given object instance-number, sets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Value_Event_Detection_Enable_Set(
+    uint32_t object_instance, bool value)
+{
+    bool retval = false;
+#if !defined(INTRINSIC_REPORTING)
+    (void)object_instance;
+    (void)value;
+#else
+    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
+
+    if (pObject) {
+        pObject->Event_Detection_Enable = value;
+        retval = true;
+    }
+#endif
+
+    return retval;
+}
+
+/**
  * @brief For a given object instance-number, returns the description
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
@@ -525,20 +582,6 @@ static bool Analog_Value_Object_Fault(struct object_data *pObject)
 }
 
 /**
- * @brief For a given object instance-number, gets the Fault status flag
- * @param  object_instance - object-instance number of the object
- * @return  true the status flag is in Fault
- */
-static bool Analog_Value_Fault(uint32_t object_instance)
-{
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-
-    return Analog_Value_Object_Fault(pObject);
-}
-
-/**
  * @brief For a given object instance-number, sets the reliability
  * @param  object_instance - object-instance number of the object
  * @param  value - reliability property value
@@ -547,9 +590,9 @@ static bool Analog_Value_Fault(uint32_t object_instance)
 bool Analog_Value_Reliability_Set(
     uint32_t object_instance, BACNET_RELIABILITY value)
 {
-    struct object_data *pObject;
     bool status = false;
     bool fault = false;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -564,6 +607,20 @@ bool Analog_Value_Reliability_Set(
     }
 
     return status;
+}
+
+/**
+ * @brief For a given object instance-number, gets the Fault status flag
+ * @param  object_instance - object-instance number of the object
+ * @return  true the status flag is in Fault
+ */
+static bool Analog_Value_Fault(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+
+    return Analog_Value_Object_Fault(pObject);
 }
 
 /**
@@ -610,7 +667,7 @@ bool Analog_Value_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
 {
     bool status = false;
-    bool in_alarm = true;
+    bool in_alarm = false;
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
@@ -619,10 +676,12 @@ bool Analog_Value_Encode_Value_List(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (Analog_Value_Event_State(object_instance) == EVENT_STATE_NORMAL) 
-            in_alarm = false;
-        if (Analog_Value_Object_Fault(pObject))
+        if (Analog_Value_Event_State(object_instance) != EVENT_STATE_NORMAL) {
+            in_alarm = true;
+        }
+        if (Analog_Value_Object_Fault(pObject)) {
             fault = true;
+        }
         out_of_service = pObject->Out_Of_Service;
         present_value = pObject->Prior_Value;
         overridden = pObject->Overridden;
@@ -676,9 +735,9 @@ void Analog_Value_COV_Increment_Set(uint32_t object_instance, float value)
  *
  * @return  units property value
  */
-uint16_t Analog_Value_Units(uint32_t object_instance)
+BACNET_ENGINEERING_UNITS Analog_Value_Units(uint32_t object_instance)
 {
-    uint16_t units = UNITS_NO_UNITS;
+    BACNET_ENGINEERING_UNITS units = UNITS_NO_UNITS;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -697,7 +756,7 @@ uint16_t Analog_Value_Units(uint32_t object_instance)
  *
  * @return true if the units property value was set
  */
-bool Analog_Value_Units_Set(uint32_t object_instance, uint16_t units)
+bool Analog_Value_Units_Set(uint32_t object_instance, BACNET_ENGINEERING_UNITS units)
 {
     bool status = false;
     struct object_data *pObject;
@@ -959,7 +1018,7 @@ bool Analog_Value_Deadband_Set(uint32_t object_instance, float value)
  *
  * @return  Limit Enable value
  */
-uint8_t Analog_Value_Limit_Enable(uint32_t object_instance)
+BACNET_LIMIT_ENABLE Analog_Value_Limit_Enable(uint32_t object_instance)
 {
     uint8_t value = 0;
     struct object_data *pObject;
@@ -1066,9 +1125,9 @@ bool Analog_Value_Acked_Transitions(uint32_t object_instance, ACKED_INFO *value[
  *
  * @return  Notify Type value
  */
-uint8_t Analog_Value_Notify_Type(uint32_t object_instance)
+BACNET_NOTIFY_TYPE Analog_Value_Notify_Type(uint32_t object_instance)
 {
-    uint8_t value = 0;
+    BACNET_NOTIFY_TYPE value = 0;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -1087,7 +1146,7 @@ uint8_t Analog_Value_Notify_Type(uint32_t object_instance)
  *
  * @return true if the Notify Type value was set
  */
-bool Analog_Value_Notify_Type_Set(uint32_t object_instance, uint8_t value)
+bool Analog_Value_Notify_Type_Set(uint32_t object_instance, BACNET_NOTIFY_TYPE value)
 {
     bool status = false;
     struct object_data *pObject;
@@ -1547,14 +1606,17 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     int apdu_len = 0; /* return value */
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
-    uint8_t *apdu = NULL;
-    int apdu_size = 0;
-    uint32_t units = 0;
     float real_value = 0.0;
+    uint8_t *apdu = NULL;
+    BACNET_ENGINEERING_UNITS units = 0;
     unsigned i = 0;
     bool state = false;
 #if defined(INTRINSIC_REPORTING)
+    int apdu_size = 0;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
+#else
+    // for PROP_PRIORITY_ARRAY
+    int apdu_size = 0;
 #endif
 
     /* Valid data? */
@@ -1568,6 +1630,9 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     apdu = rpdata->application_data;
 #if defined(INTRINSIC_REPORTING)
     apdu_size = rpdata->application_data_len;
+#else
+    // for PROP_PRIORITY_ARRAY
+    apdu_size = rpdata->application_data_len;
 #endif
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
@@ -1577,8 +1642,8 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_OBJECT_NAME:
             if (Analog_Value_Object_Name(
                     rpdata->object_instance, &char_string)) {
-            apdu_len =
-                encode_application_character_string(&apdu[0], &char_string);
+                apdu_len =
+                    encode_application_character_string(&apdu[0], &char_string);
             }
             break;
         case PROP_OBJECT_TYPE:
@@ -1602,16 +1667,11 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &bit_string, STATUS_FLAG_IN_ALARM,
                 Analog_Value_Event_State(rpdata->object_instance) != EVENT_STATE_NORMAL);
             state = Analog_Value_Fault(rpdata->object_instance);
-            bitstring_set_bit(
-                &bit_string, STATUS_FLAG_FAULT,
-                state);
+            bitstring_set_bit(&bit_string, STATUS_FLAG_FAULT, state);
             state = Analog_Value_Overridden(rpdata->object_instance);
-            bitstring_set_bit(
-                &bit_string, STATUS_FLAG_OVERRIDDEN, state);
+            bitstring_set_bit(&bit_string, STATUS_FLAG_OVERRIDDEN, state);
             state = Analog_Value_Out_Of_Service(rpdata->object_instance);
-            bitstring_set_bit(
-                &bit_string, STATUS_FLAG_OUT_OF_SERVICE,
-                state);
+            bitstring_set_bit(&bit_string, STATUS_FLAG_OUT_OF_SERVICE, state);
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
         case PROP_EVENT_STATE:
@@ -1625,7 +1685,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
         case PROP_RELIABILITY:
             apdu_len =
-            encode_application_enumerated(&apdu[0], Analog_Value_Reliability(rpdata->object_instance));
+                encode_application_enumerated(&apdu[0], Analog_Value_Reliability(rpdata->object_instance));
             break;
         case PROP_OUT_OF_SERVICE:
             state = Analog_Value_Out_Of_Service(rpdata->object_instance);
@@ -1663,7 +1723,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 encode_application_character_string(&apdu[0], &char_string);
             break;
         case PROP_COV_INCREMENT:
-            apdu_len = 
+            apdu_len =
                 encode_application_real(&apdu[0], Analog_Value_COV_Increment(rpdata->object_instance));
             break;
         case PROP_RESOLUTION:
@@ -1686,28 +1746,23 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len =
                 encode_application_unsigned(&apdu[0], i);
             break;
-
         case PROP_NOTIFICATION_CLASS:
             i = Analog_Value_Notification_Class(rpdata->object_instance);
             apdu_len = encode_application_unsigned(
                 &apdu[0], i);
             break;
-
         case PROP_HIGH_LIMIT:
             real_value = Analog_Value_High_Limit(rpdata->object_instance);
             apdu_len = encode_application_real(&apdu[0], real_value);
             break;
-
         case PROP_LOW_LIMIT:
             real_value = Analog_Value_Low_Limit(rpdata->object_instance);
             apdu_len = encode_application_real(&apdu[0], real_value);
             break;
-
         case PROP_DEADBAND:
             real_value = Analog_Value_Deadband(rpdata->object_instance);
             apdu_len = encode_application_real(&apdu[0], real_value);
             break;
-
         case PROP_LIMIT_ENABLE:
             i = Analog_Value_Limit_Enable(rpdata->object_instance);
             bitstring_init(&bit_string);
@@ -1738,6 +1793,11 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                              : false);
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
+        case PROP_EVENT_DETECTION_ENABLE:
+            state = Analog_Value_Event_Detection_Enable(rpdata->object_instance);
+            apdu_len = encode_application_boolean(
+                &apdu[0], state );
+            break;
         case PROP_ACKED_TRANSITIONS:
             state = Analog_Value_Acked_Transitions(rpdata->object_instance, ack_info);
             bitstring_init(&bit_string);
@@ -1763,8 +1823,8 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 Analog_Value_Event_Time_Stamps_Encode,
                 MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
-                        rpdata->error_code =
-                            ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
             } else if (apdu_len == BACNET_STATUS_ERROR) {
                 rpdata->error_class = ERROR_CLASS_PROPERTY;
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
@@ -1800,7 +1860,7 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
@@ -1883,6 +1943,37 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data->object_instance, value.type.Boolean);
             }
             break;
+        case PROP_UNITS:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
+            if (status) {
+                if (Analog_Value_Units_Set(
+                    wp_data->object_instance, value.type.Enumerated)) {
+                    ucix_add_option_int(ctxw, sec, idx_c, "units",
+                        Analog_Value_Units(wp_data->object_instance));
+                    ucix_commit(ctxw,sec);
+                } else {
+                    status = false;
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                }
+            }
+            break;
+        case PROP_COV_INCREMENT:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_REAL);
+            if (status) {
+                Analog_Value_COV_Increment_Set(wp_data->object_instance,
+                value.type.Real);
+                value_f = Analog_Value_COV_Increment(wp_data->object_instance);
+                value_c_len = snprintf_res(NULL, 0, resolution, value_f);
+                value_c = malloc(value_c_len + 1);
+                snprintf_res(value_c, value_c_len + 1, resolution, value_f);
+                ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
+                ucix_commit(ctxw,sec);
+                free(value_c);
+            }
+            break;
         case PROP_OBJECT_IDENTIFIER:
         case PROP_OBJECT_TYPE:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
@@ -1904,33 +1995,6 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         case PROP_EVENT_STATE:
             wp_data->error_class = ERROR_CLASS_PROPERTY;
             wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-            break;
-        case PROP_UNITS:
-            status = write_property_type_valid(
-                wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
-            if (status) {
-                if (Analog_Value_Units_Set(
-                    wp_data->object_instance, value.type.Enumerated)) {
-                    ucix_add_option_int(ctxw, sec, idx_c, "units",
-                        Analog_Value_Units(wp_data->object_instance));
-                    ucix_commit(ctxw,sec);
-                }
-            }
-            break;
-        case PROP_COV_INCREMENT:
-            status = write_property_type_valid(
-                wp_data, &value, BACNET_APPLICATION_TAG_REAL);
-            if (status) {
-                Analog_Value_COV_Increment_Set(wp_data->object_instance,
-                value.type.Real);
-                value_f = Analog_Value_COV_Increment(wp_data->object_instance);
-                value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                value_c = malloc(value_c_len + 1);
-                snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
-                ucix_commit(ctxw,sec);
-                free(value_c);
-            }
             break;
         case PROP_RELIABILITY:
             status = write_property_type_valid(wp_data, &value,
@@ -2140,8 +2204,8 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else {
-            wp_data->error_class = ERROR_CLASS_PROPERTY;
-            wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             }
             break;
     }
@@ -2179,26 +2243,28 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
     bool SendNotify = false;
 
     pObject = Keylist_Data(Object_List, object_instance);
-
-    if (!pObject)
+    if (!pObject) {
         return;
+    }
+
+    /* check whether Intrinsic reporting is enabled */
+    if (!pObject->Event_Detection_Enable) {
+        return; /* limits are not configured */
+    }
 
     /* check limits */
-    if (!pObject->Limit_Enable)
+    if (!pObject->Limit_Enable){
         return; /* limits are not configured */
-
+    }
 
     if (pObject->Ack_notify_data.bSendAckNotify) {
         /* clean bSendAckNotify flag */
         pObject->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
-
-#if PRINT_ENABLED
-        fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(Object_Type), object_instance);
-#endif /* PRINT_ENABLED */
-
+        debug_printf(
+            "Send Acknotification for (%s,%u).\n",
+            bactext_object_type_name(Object_Type), (unsigned)object_instance);
         characterstring_init_ansi(&msgText, "AckNotification");
 
         /* Notify Type */
@@ -2221,9 +2287,9 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                    property. */
                 if ((PresentVal > pObject->High_Limit) &&
                     ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
-                        EVENT_HIGH_LIMIT_ENABLE) &&
+                     EVENT_HIGH_LIMIT_ENABLE) &&
                     ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                        EVENT_ENABLE_TO_OFFNORMAL)) {
+                     EVENT_ENABLE_TO_OFFNORMAL)) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_HIGH_LIMIT;
                     } else {
@@ -2241,9 +2307,9 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                    property. */
                 if ((PresentVal < pObject->Low_Limit) &&
                     ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
-                        EVENT_LOW_LIMIT_ENABLE) &&
+                     EVENT_LOW_LIMIT_ENABLE) &&
                     ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                        EVENT_ENABLE_TO_OFFNORMAL)) {
+                     EVENT_ENABLE_TO_OFFNORMAL)) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_LOW_LIMIT;
                     } else {
@@ -2265,11 +2331,11 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                    property, and (c) the TO-NORMAL flag must be set in the
                    Event_Enable property. */
                 if (((PresentVal <
-                    pObject->High_Limit - pObject->Deadband) &&
-                    ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
-                        EVENT_HIGH_LIMIT_ENABLE) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                        EVENT_ENABLE_TO_NORMAL))  ||
+                      pObject->High_Limit - pObject->Deadband) &&
+                     ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
+                      EVENT_HIGH_LIMIT_ENABLE) &&
+                     ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                      EVENT_ENABLE_TO_NORMAL)) ||
                     /* 13.3.6 (c) If pCurrentState is HIGH_LIMIT, and the
                      * HighLimitEnable flag of pLimitEnable is FALSE, then
                      * indicate a transition to the NORMAL event state. */
@@ -2300,7 +2366,7 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                 if (((PresentVal >
                       pObject->Low_Limit + pObject->Deadband) &&
                      ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
-                        EVENT_LOW_LIMIT_ENABLE) &&
+                      EVENT_LOW_LIMIT_ENABLE) &&
                      ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
                       EVENT_ENABLE_TO_NORMAL)) ||
                     /* 13.3.6 (f) If pCurrentState is LOW_LIMIT, and the
@@ -2321,7 +2387,7 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
 
             default:
                 return; /* shouldn't happen */
-        }       /* switch (FromState) */
+        } /* switch (FromState) */
 
         ToState = pObject->Event_State;
 
@@ -2398,7 +2464,7 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                     break;
                 default:
                     break;
-        }
+            }
         } else {
             /* fill event_data timeStamp */
             switch (ToState) {
@@ -2435,8 +2501,9 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* filled before */
 
         /* From State */
-        if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION)
+        if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
             event_data.fromState = FromState;
+        }
 
         /* To State */
         event_data.toState = pObject->Event_State;
@@ -2493,22 +2560,22 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                 case EVENT_STATE_OFFNORMAL:
                 case EVENT_STATE_HIGH_LIMIT:
                 case EVENT_STATE_LOW_LIMIT:
-                    pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].
-                        bIsAcked = false;
-                    pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].
-                        Time_Stamp = event_data.timeStamp.value.dateTime;
+                    pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]
+                        .bIsAcked = false;
+                    pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]
+                        .Time_Stamp = event_data.timeStamp.value.dateTime;
                     break;
                 case EVENT_STATE_FAULT:
-                    pObject->Acked_Transitions[TRANSITION_TO_FAULT].
-                        bIsAcked = false;
-                    pObject->Acked_Transitions[TRANSITION_TO_FAULT].
-                        Time_Stamp = event_data.timeStamp.value.dateTime;
+                    pObject->Acked_Transitions[TRANSITION_TO_FAULT].bIsAcked =
+                        false;
+                    pObject->Acked_Transitions[TRANSITION_TO_FAULT]
+                        .Time_Stamp = event_data.timeStamp.value.dateTime;
                     break;
                 case EVENT_STATE_NORMAL:
-                    pObject->Acked_Transitions[TRANSITION_TO_NORMAL].
-                        bIsAcked = false;
-                    pObject->Acked_Transitions[TRANSITION_TO_NORMAL].
-                        Time_Stamp = event_data.timeStamp.value.dateTime;
+                    pObject->Acked_Transitions[TRANSITION_TO_NORMAL]
+                        .bIsAcked = false;
+                    pObject->Acked_Transitions[TRANSITION_TO_NORMAL]
+                        .Time_Stamp = event_data.timeStamp.value.dateTime;
                     break;
                 default: /* shouldn't happen */
                     break;
@@ -2544,11 +2611,11 @@ int Analog_Value_Event_Information(
            (TO-OFFNORMAL, TO-FAULT, TONORMAL) set to FALSE. */
         IsNotAckedTransitions =
             (pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].bIsAcked ==
-            false) |
+             false) ||
             (pObject->Acked_Transitions[TRANSITION_TO_FAULT].bIsAcked ==
-            false) |
+             false) ||
             (pObject->Acked_Transitions[TRANSITION_TO_NORMAL].bIsAcked ==
-            false);
+             false);
     } else {
         return -1; /* end of list  */
     }
@@ -2596,7 +2663,7 @@ int Analog_Value_Event_Information(
         return 1; /* active event */
     } else {
         return 0; /* no active event at this index */
-}
+    }
 }
 
 /**
@@ -2609,7 +2676,8 @@ int Analog_Value_Alarm_Ack(
     BACNET_ALARM_ACK_DATA *alarmack_data, BACNET_ERROR_CODE *error_code)
 {
     struct object_data *pObject;
-     if (!alarmack_data) {
+
+    if (!alarmack_data) {
         return -1;
     }
     pObject =
@@ -2622,21 +2690,21 @@ int Analog_Value_Alarm_Ack(
         case EVENT_STATE_OFFNORMAL:
         case EVENT_STATE_HIGH_LIMIT:
         case EVENT_STATE_LOW_LIMIT:
-            if (pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].
-                bIsAcked == false) {
+            if (pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]
+                    .bIsAcked == false) {
                 if (alarmack_data->eventTimeStamp.tag != TIME_STAMP_DATETIME) {
                     *error_code = ERROR_CODE_INVALID_TIME_STAMP;
                     return -1;
                 }
                 if (datetime_compare(
                         &pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]
-                            .Time_Stamp,
+                             .Time_Stamp,
                         &alarmack_data->eventTimeStamp.value.dateTime) > 0) {
                     *error_code = ERROR_CODE_INVALID_TIME_STAMP;
                     return -1;
                 }
                 /* Clean transitions flag. */
-                pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].bIsAcked = 
+                pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].bIsAcked =
                     true;
             } else if (
                 alarmack_data->eventStateAcked == pObject->Event_State) {
@@ -2655,9 +2723,9 @@ int Analog_Value_Alarm_Ack(
                     return -1;
                 }
                 if (datetime_compare(
-                    &pObject-> Acked_Transitions[TRANSITION_TO_FAULT]
-                        .Time_Stamp,
-                    &alarmack_data->eventTimeStamp.value.dateTime) > 0) {
+                        &pObject-> Acked_Transitions[TRANSITION_TO_FAULT]
+                             .Time_Stamp,
+                        &alarmack_data->eventTimeStamp.value.dateTime) > 0) {
                     *error_code = ERROR_CODE_INVALID_TIME_STAMP;
                     return -1;
                 }
@@ -2681,7 +2749,8 @@ int Analog_Value_Alarm_Ack(
                     return -1;
                 }
                 if (datetime_compare(
-                    &pObject->Acked_Transitions[TRANSITION_TO_NORMAL].Time_Stamp,
+                        &pObject->Acked_Transitions[TRANSITION_TO_NORMAL]
+                             .Time_Stamp,
                         &alarmack_data->eventTimeStamp.value.dateTime) > 0) {
                     *error_code = ERROR_CODE_INVALID_TIME_STAMP;
                     return -1;
@@ -2757,6 +2826,38 @@ int Analog_Value_Alarm_Summary(
 #endif /* defined(INTRINSIC_REPORTING) */
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Analog_Value_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Analog_Value_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates a Analog Value object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -2770,6 +2871,9 @@ uint32_t Analog_Value_Create(uint32_t object_instance)
     unsigned j;
 #endif
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {

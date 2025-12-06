@@ -39,7 +39,9 @@ extern "C" {
 #endif /* __cplusplus */
 BACNET_STACK_EXPORT
 void Analog_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 BACNET_STACK_EXPORT
 bool Analog_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -62,6 +64,10 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 
 BACNET_STACK_EXPORT
 bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+
+BACNET_STACK_EXPORT
+void Analog_Value_Write_Present_Value_Callback_Set(
+    analog_value_write_present_value_callback cb);
 
 BACNET_STACK_EXPORT
 bool Analog_Value_Present_Value_Set(
@@ -98,9 +104,9 @@ bool Analog_Value_Reliability_Set(
     uint32_t object_instance, BACNET_RELIABILITY value);
 
 BACNET_STACK_EXPORT
-uint16_t Analog_Value_Units(uint32_t instance);
+BACNET_ENGINEERING_UNITS Analog_Value_Units(uint32_t instance);
 BACNET_STACK_EXPORT
-bool Analog_Value_Units_Set(uint32_t instance, uint16_t unit);
+bool Analog_Value_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS unit);
 
 BACNET_STACK_EXPORT
 bool Analog_Value_Out_Of_Service(uint32_t instance);
@@ -138,47 +144,73 @@ BACNET_STACK_EXPORT
 bool Analog_Value_Max_Pres_Value_Set(uint32_t object_instance, float value);
 
 /* note: header of Intrinsic_Reporting function is required
-    even when INTRINSIC_REPORTING is not defined */
+   even when INTRINSIC_REPORTING is not defined */
 BACNET_STACK_EXPORT
 void Analog_Value_Intrinsic_Reporting(uint32_t object_instance);
 
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
 uint32_t Analog_Value_Time_Delay(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
 bool Analog_Value_Time_Delay_Set(uint32_t object_instance, uint32_t value);
+
 BACNET_STACK_EXPORT
 uint32_t Analog_Value_Notification_Class(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
-bool Analog_Value_Notification_Class_Set(uint32_t object_instance, uint32_t value);
+bool Analog_Value_Notification_Class_Set(
+    uint32_t object_instance, uint32_t value);
+
 BACNET_STACK_EXPORT
 float Analog_Value_High_Limit(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
 bool Analog_Value_High_Limit_Set(uint32_t object_instance, float value);
+
 BACNET_STACK_EXPORT
 float Analog_Value_Low_Limit(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
 bool Analog_Value_Low_Limit_Set(uint32_t object_instance, float value);
+
 BACNET_STACK_EXPORT
 float Analog_Value_Deadband(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
 bool Analog_Value_Deadband_Set(uint32_t object_instance, float value);
+
 BACNET_STACK_EXPORT
-uint8_t Analog_Value_Limit_Enable(uint32_t object_instance);
+BACNET_LIMIT_ENABLE Analog_Value_Limit_Enable(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
-bool Analog_Value_Limit_Enable_Set(uint32_t object_instance, uint8_t value);
+bool Analog_Value_Limit_Enable_Set(
+    uint32_t object_instance, uint8_t value);
+
 BACNET_STACK_EXPORT
 uint8_t Analog_Value_Event_Enable(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
-bool Analog_Value_Event_Enable_Set(uint32_t object_instance, uint8_t value);
+bool Analog_Value_Event_Enable_Set(
+    uint32_t object_instance, uint8_t value);
+
 BACNET_STACK_EXPORT
 bool Analog_Value_Acked_Transitions(uint32_t object_instance, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
+
 BACNET_STACK_EXPORT
-uint8_t Analog_Value_Notify_Type(uint32_t object_instance);
+bool Analog_Value_Event_Detection_Enable_Set(
+    uint32_t object_instance, bool value);
+
 BACNET_STACK_EXPORT
-bool Analog_Value_Notify_Type_Set(uint32_t object_instance, uint8_t value);
+BACNET_NOTIFY_TYPE Analog_Value_Notify_Type(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
-bool Analog_Value_Event_Time_Stamps(uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION]);
+bool Analog_Value_Notify_Type_Set(
+    uint32_t object_instance, BACNET_NOTIFY_TYPE value);
+
+BACNET_STACK_EXPORT
+bool Analog_Value_Event_Time_Stamps(
+    uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION]);
 
 BACNET_STACK_EXPORT
 int Analog_Value_Event_Information(
@@ -192,6 +224,11 @@ BACNET_STACK_EXPORT
 int Analog_Value_Alarm_Summary(
     unsigned index, BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
 #endif
+
+BACNET_STACK_EXPORT
+void *Analog_Value_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Analog_Value_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Analog_Value_Create(uint32_t object_instance);
