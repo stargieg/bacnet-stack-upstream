@@ -55,10 +55,12 @@ struct object_data {
     const char *Active_Text;
     const char *Inactive_Text;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING)
     uint32_t Time_Delay;
     uint32_t Notification_Class;
     unsigned Event_Enable : 3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
@@ -87,6 +89,7 @@ struct object_data_t {
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
     unsigned Notify_Type:1;
+    bool Event_Detection_Enable:1;
 #endif /* INTRINSIC_REPORTING */
 };
 
@@ -98,18 +101,12 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_BINARY_INPUT;
 static binary_input_write_present_value_callback
     Binary_Input_Write_Present_Value_Callback;
 
-/* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Properties_Required[] = {
-    PROP_OBJECT_IDENTIFIER,
-    PROP_OBJECT_NAME,
-    PROP_OBJECT_TYPE,
-    PROP_PRESENT_VALUE,
-    PROP_STATUS_FLAGS,
-    PROP_EVENT_STATE,
-    PROP_OUT_OF_SERVICE,
-    PROP_POLARITY,
-    PROP_PRIORITY_ARRAY,
+static const int32_t Properties_Required[] = {
+    /* unordered list of required properties */
+    PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,  PROP_OBJECT_TYPE,
+    PROP_PRESENT_VALUE,     PROP_STATUS_FLAGS, PROP_EVENT_STATE,
+    PROP_OUT_OF_SERVICE,    PROP_POLARITY,     PROP_PRIORITY_ARRAY,
     PROP_RELINQUISH_DEFAULT,
 #if (BACNET_PROTOCOL_REVISION >= 17)
     PROP_CURRENT_COMMAND_PRIORITY,
@@ -117,7 +114,8 @@ static const int Properties_Required[] = {
     -1
 };
 
-static const int Properties_Optional[] = {
+static const int32_t Properties_Optional[] = {
+    /* unordered list of optional properties */
     PROP_RELIABILITY,
     PROP_DESCRIPTION,
     PROP_ACTIVE_TEXT,
@@ -135,8 +133,7 @@ static const int Properties_Optional[] = {
     -1
 };
 
-static const int Properties_Proprietary[] = { -1 };
-/* clang-format on */
+static const int32_t Properties_Proprietary[] = { -1 };
 
 /**
  * Initialize the pointers for the required, the optional and the properitary
@@ -147,7 +144,9 @@ static const int Properties_Proprietary[] = { -1 };
  * @param pProprietary - Pointer to the pointer of properitary values.
  */
 void Binary_Input_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Properties_Required;
@@ -307,7 +306,7 @@ static int Binary_Input_Priority_Array_Encode(
 /**
  * @brief For a given object instance-number, checks the present-value for COV
  * @param  pObject - specific object with valid data
- * @param  value - floating point analog value
+ * @param  value - binary value
  */
 static void Binary_Input_Present_Value_COV_Detect(
     struct object_data *pObject, BACNET_BINARY_PV value)
@@ -491,7 +490,7 @@ bool Binary_Input_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
 {
     bool status = false;
-    bool in_alarm = true;
+    bool in_alarm = false;
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
@@ -500,8 +499,8 @@ bool Binary_Input_Encode_Value_List(
 
     pObject = Binary_Input_Object(object_instance);
     if (pObject) {
-        if (Binary_Input_Event_State(object_instance) == EVENT_STATE_NORMAL) {
-            in_alarm = false;
+        if (Binary_Input_Event_State(object_instance) != EVENT_STATE_NORMAL) {
+            in_alarm = true;
         }
         fault = Binary_Input_Object_Fault(pObject);
         out_of_service = pObject->Out_Of_Service;
@@ -545,7 +544,7 @@ bool Binary_Input_Present_Value_Set(
  * For a given object instance-number, sets the present-value
  *
  * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog value
+ * @param  value - binary present-value
  * @param  priority - priority-array index value 1..16
  * @param  error_class - the BACnet error class
  * @param  error_code - BACnet Error code
@@ -885,7 +884,7 @@ BACNET_BINARY_PV Binary_Input_Relinquish_Default(uint32_t object_instance)
  * property value
  *
  * @param object_instance - object-instance number of the object
- * @param value - floating point relinquish-default value
+ * @param value - binary relinquish-default value
  *
  * @return true if the relinquish-default property value was set
  */
@@ -1095,9 +1094,12 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_POLARITY polarity = POLARITY_NORMAL;
     unsigned i = 0;
     bool state = false;
-    int apdu_size = 0;
 #if defined(INTRINSIC_REPORTING)
+    int apdu_size = 0;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
+#else
+    // for PROP_PRIORITY_ARRAY
+    int apdu_size = 0;
 #endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
@@ -1105,7 +1107,12 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
+#if defined(INTRINSIC_REPORTING)
     apdu_size = rpdata->application_data_len;
+#else
+    // for PROP_PRIORITY_ARRAY
+    apdu_size = rpdata->application_data_len;
+#endif
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -1129,8 +1136,9 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_STATUS_FLAGS:
             /* note: see the details in the standard on how to use these */
             bitstring_init(&bit_string);
-            bitstring_set_bit(&bit_string, STATUS_FLAG_IN_ALARM,
-            Binary_Input_Event_State(rpdata->object_instance) !=
+            bitstring_set_bit(
+                &bit_string, STATUS_FLAG_IN_ALARM,
+                Binary_Input_Event_State(rpdata->object_instance) !=
                     EVENT_STATE_NORMAL);
             state = Binary_Input_Fault(rpdata->object_instance);
             bitstring_set_bit(&bit_string, STATUS_FLAG_FAULT, state);
@@ -1205,8 +1213,10 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #if defined(INTRINSIC_REPORTING)
         case PROP_ALARM_VALUE:
             /* note: you need to look up the actual value */
-            present_value = Binary_Input_Alarm_Value(rpdata->object_instance);
-            apdu_len = encode_application_boolean(&apdu[0], present_value);
+            present_value =
+                Binary_Input_Alarm_Value(rpdata->object_instance);
+            apdu_len =
+                encode_application_boolean(&apdu[0], present_value);
             break;
         case PROP_TIME_DELAY:
             i = Binary_Input_Time_Delay(rpdata->object_instance);
@@ -1229,8 +1239,7 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                                 : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_FAULT,
-                (i & EVENT_ENABLE_TO_FAULT) ? true
-                                            : false);
+                (i & EVENT_ENABLE_TO_FAULT) ? true : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_NORMAL,
                 (i & EVENT_ENABLE_TO_NORMAL) ? true
@@ -1319,7 +1328,7 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
@@ -1434,13 +1443,18 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
         case PROP_POLARITY:
             status = write_property_type_valid(
-                wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
+                wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
                 if (Binary_Input_Polarity_Set(
-                    wp_data->object_instance, value.type.Boolean)) {
+                    wp_data->object_instance,
+                    (BACNET_POLARITY)value.type.Enumerated)) {
                     ucix_add_option_int(ctxw, sec, idx_c, "polarity",
                         Binary_Input_Polarity(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
+                } else {
+                    status = false;
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                 }
             }
             break;
@@ -1517,6 +1531,10 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "alarm_value", value_b);
                     ucix_commit(ctxw,sec);
                     free(value_c);
+                } else {
+                    status = false;
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                 }
             }
             break;
@@ -1530,6 +1548,10 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "event",
                         Binary_Input_Event_Enable(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
+                } else {
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                    status = false;
                 }
             }
             break;
@@ -1543,7 +1565,11 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "notify_type",
                         Binary_Input_Notify_Type(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
-                    }
+                } else {
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                    status = false;
+                }
             }
             break;
 #endif
@@ -1554,8 +1580,8 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else {
-            wp_data->error_class = ERROR_CLASS_PROPERTY;
-            wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             }
             break;
     }
@@ -1620,6 +1646,38 @@ void Binary_Input_Write_Disable(uint32_t object_instance)
 }
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Binary_Input_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Binary_Input_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * Creates a Binary Input object
  * @param object_instance - object-instance number of the object
  */
@@ -1629,6 +1687,9 @@ uint32_t Binary_Input_Create(uint32_t object_instance)
     int index = 0;
     unsigned priority = 0;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {
@@ -1661,6 +1722,7 @@ uint32_t Binary_Input_Create(uint32_t object_instance)
             pObject->Polarity = false;
 #if defined(INTRINSIC_REPORTING)
             pObject->Event_State = EVENT_STATE_NORMAL;
+            pObject->Event_Detection_Enable = true;
             pObject->Event_Enable = true;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
@@ -1801,11 +1863,14 @@ static void uci_list(const char *sec_idx,
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = true;
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
     pObject->Alarm_Value = value_b;
 
     pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
+
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -1868,6 +1933,7 @@ void Binary_Input_Init(void)
         tObject.Alarm_Value = strndup(option,option_str.length);
     else
         tObject.Alarm_Value = "0";
+    tObject.Event_Detection_Enable = true;
 #endif
     itr_m.section = sec;
     itr_m.ctx = ctx;
