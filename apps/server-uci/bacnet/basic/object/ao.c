@@ -69,6 +69,7 @@ struct object_data {
     float Deadband;
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
@@ -100,6 +101,7 @@ struct object_data_t {
     const char *Deadband;
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
 #endif /* INTRINSIC_REPORTING */
 };
@@ -2989,6 +2991,7 @@ static void uci_list(const char *sec_idx,
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable);
     option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "high_limit");
@@ -3080,6 +3083,7 @@ void Analog_Output_Init(void)
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
     tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0);
     option = ucix_get_option(ctx, sec, "default", "high_limit");

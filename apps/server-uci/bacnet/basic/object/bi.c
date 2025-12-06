@@ -88,8 +88,8 @@ struct object_data_t {
     const char *Alarm_Value;
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
-    bool Event_Detection_Enable:1;
 #endif /* INTRINSIC_REPORTING */
 };
 
@@ -1863,14 +1863,12 @@ static void uci_list(const char *sec_idx,
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
-    pObject->Event_Detection_Enable = true;
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
     pObject->Alarm_Value = value_b;
 
     pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
-
-    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -1927,13 +1925,13 @@ void Binary_Input_Init(void)
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
     tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     option = ucix_get_option(ctx, sec, "default", "alarm_value");
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.Alarm_Value = strndup(option,option_str.length);
     else
         tObject.Alarm_Value = "0";
-    tObject.Event_Detection_Enable = true;
 #endif
     itr_m.section = sec;
     itr_m.ctx = ctx;
