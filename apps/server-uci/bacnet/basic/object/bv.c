@@ -21,6 +21,8 @@
 #include "bacnet/wp.h"
 #include "bacnet/rp.h"
 #include "bacnet/cov.h"
+#include "bacnet/proplist.h"
+/* basic objects and services */
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/sys/keylist.h"
@@ -56,16 +58,18 @@ struct object_data {
     const char *Active_Text;
     const char *Inactive_Text;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING)
     uint32_t Time_Delay;
     uint32_t Notification_Class;
     unsigned Event_Enable : 3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
     /* time to generate event notification */
     uint32_t Remaining_Time_Delay;
-    /* AckNotification informations */
+    /* AckNotification information */
     ACK_NOTIFICATION Ack_notify_data;
     BACNET_BINARY_PV Alarm_Value;
 #endif
@@ -87,6 +91,7 @@ struct object_data_t {
     const char *Alarm_Value;
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
 #endif /* INTRINSIC_REPORTING */
 };
@@ -101,7 +106,7 @@ static binary_value_write_present_value_callback
 
 /* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Binary_Value_Properties_Required[] = {
+static const int32_t Binary_Value_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,
@@ -118,7 +123,7 @@ static const int Binary_Value_Properties_Required[] = {
     -1
 };
 
-static const int Binary_Value_Properties_Optional[] = {
+static const int32_t Binary_Value_Properties_Optional[] = {
     PROP_DESCRIPTION,
     PROP_RELIABILITY,
     PROP_ACTIVE_TEXT,
@@ -136,7 +141,7 @@ static const int Binary_Value_Properties_Optional[] = {
     -1
 };
 
-static const int Binary_Value_Properties_Proprietary[] = {
+static const int32_t Binary_Value_Properties_Proprietary[] = {
     -1
 };
 /* clang-format on */
@@ -150,7 +155,9 @@ static const int Binary_Value_Properties_Proprietary[] = {
  * @param pProprietary - Pointer to the pointer of properitary values.
  */
 void Binary_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Binary_Value_Properties_Required;
@@ -370,24 +377,6 @@ static BACNET_POLARITY Binary_Polarity(bool value)
 
     return polarity;
 }
-
-#if 0
-/**
- * @brief Convert from BACNET_POLARITY enumeration to boolean
- * @param binary_value BACNET_POLARITY enumeration
- * @return boolean value
- */
-static bool Binary_Polarity_Boolean(BACNET_POLARITY polarity)
-{
-    bool boolean_value = false;
-
-    if (polarity == POLARITY_REVERSE) {
-        boolean_value = true;
-    }
-
-    return boolean_value;
-}
-#endif
 
 /**
  * For a given object instance-number, return the present value.
@@ -733,7 +722,7 @@ bool Binary_Value_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list)
 {
     bool status = false;
-    bool in_alarm = true;
+    bool in_alarm = false;
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
@@ -742,16 +731,16 @@ bool Binary_Value_Encode_Value_List(
 
     pObject = Binary_Value_Object(object_instance);
     if (pObject) {
-        if (Binary_Value_Event_State(object_instance) == EVENT_STATE_NORMAL) {
-            in_alarm = false;
+        if (Binary_Value_Event_State(object_instance) != EVENT_STATE_NORMAL) {
+            in_alarm = true;
         }
         fault = Binary_Value_Object_Fault(pObject);
         overridden = pObject->Overridden;
         present_value = pObject->Prior_Value;
         out_of_service = pObject->Out_Of_Service;
         status = cov_value_list_encode_enumerated(
-                value_list, present_value, in_alarm, fault, overridden,
-                out_of_service);
+            value_list, present_value, in_alarm, fault, overridden,
+            out_of_service);
     }
 
     return status;
@@ -788,7 +777,7 @@ bool Binary_Value_Present_Value_Set(
  * For a given object instance-number, sets the present-value
  *
  * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog value
+ * @param  value - binary value
  * @param  priority - priority-array index value 1..16
  * @param  error_class - the BACnet error class
  * @param  error_code - BACnet Error code
@@ -844,6 +833,42 @@ static bool Binary_Value_Present_Value_Write(
 }
 
 /**
+ * For a given object instance-number, sets the out-of-service flag if writable
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - binary value
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ *
+ * @return  true if flag is set, false if errors occurred
+ */
+static bool Binary_Value_Out_Of_Service_Write(
+    uint32_t object_instance,
+    bool value,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Binary_Value_Object(object_instance);
+    if (pObject) {
+        if (pObject->Write_Enabled) {
+            Binary_Value_Out_Of_Service_Set(object_instance, value);
+            status = true;
+        } else {
+            *error_class = ERROR_CLASS_PROPERTY;
+            *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+        }
+    } else {
+        *error_class = ERROR_CLASS_OBJECT;
+        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
  * @brief Get the object name
  * @param  object_instance - object-instance number of the object
  * @param  object_name - holds the object-name to be retrieved
@@ -860,7 +885,7 @@ bool Binary_Value_Object_Name(
     if (pObject) {
         if (pObject->Object_Name == NULL) {
             snprintf(
-                text, sizeof(text), "BINARY INPUT %lu",
+                text, sizeof(text), "BINARY VALUE %lu",
                 (unsigned long)object_instance);
             status = characterstring_init_ansi(object_name, text);
         } else {
@@ -1218,17 +1243,24 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     unsigned i = 0;
     bool state = false;
 #if defined(INTRINSIC_REPORTING)
-    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
-#endif
-
     int apdu_size = 0;
+    ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
+#else
+    // for PROP_PRIORITY_ARRAY
+    int apdu_size = 0;
+#endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
     }
     apdu = rpdata->application_data;
+#if defined(INTRINSIC_REPORTING)
     apdu_size = rpdata->application_data_len;
+#else
+    // for PROP_PRIORITY_ARRAY
+    apdu_size = rpdata->application_data_len;
+#endif
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -1246,13 +1278,15 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_PRESENT_VALUE:
             present_value =
                 Binary_Value_Present_Value(rpdata->object_instance);
-            apdu_len = encode_application_enumerated(&apdu[0], present_value);
+            apdu_len = encode_application_enumerated(
+                &apdu[0], present_value);
             break;
         case PROP_STATUS_FLAGS:
             /* note: see the details in the standard on how to use these */
             bitstring_init(&bit_string);
-            bitstring_set_bit(&bit_string, STATUS_FLAG_IN_ALARM,
-            Binary_Value_Event_State(rpdata->object_instance) !=
+            bitstring_set_bit(
+                &bit_string, STATUS_FLAG_IN_ALARM,
+                Binary_Value_Event_State(rpdata->object_instance) !=
                     EVENT_STATE_NORMAL);
             state = Binary_Value_Fault(rpdata->object_instance);
             bitstring_set_bit(&bit_string, STATUS_FLAG_FAULT, state);
@@ -1339,7 +1373,7 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             /* note: you need to look up the actual value */
             present_value = Binary_Value_Alarm_Value(rpdata->object_instance);
             apdu_len =
-                encode_application_boolean(&apdu[0], present_value);
+                encode_application_enumerated(&apdu[0], present_value);
             break;
 
         case PROP_TIME_DELAY:
@@ -1363,8 +1397,7 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                                 : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_FAULT,
-                (i & EVENT_ENABLE_TO_FAULT) ? true
-                                            : false);
+                (i & EVENT_ENABLE_TO_FAULT) ? true : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_NORMAL,
                 (i & EVENT_ENABLE_TO_NORMAL) ? true
@@ -1406,8 +1439,8 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 Binary_Value_Event_Time_Stamps_Encode,
                 MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
-                        rpdata->error_code =
-                            ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
             } else if (apdu_len == BACNET_STATUS_ERROR) {
                 rpdata->error_class = ERROR_CLASS_PROPERTY;
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
@@ -1443,7 +1476,7 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
@@ -1457,7 +1490,6 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     if (wp_data->application_data_len == 0) {
         return false;
     }
-
     /* Decode the some of the request. */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -1514,8 +1546,9 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
-                Binary_Value_Out_Of_Service_Set(
-                    wp_data->object_instance, value.type.Boolean);
+                status = Binary_Value_Out_Of_Service_Write(
+                    wp_data->object_instance, value.type.Boolean,
+                    &wp_data->error_class, &wp_data->error_code);
             }
             break;
         case PROP_OBJECT_IDENTIFIER:
@@ -1649,6 +1682,10 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "alarm_value", value_b);
                     ucix_commit(ctxw,sec);
                     free(value_c);
+                } else {
+                    status = false;
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                 }
             }
             break;
@@ -1662,6 +1699,10 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "event",
                         Binary_Value_Event_Enable(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
+                } else {
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                    status = false;
                 }
             }
             break;
@@ -1675,7 +1716,11 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     ucix_add_option_int(ctxw, sec, idx_c, "notify_type",
                         Binary_Value_Notify_Type(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
-                    }
+                } else {
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                    status = false;
+                }
             }
             break;
 #endif
@@ -1688,8 +1733,8 @@ bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else {
-            wp_data->error_class = ERROR_CLASS_PROPERTY;
-            wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             }
             break;
     }
@@ -1754,7 +1799,39 @@ void Binary_Value_Write_Disable(uint32_t object_instance)
 }
 
 /**
- * @brief Creates a Binary Output object
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Binary_Value_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Binary_Value_Object(object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Binary_Value_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Binary_Value_Object(object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
+ * @brief Creates a Binary Value object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
  */
@@ -1763,6 +1840,10 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
     struct object_data *pObject = NULL;
     int index = 0;
     unsigned priority = 0;
+
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {
@@ -1796,6 +1877,7 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
 #if defined(INTRINSIC_REPORTING)
             pObject->Event_State = EVENT_STATE_NORMAL;
             pObject->Event_Enable = true;
+            pObject->Event_Detection_Enable = true;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
             /* initialize Event time stamps using wildcards and set
@@ -1829,7 +1911,7 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
 }
 
 /**
- * Initializes the Binary Input object data
+ * Deletes the Binary Value object data
  */
 void Binary_Value_Cleanup(void)
 {
@@ -1849,7 +1931,7 @@ void Binary_Value_Cleanup(void)
 }
 
 /**
- * Creates a Binary Input object
+ * Deletes a Binary Value object
  */
 bool Binary_Value_Delete(uint32_t object_instance)
 {
@@ -1933,6 +2015,7 @@ static void uci_list(const char *sec_idx,
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
     pObject->Alarm_Value = value_b;
@@ -1994,12 +2077,14 @@ void Binary_Value_Init(void)
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
     tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     option = ucix_get_option(ctx, sec, "default", "alarm_value");
     if (option && characterstring_init_ansi(&option_str, option))
         tObject.Alarm_Value = strndup(option,option_str.length);
     else
         tObject.Alarm_Value = "0";
+    tObject.Event_Detection_Enable = true;
 #endif
     itr_m.section = sec;
     itr_m.ctx = ctx;
@@ -2060,7 +2145,7 @@ bool Binary_Value_Event_Detection_Enable(uint32_t object_instance)
     struct object_data *pObject = Binary_Value_Object(object_instance);
 
     if (pObject) {
-        retval = pObject->Event_Enable;
+        retval = pObject->Event_Detection_Enable;
     }
 #endif
 
@@ -2086,7 +2171,7 @@ bool Binary_Value_Event_Detection_Enable_Set(
     struct object_data *pObject = Binary_Value_Object(object_instance);
 
     if (pObject) {
-        pObject->Event_Enable = value;
+        pObject->Event_Detection_Enable = value;
         retval = true;
     }
 #endif
@@ -2144,7 +2229,7 @@ bool Binary_Value_Event_Enable_Set(
               ~(EVENT_ENABLE_TO_OFFNORMAL | EVENT_ENABLE_TO_FAULT |
                 EVENT_ENABLE_TO_NORMAL))) {
             pObject->Event_Enable = event_enable;
-        status = true;
+            status = true;
         }
     }
 
@@ -2188,7 +2273,7 @@ bool Binary_Value_Notify_Type_Set(
     if (pObject) {
         if ((notify_type == NOTIFY_EVENT) || (notify_type == NOTIFY_ALARM)) {
             pObject->Notify_Type = notify_type;
-        status = true;
+            status = true;
         }
     }
 
@@ -2532,10 +2617,6 @@ bool Binary_Value_Alarm_Value_Set(
     struct object_data *pObject = Binary_Value_Object(object_instance);
 
     if (pObject) {
-        if (pObject->Polarity != POLARITY_NORMAL) {
-            value =
-                (value == BINARY_INACTIVE) ? BINARY_ACTIVE : BINARY_INACTIVE;
-        }
         pObject->Alarm_Value = value;
         status = true;
     }
@@ -2562,7 +2643,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
     }
 
     /* check whether Intrinsic reporting is enabled */
-    if (!pObject->Event_Enable) {
+    if (!pObject->Event_Detection_Enable) {
         return; /* limits are not configured */
     }
 
@@ -2571,7 +2652,8 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         pObject->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
-        debug_printf("Binary-Input[%d]: Send AckNotification.\n", object_instance);
+        debug_printf(
+            "Binary-Value[%d]: Send AckNotification.\n", object_instance);
         characterstring_init_ansi(&msgText, "AckNotification");
 
         /* Notify Type */
@@ -2592,7 +2674,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                 */
                 if ((PresentVal == pObject->Alarm_Value) &&
                     ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                        EVENT_ENABLE_TO_OFFNORMAL)) {
+                     EVENT_ENABLE_TO_OFFNORMAL)) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_OFFNORMAL;
                     } else {
@@ -2611,7 +2693,9 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                    pTimeDelayNormal, then indicate a transition to the NORMAL
                    event state.
                 */
-                if (PresentVal != pObject->Alarm_Value) {
+                if ((PresentVal != pObject->Alarm_Value) &&
+                    ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                     EVENT_ENABLE_TO_NORMAL)) {
                     if (!pObject->Remaining_Time_Delay) {
                         pObject->Event_State = EVENT_STATE_NORMAL;
                     } else {
@@ -2658,7 +2742,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                     break;
             } /* switch (ToState) */
             debug_printf(
-                "Binary-Input[%d]: Event_State goes from %.128s to %.128s.\n",
+                "Binary-Value[%d]: Event_State goes from %.128s to %.128s.\n",
                 object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
             /* Notify Type */
@@ -2674,8 +2758,8 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
 
         /* Time Stamp */
         event_data.timeStamp.tag = TIME_STAMP_DATETIME;
-        Device_getCurrentDateTime(&event_data.timeStamp.value.dateTime);
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
+            Device_getCurrentDateTime(&event_data.timeStamp.value.dateTime);
             /* fill Event_Time_Stamps */
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
@@ -2692,6 +2776,27 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL],
                         &event_data.timeStamp.value.dateTime);
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            /* fill event_data timeStamp */
+            switch (ToState) {
+                case EVENT_STATE_FAULT:
+                    datetime_copy(
+                        &event_data.timeStamp.value.dateTime,
+                        &pObject->Event_Time_Stamps[TRANSITION_TO_FAULT]);
+                    break;
+                case EVENT_STATE_NORMAL:
+                    datetime_copy(
+                        &event_data.timeStamp.value.dateTime,
+                        &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL]);
+                    break;
+                case EVENT_STATE_OFFNORMAL:
+                    datetime_copy(
+                        &event_data.timeStamp.value.dateTime,
+                        &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL]);
                     break;
                 default:
                     break;
@@ -2721,8 +2826,11 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* Event Values */
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
             /* Value that exceeded a limit. */
-            event_data.notificationParams.changeOfState.newState.tag = PROP_STATE_BINARY_VALUE;
-            event_data.notificationParams.changeOfState.newState.state.binaryValue = pObject->Prior_Value;
+            event_data.notificationParams.changeOfState.newState =
+                (BACNET_PROPERTY_STATE) {
+                    .tag = PROP_STATE_BINARY_VALUE,
+                    .state = { .binaryValue = pObject->Prior_Value }
+                };
             /* Status_Flags of the referenced object. */
             bitstring_init(
                 &event_data.notificationParams.changeOfState.statusFlags);

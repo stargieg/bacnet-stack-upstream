@@ -44,7 +44,9 @@ void Binary_Value_Init(void);
 
 BACNET_STACK_EXPORT
 void Binary_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool Binary_Value_Valid_Instance(uint32_t object_instance);
@@ -140,6 +142,12 @@ BACNET_POLARITY Binary_Value_Polarity(uint32_t instance);
 BACNET_STACK_EXPORT
 bool Binary_Value_Polarity_Set(
     uint32_t object_instance, BACNET_POLARITY polarity);
+
+BACNET_STACK_EXPORT
+void *Binary_Value_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Binary_Value_Context_Set(uint32_t object_instance, void *context);
+
 BACNET_STACK_EXPORT
 uint32_t Binary_Value_Create(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -171,9 +179,6 @@ int Binary_Value_Alarm_Ack(
 BACNET_STACK_EXPORT
 int Binary_Value_Alarm_Summary(
     unsigned index, BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
-
-BACNET_STACK_EXPORT
-BACNET_BINARY_PV Binary_Value_Feedback_Value(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 uint32_t Binary_Value_Time_Delay(uint32_t object_instance);
