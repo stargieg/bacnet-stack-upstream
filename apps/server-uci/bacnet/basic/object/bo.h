@@ -45,7 +45,9 @@ void Binary_Output_Init(void);
 
 BACNET_STACK_EXPORT
 void Binary_Output_Property_Lists(
-const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool Binary_Output_Valid_Instance(uint32_t object_instance);
@@ -193,6 +195,11 @@ int Binary_Output_Alarm_Summary(
     unsigned index,
     BACNET_GET_ALARM_SUMMARY_DATA * getalarm_data);
 #endif
+
+BACNET_STACK_EXPORT
+void *Binary_Output_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Binary_Output_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Binary_Output_Create(uint32_t object_instance);

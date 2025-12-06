@@ -58,6 +58,7 @@ struct object_data {
     const char *Active_Text;
     const char *Inactive_Text;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State:3;
     uint32_t Time_Delay;
@@ -104,32 +105,36 @@ static binary_output_write_present_value_callback
     Binary_Output_Write_Present_Value_Callback;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
-                                           PROP_OBJECT_NAME,
-                                           PROP_OBJECT_TYPE,
-                                           PROP_PRESENT_VALUE,
-                                           PROP_STATUS_FLAGS,
-                                           PROP_EVENT_STATE,
-                                           PROP_OUT_OF_SERVICE,
-                                           PROP_POLARITY,
-                                           PROP_PRIORITY_ARRAY,
-                                           PROP_RELINQUISH_DEFAULT,
+static const int32_t Properties_Required[] = {
+    /* unordered list of required properties */
+    PROP_OBJECT_IDENTIFIER,
+    PROP_OBJECT_NAME,
+    PROP_OBJECT_TYPE,
+    PROP_PRESENT_VALUE,
+    PROP_STATUS_FLAGS,
+    PROP_EVENT_STATE,
+    PROP_OUT_OF_SERVICE,
+    PROP_POLARITY,
+    PROP_PRIORITY_ARRAY,
+    PROP_RELINQUISH_DEFAULT,
 #if (BACNET_PROTOCOL_REVISION >= 17)
-                                           PROP_CURRENT_COMMAND_PRIORITY,
+    PROP_CURRENT_COMMAND_PRIORITY,
 #endif
-    -1 };
+    -1
+};
 
-static const int Properties_Optional[] = { PROP_RELIABILITY, PROP_DESCRIPTION,
-                                           PROP_ACTIVE_TEXT, PROP_INACTIVE_TEXT,
+static const int32_t Properties_Optional[] = {
+    /* unordered list of optional properties */
+    PROP_RELIABILITY, PROP_DESCRIPTION, PROP_ACTIVE_TEXT, PROP_INACTIVE_TEXT,
 #if defined(INTRINSIC_REPORTING)
-                                           PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS,
-                                           PROP_ALARM_VALUE, PROP_EVENT_ENABLE,
-                                           PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE,
-                                           PROP_EVENT_TIME_STAMPS, PROP_FEEDBACK_VALUE,
+    PROP_TIME_DELAY,        PROP_NOTIFICATION_CLASS,
+    PROP_ALARM_VALUE,       PROP_EVENT_ENABLE,
+    PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE,
+    PROP_EVENT_TIME_STAMPS, PROP_FEEDBACK_VALUE,
 #endif
     -1 };
 
-static const int Properties_Proprietary[] = { -1 };
+static const int32_t Properties_Proprietary[] = { -1 };
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -143,7 +148,9 @@ static const int Properties_Proprietary[] = { -1 };
  * BACnet proprietary properties for this object.
  */
 void Binary_Output_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Properties_Required;
@@ -1311,7 +1318,7 @@ bool Binary_Output_Encode_Value_List(
 {
     bool status = false;
     struct object_data *pObject;
-    bool in_alarm = true;
+    bool in_alarm = false;
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
@@ -1319,8 +1326,8 @@ bool Binary_Output_Encode_Value_List(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (Binary_Output_Event_State(object_instance) == EVENT_STATE_NORMAL) {
-            in_alarm = false;
+        if (Binary_Output_Event_State(object_instance) != EVENT_STATE_NORMAL) {
+            in_alarm = true;
         }
         fault = Binary_Output_Object_Fault(pObject);
         value = pObject->Prior_Value;
@@ -1398,9 +1405,16 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #endif
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
 
-    if ((rpdata->application_data == NULL) ||
+    if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
+    }
+    if (!property_lists_member(
+            Properties_Required, Properties_Optional, Properties_Proprietary,
+            rpdata->object_property)) {
+        rpdata->error_class = ERROR_CLASS_PROPERTY;
+        rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+        return BACNET_STATUS_ERROR;
     }
     apdu = rpdata->application_data;
     apdu_size = rpdata->application_data_len;
@@ -1470,11 +1484,11 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 Binary_Output_Priority_Array_Encode, BACNET_MAX_PRIORITY, apdu,
                 apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
-                        rpdata->error_code =
-                            ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
             } else if (apdu_len == BACNET_STATUS_ERROR) {
-                    rpdata->error_class = ERROR_CLASS_PROPERTY;
-                    rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
             break;
         case PROP_RELINQUISH_DEFAULT:
@@ -1640,7 +1654,7 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
@@ -1756,10 +1770,10 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
         case PROP_POLARITY:
             status = write_property_type_valid(wp_data, &value,
-                BACNET_APPLICATION_TAG_BOOLEAN);
+                BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
                 if (Binary_Output_Polarity_Set(
-                    wp_data->object_instance, value.type.Boolean)) {
+                    wp_data->object_instance, value.type.Enumerated)) {
                     ucix_add_option_int(ctxw, sec, idx_c, "polarity",
                         Binary_Output_Polarity(wp_data->object_instance));
                     ucix_commit(ctxw,sec);
@@ -1779,10 +1793,10 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
         case PROP_RELINQUISH_DEFAULT:
             status = write_property_type_valid(wp_data, &value,
-                BACNET_APPLICATION_TAG_BOOLEAN);
+                BACNET_APPLICATION_TAG_ENUMERATED);
             if (status)
                 Binary_Output_Relinquish_Default_Set(wp_data->object_instance,
-                    value.type.Boolean);
+                    value.type.Enumerated);
             break;
         case PROP_DESCRIPTION:
             status = write_property_type_valid(wp_data, &value,
@@ -2404,6 +2418,38 @@ int Binary_Output_Alarm_Summary(
 #endif /* defined(INTRINSIC_REPORTING) */
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Binary_Output_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Binary_Output_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates a Binary Output object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -2414,7 +2460,9 @@ uint32_t  Binary_Output_Create(uint32_t object_instance)
     int index = 0;
     unsigned priority = 0;
 
-
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {
