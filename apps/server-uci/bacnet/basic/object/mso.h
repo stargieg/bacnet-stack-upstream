@@ -39,7 +39,9 @@ extern "C" {
 
 BACNET_STACK_EXPORT
 void Multistate_Output_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 BACNET_STACK_EXPORT
 bool Multistate_Output_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -68,6 +70,14 @@ uint32_t Multistate_Output_Present_Value(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Multistate_Output_Present_Value_Set(
     uint32_t object_instance, uint32_t value, unsigned priority);
+
+BACNET_STACK_EXPORT
+bool Multistate_Output_Priority_Array_Relinquished(
+    uint32_t object_instance, unsigned priority);
+BACNET_STACK_EXPORT
+uint32_t Multistate_Output_Priority_Array_Value(
+    uint32_t object_instance, unsigned priority);
+
 BACNET_STACK_EXPORT
 bool Multistate_Output_Present_Value_Relinquish(
     uint32_t instance, unsigned priority);
@@ -116,7 +126,7 @@ bool Multistate_Output_Max_States_Set(
 BACNET_STACK_EXPORT
 uint32_t Multistate_Output_Max_States(uint32_t instance);
 BACNET_STACK_EXPORT
-char *
+const char *
 Multistate_Output_State_Text(uint32_t object_instance, uint32_t state_index);
 
 BACNET_STACK_EXPORT
@@ -201,6 +211,11 @@ int Multistate_Output_Alarm_Summary(
 
 bool Multistate_Output_Object_Instance_Add(
     uint32_t instance);
+
+BACNET_STACK_EXPORT
+void *Multistate_Output_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Multistate_Output_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Multistate_Output_Create(uint32_t object_instance);
