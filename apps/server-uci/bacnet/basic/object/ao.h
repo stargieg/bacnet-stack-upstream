@@ -39,7 +39,9 @@ extern "C" {
 
 BACNET_STACK_EXPORT
 void Analog_Output_Property_Lists(
-const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 BACNET_STACK_EXPORT
 bool Analog_Output_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -66,6 +68,13 @@ void Analog_Output_Write_Present_Value_Callback_Set(
     analog_output_write_present_value_callback cb);
 
 BACNET_STACK_EXPORT
+bool Analog_Output_Priority_Array_Relinquished(
+    uint32_t object_instance, unsigned priority);
+BACNET_STACK_EXPORT
+float Analog_Output_Priority_Array_Value(
+    uint32_t object_instance, unsigned priority);
+
+BACNET_STACK_EXPORT
 float Analog_Output_Relinquish_Default(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Analog_Output_Relinquish_Default_Set(
@@ -86,7 +95,7 @@ bool Analog_Output_Encode_Value_List(
 BACNET_STACK_EXPORT
 float Analog_Output_COV_Increment(uint32_t instance);
 BACNET_STACK_EXPORT
-void Analog_Output_COV_Increment_Set(uint32_t instance, float value);
+bool Analog_Output_COV_Increment_Set(uint32_t instance, float value);
 BACNET_STACK_EXPORT
 float Analog_Output_Resolution(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -106,9 +115,9 @@ BACNET_STACK_EXPORT
 bool Analog_Output_Description_Set(uint32_t instance, const char *new_name);
 
 BACNET_STACK_EXPORT
-bool Analog_Output_Units_Set(uint32_t instance, uint16_t units);
+bool Analog_Output_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS units);
 BACNET_STACK_EXPORT
-uint16_t Analog_Output_Units(uint32_t instance);
+BACNET_ENGINEERING_UNITS Analog_Output_Units(uint32_t instance);
 
 BACNET_STACK_EXPORT
 bool Analog_Output_Out_Of_Service(uint32_t instance);
@@ -219,6 +228,11 @@ int Analog_Output_Alarm_Summary(
     unsigned index,
     BACNET_GET_ALARM_SUMMARY_DATA * getalarm_data);
 #endif
+
+BACNET_STACK_EXPORT
+void *Analog_Output_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Analog_Output_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Analog_Output_Create(uint32_t object_instance);
