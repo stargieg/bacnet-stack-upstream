@@ -2263,8 +2263,7 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
         debug_printf(
-            "Send Acknotification for (%s,%u).\n",
-            bactext_object_type_name(Object_Type), (unsigned)object_instance);
+            "Analog-Value[%d]: Send AckNotification.\n", object_instance);
         characterstring_init_ansi(&msgText, "AckNotification");
 
         /* Notify Type */
@@ -2424,9 +2423,8 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                     break;
             } /* switch (ToState) */
             debug_printf(
-                "Event_State for (%s,%u) goes from %s to %s.\n",
-                bactext_object_type_name(Object_Type),
-                (unsigned)object_instance, bactext_event_state_name(FromState),
+                "Analog-Value[%d]: Event_State goes from %.128s to %.128s.\n",
+                object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
@@ -2791,6 +2789,14 @@ int Analog_Value_Alarm_Summary(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, Analog_Value_Index_To_Instance(index));
+
+    if (getalarm_data == NULL) {
+        debug_printf(
+            "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
+            __LINE__, (void *)getalarm_data);
+        return -2;
+    }
+
     if (pObject) {
         /* Event_State is not equal to NORMAL  and
            Notify_Type property value is ALARM */

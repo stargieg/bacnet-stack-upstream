@@ -26,10 +26,10 @@
 #include "bacnet/reject.h"
 #include "bacnet/rp.h"
 #include "bacnet/wp.h"
-#include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
@@ -2112,10 +2112,8 @@ void Multistate_Value_Intrinsic_Reporting(
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
 
-#if PRINT_ENABLED
-        fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(Object_Type), object_instance);
-#endif /* PRINT_ENABLED */
+        debug_printf(
+            "Multi-State-Value[%d]: Send Acknotification.\n", object_instance);
 
         characterstring_init_ansi(&msgText, "AckNotification");
 
@@ -2203,12 +2201,10 @@ void Multistate_Value_Intrinsic_Reporting(
                     break;
             }   /* switch (ToState) */
 
-#if PRINT_ENABLED
-            fprintf(stderr, "Event_State for (%s,%d) goes from %s to %s.\n",
-                bactext_object_type_name(Object_Type), object_instance,
-                bactext_event_state_name(FromState),
+            debug_printf(
+                "Multi-State-Value[%d]: Event_State goes from %s to %s.\n",
+                object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
-#endif /* PRINT_ENABLED */
 
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
@@ -2287,11 +2283,24 @@ void Multistate_Value_Intrinsic_Reporting(
         }
 
         /* add data from notification class */
+        debug_printf(
+            "Multi-State-Value[%d]: Notification Class[%d]-%s "
+            "%u/%u/%u-%u:%u:%u.%u!\n",
+            object_instance, event_data.notificationClass,
+            bactext_event_type_name(event_data.eventType),
+            (unsigned)event_data.timeStamp.value.dateTime.date.year,
+            (unsigned)event_data.timeStamp.value.dateTime.date.month,
+            (unsigned)event_data.timeStamp.value.dateTime.date.day,
+            (unsigned)event_data.timeStamp.value.dateTime.time.hour,
+            (unsigned)event_data.timeStamp.value.dateTime.time.min,
+            (unsigned)event_data.timeStamp.value.dateTime.time.sec,
+            (unsigned)event_data.timeStamp.value.dateTime.time.hundredths);
         Notification_Class_common_reporting_function(&event_data);
 
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
+            debug_printf("Multi-State-Value[%d]: Ack Required!\n", object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                     pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].
@@ -2500,6 +2509,13 @@ int Multistate_Value_Alarm_Summary(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, Multistate_Value_Index_To_Instance(index));
+
+    if (getalarm_data == NULL) {
+        debug_printf(
+            "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
+            __LINE__, (void *)getalarm_data);
+        return -2;
+    }
 
     /* check index */
     if (pObject) {

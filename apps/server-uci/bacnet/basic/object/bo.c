@@ -1937,10 +1937,8 @@ void Binary_Output_Intrinsic_Reporting(
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
 
-#if PRINT_ENABLED
-        fprintf(stderr, "Send Acknotification for (%s,%d).\n",
-            bactext_object_type_name(Object_Type), object_instance);
-#endif /* PRINT_ENABLED */
+        debug_printf(
+            "Binary-Output[%d]: Send Acknotification.\n", object_instance);
 
         characterstring_init_ansi(&msgText, "AckNotification");
 
@@ -2073,14 +2071,10 @@ void Binary_Output_Intrinsic_Reporting(
                 default:
                     break;
             }   /* switch (ToState) */
-
-#if PRINT_ENABLED
-            fprintf(stderr, "Event_State for (%s,%d) goes from %s to %s.\n",
-                bactext_object_type_name(Object_Type), object_instance,
-                bactext_event_state_name(FromState),
+            debug_printf(
+                "Binary-Output[%d]: Event_State goes from %s to %s.\n",
+                object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
-#endif /* PRINT_ENABLED */
-
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
 
@@ -2160,7 +2154,7 @@ void Binary_Output_Intrinsic_Reporting(
 
         /* add data from notification class */
         debug_printf(
-            "Binary-Value[%d]: Notification Class[%d]-%s "
+            "Binary-Output[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
             bactext_event_type_name(event_data.eventType),
@@ -2176,6 +2170,7 @@ void Binary_Output_Intrinsic_Reporting(
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
+            debug_printf("Binary-Output[%d]: Ack Required!\n", object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                     pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL].
@@ -2385,6 +2380,13 @@ int Binary_Output_Alarm_Summary(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, Binary_Output_Index_To_Instance(index));
+
+    if (getalarm_data == NULL) {
+        debug_printf(
+            "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
+            __LINE__, (void *)getalarm_data);
+        return -2;
+    }
 
     /* check index */
     if (pObject) {

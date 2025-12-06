@@ -2785,6 +2785,14 @@ int Analog_Input_Alarm_Summary(
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, Analog_Input_Index_To_Instance(index));
+
+    if (getalarm_data == NULL) {
+        debug_printf(
+            "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
+            __LINE__, (void *)getalarm_data);
+        return -2;
+    }
+
     if (pObject) {
         /* Event_State is not equal to NORMAL  and
            Notify_Type property value is ALARM */
