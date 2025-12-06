@@ -39,6 +39,7 @@ struct object_data {
     bool Out_Of_Service : 1;
     bool Overridden : 1;
     bool Changed : 1;
+    bool Write_Enabled : 1;
     uint8_t Prior_Value;
     bool Relinquished[BACNET_MAX_PRIORITY];
     uint8_t Priority_Array[BACNET_MAX_PRIORITY];
@@ -49,12 +50,14 @@ struct object_data {
     const char *State_Text[254];
     uint32_t State_Count;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State:3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
     bool Alarm_State[254];
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
@@ -81,6 +84,7 @@ struct object_data_t {
     bool Alarm_State[254];
     unsigned Limit_Enable:2;
     unsigned Event_Enable:3;
+    unsigned Event_Detection_Enable:1;
     unsigned Notify_Type:1;
 #endif /* INTRINSIC_REPORTING */
 };
@@ -94,7 +98,7 @@ static multistate_input_write_present_value_callback
     Multistate_Input_Write_Present_Value_Callback;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Properties_Required[] = { 
+static const int32_t Properties_Required[] = { 
     PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,      PROP_OBJECT_TYPE,
     PROP_PRESENT_VALUE,     PROP_STATUS_FLAGS,     PROP_EVENT_STATE,
     PROP_OUT_OF_SERVICE,    PROP_NUMBER_OF_STATES, PROP_PRIORITY_ARRAY,
@@ -105,14 +109,16 @@ static const int Properties_Required[] = {
     -1
 };
 
-static const int Properties_Optional[] = { PROP_DESCRIPTION, PROP_RELIABILITY, PROP_STATE_TEXT,
+static const int32_t Properties_Optional[] = {
+    /* unordered list of optional properties */
+    PROP_DESCRIPTION, PROP_RELIABILITY, PROP_STATE_TEXT,
 #if defined(INTRINSIC_REPORTING)
     PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS, PROP_ALARM_VALUES, PROP_EVENT_ENABLE,
     PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE, PROP_EVENT_TIME_STAMPS,
 #endif
     -1 };
 
-static const int Properties_Proprietary[] = { -1 };
+static const int32_t Properties_Proprietary[] = { -1 };
 
 /**
  * Initialize the pointers for the required, the optional and the properitary
@@ -123,7 +129,9 @@ static const int Properties_Proprietary[] = { -1 };
  * @param pProprietary - Pointer to the pointer of properitary values.
  */
 void Multistate_Input_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Properties_Required;
@@ -265,10 +273,10 @@ bool Multistate_Input_Max_States_Set(uint32_t object_instance,
  * @param  state_index - state index number 1..N of the text requested
  * @return  C string retrieved
  */
-char *
+const char *
 Multistate_Input_State_Text(uint32_t object_instance, uint32_t state_index)
 {
-    char *pName = NULL; /* return value */
+    const char *pName = NULL; /* return value */
     const struct object_data *pObject;
 
     pObject = Multistate_Input_Object(object_instance);
@@ -302,9 +310,8 @@ bool Multistate_Input_State_Text_Set(
     if (pObject && state_index > 0 && char_string) {
         if (state_index > pObject->State_Count) pObject->State_Count = state_index;
         state_index--;
-        status =
-            characterstring_ansi_copy((char *)pObject->State_Text[state_index],
-            sizeof(pObject->State_Text[state_index]), char_string);
+        pObject->State_Text[state_index] = strdup(char_string->value);
+        status = true;
     }
 
     return status;
@@ -384,7 +391,7 @@ uint32_t Multistate_Input_Present_Value(uint32_t object_instance)
 /**
  * @brief For a given object instance-number, checks the present-value for COV
  * @param  pObject - specific object with valid data
- * @param  value - floating point analog value
+ * @param  value - multistate value
  */
 static void Multistate_Input_Present_Value_COV_Detect(
     struct object_data *pObject, uint32_t value)
@@ -608,6 +615,42 @@ void Multistate_Input_Out_Of_Service_Set(uint32_t object_instance, bool value)
     }
 
     return;
+}
+
+/**
+ * For a given object instance-number, sets the out-of-service state
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - out-of-service state
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ *
+ * @return  true if value is set, false if error occurred
+ */
+static bool Multistate_Input_Out_Of_Service_Write(
+    uint32_t object_instance,
+    bool value,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Multistate_Input_Object(object_instance);
+    if (pObject) {
+        if (pObject->Write_Enabled) {
+            Multistate_Input_Out_Of_Service_Set(object_instance, value);
+            status = true;
+        } else {
+            *error_class = ERROR_CLASS_PROPERTY;
+            *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+        }
+    } else {
+        *error_class = ERROR_CLASS_OBJECT;
+        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
 }
 
 /**
@@ -1374,24 +1417,6 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[apdu_len],
                 Multistate_Input_Max_States(rpdata->object_instance));
             break;
-        case PROP_PRIORITY_ARRAY:
-            apdu_len = bacnet_array_encode(
-                rpdata->object_instance, rpdata->array_index,
-                Multistate_Input_Priority_Array_Encode, BACNET_MAX_PRIORITY,
-                apdu, apdu_size);
-            if (apdu_len == BACNET_STATUS_ABORT) {
-                        rpdata->error_code =
-                            ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
-            } else if (apdu_len == BACNET_STATUS_ERROR) {
-                    rpdata->error_class = ERROR_CLASS_PROPERTY;
-                    rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-            }
-            break;
-        case PROP_RELINQUISH_DEFAULT:
-            present_value =
-                Multistate_Input_Relinquish_Default(rpdata->object_instance);
-            apdu_len = encode_application_unsigned(&apdu[0], present_value);
-            break;
         case PROP_STATE_TEXT:
             max_states = Multistate_Input_Max_States(rpdata->object_instance);
             if (rpdata->array_index == 0) {
@@ -1432,12 +1457,23 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 }
             }
             break;
-        case PROP_DESCRIPTION:
-            characterstring_init_ansi(
-                &char_string,
-                Multistate_Input_Description(rpdata->object_instance));
-            apdu_len =
-                encode_application_character_string(&apdu[0], &char_string);
+        case PROP_PRIORITY_ARRAY:
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Multistate_Input_Priority_Array_Encode, BACNET_MAX_PRIORITY,
+                apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                        rpdata->error_code =
+                            ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
+                    rpdata->error_class = ERROR_CLASS_PROPERTY;
+                    rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+            }
+            break;
+        case PROP_RELINQUISH_DEFAULT:
+            present_value =
+                Multistate_Input_Relinquish_Default(rpdata->object_instance);
+            apdu_len = encode_application_unsigned(&apdu[0], present_value);
             break;
 #if (BACNET_PROTOCOL_REVISION >= 17)
         case PROP_CURRENT_COMMAND_PRIORITY:
@@ -1569,6 +1605,13 @@ int Multistate_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             }
             break;
 #endif
+        case PROP_DESCRIPTION:
+            characterstring_init_ansi(
+                &char_string,
+                Multistate_Input_Description(rpdata->object_instance));
+            apdu_len =
+                encode_application_character_string(&apdu[0], &char_string);
+            break;
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
             rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
@@ -1599,13 +1642,15 @@ bool Multistate_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false; /* return value */
     int len = 0;
     int element_len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     uint32_t idx = 0;
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
     int idx_c_len = 0;
     uint32_t value_i = false;
     char *value_c = NULL;
+    const char *pName = NULL;
+    BACNET_CHARACTER_STRING char_string = { 0 };
     char stats[254][64];
     uint32_t stats_n = 0;
     uint32_t k = 0;
@@ -1672,8 +1717,9 @@ bool Multistate_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
-                Multistate_Input_Out_Of_Service_Set(
-                    wp_data->object_instance, value.type.Boolean);
+                status = Multistate_Input_Out_Of_Service_Write(
+                    wp_data->object_instance, value.type.Boolean,
+                    &wp_data->error_class, &wp_data->error_code);
             }
             break;
         case PROP_OBJECT_IDENTIFIER:
@@ -1736,9 +1782,11 @@ bool Multistate_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 stats_n = Multistate_Input_Max_States(wp_data->object_instance);
                 for (k = 0 ; k < stats_n; k++) {
-                    value_c = Multistate_Input_State_Text(wp_data->object_instance, k+1);
-                    if (value_c)
-                        sprintf(stats[k], "%s", value_c);
+                    pName = Multistate_Input_State_Text(wp_data->object_instance, k+1);
+                    if (pName) {
+                        characterstring_init_ansi(&char_string, pName);
+                        sprintf(stats[k], "%s", char_string.value);
+                    }
                 }
                 ucix_set_list(ctxw, sec, idx_c, "state",
                 stats, stats_n);
@@ -1927,6 +1975,84 @@ void Multistate_Input_Write_Present_Value_Callback_Set(
 }
 
 /**
+ * @brief Determines a object write-enabled flag state
+ * @param object_instance - object-instance number of the object
+ * @return  write-enabled status flag
+ */
+bool Multistate_Input_Write_Enabled(uint32_t object_instance)
+{
+    bool value = false;
+    struct object_data *pObject;
+
+    pObject = Multistate_Input_Object(object_instance);
+    if (pObject) {
+        value = pObject->Write_Enabled;
+    }
+
+    return value;
+}
+
+/**
+ * @brief For a given object instance-number, sets the write-enabled flag
+ * @param object_instance - object-instance number of the object
+ */
+void Multistate_Input_Write_Enable(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Multistate_Input_Object(object_instance);
+    if (pObject) {
+        pObject->Write_Enabled = true;
+    }
+}
+
+/**
+ * @brief For a given object instance-number, clears the write-enabled flag
+ * @param object_instance - object-instance number of the object
+ */
+void Multistate_Input_Write_Disable(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Multistate_Input_Object(object_instance);
+    if (pObject) {
+        pObject->Write_Enabled = false;
+    }
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Multistate_Input_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Multistate_Input_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates a new object and adds it to the object list
  * @param  object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -1937,6 +2063,9 @@ uint32_t Multistate_Input_Create(uint32_t object_instance)
     int index = 0;
     uint8_t priority = 0;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {
@@ -1960,6 +2089,7 @@ uint32_t Multistate_Input_Create(uint32_t object_instance)
                 pObject->Priority_Array[priority] = 0;
             }
             pObject->Relinquish_Default = 1;
+            pObject->Write_Enabled = false;
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
             if (index < 0) {
@@ -2088,6 +2218,7 @@ static void uci_list(const char *sec_idx,
     /* notification class not connected */
     pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
     pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
     pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
     stats_n = ucix_get_list(stats, ictx->ctx, ictx->section, sec_idx,
         "alarm");
@@ -2162,6 +2293,7 @@ void Multistate_Input_Init(void)
 #if defined(INTRINSIC_REPORTING)
     tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
     tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
     tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
     stats_n = ucix_get_list(stats, ctx, sec, "default",
         "alarm");

@@ -38,7 +38,9 @@ extern "C" {
 
 BACNET_STACK_EXPORT
 void Multistate_Input_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool Multistate_Input_Valid_Instance(uint32_t object_instance);
@@ -79,6 +81,13 @@ unsigned Multistate_Input_Present_Value_Priority(uint32_t object_instance);
 BACNET_STACK_EXPORT
 void Multistate_Input_Write_Present_Value_Callback_Set(
     multistate_input_write_present_value_callback cb);
+
+BACNET_STACK_EXPORT
+bool Multistate_Input_Write_Enabled(uint32_t instance);
+BACNET_STACK_EXPORT
+void Multistate_Input_Write_Enable(uint32_t instance);
+BACNET_STACK_EXPORT
+void Multistate_Input_Write_Disable(uint32_t instance);
 
 BACNET_STACK_EXPORT
 unsigned Multistate_Input_Event_State(
@@ -122,7 +131,7 @@ bool Multistate_Input_Max_States_Set(
 BACNET_STACK_EXPORT
 uint32_t Multistate_Input_Max_States(uint32_t instance);
 BACNET_STACK_EXPORT
-char *
+const char *
 Multistate_Input_State_Text(uint32_t object_instance, uint32_t state_index);
 
 
@@ -201,6 +210,11 @@ int Multistate_Input_Alarm_Summary(
     unsigned index,
     BACNET_GET_ALARM_SUMMARY_DATA * getalarm_data);
 #endif
+
+BACNET_STACK_EXPORT
+void *Multistate_Input_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Multistate_Input_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Multistate_Input_Create(uint32_t object_instance);
