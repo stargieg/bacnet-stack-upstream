@@ -19,6 +19,7 @@
 #include "bacnet/rp.h"
 #include "bacnet/bacdevobjpropref.h"
 #include "bacnet/bactimevalue.h"
+#include "bacnet/dailyschedule.h"
 #include "bacnet/special_event.h"
 
 #ifndef BACNET_WEEKLY_SCHEDULE_SIZE
@@ -40,22 +41,17 @@
 extern "C" {
 #endif /* __cplusplus */
 
-    /*
-     * Note:
- * This is a different struct from BACNET_DAILY_SCHEDULE used in prop value
- * encoding! The number of entries is different.
-     */
-    typedef struct bacnet_obj_daily_schedule {
-        BACNET_TIME_VALUE Time_Values[BACNET_WEEKLY_SCHEDULE_SIZE];
-    uint16_t TV_Count; /* the number of time values actually used */
-    } BACNET_OBJ_DAILY_SCHEDULE;
-#if 0
+   /*
+    * Note:
+    * This is a different struct from BACNET_DAILY_SCHEDULE used in prop value
+    * encoding! The number of entries is different.
+    */
 typedef struct schedule {
     /* Effective Period: Start and End Date */
     BACNET_DATE Start_Date;
     BACNET_DATE End_Date;
     /* Properties concerning Present Value */
-    BACNET_OBJ_DAILY_SCHEDULE Weekly_Schedule[7];
+    BACNET_DAILY_SCHEDULE Weekly_Schedule[BACNET_WEEKLY_SCHEDULE_SIZE];
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
     BACNET_SPECIAL_EVENT Exception_Schedule[BACNET_EXCEPTION_SCHEDULE_SIZE];
 #endif
@@ -72,38 +68,22 @@ typedef struct schedule {
     uint8_t obj_prop_ref_cnt; /* actual number of obj_prop references */
     uint8_t Priority_For_Writing; /* (1..16) */
     bool Out_Of_Service;
-} SCHEDULE_DESCR;
-#endif
-struct object_data_schedule {
-    /* Effective Period: Start and End Date */
-    BACNET_DATE Start_Date;
-    BACNET_DATE End_Date;
-    /* Properties concerning Present Value */
-    BACNET_OBJ_DAILY_SCHEDULE Weekly_Schedule[7];
-    BACNET_APPLICATION_DATA_VALUE Schedule_Default;
-#if BACNET_EXCEPTION_SCHEDULE_SIZE
-    BACNET_SPECIAL_EVENT Exception_Schedule[BACNET_EXCEPTION_SCHEDULE_SIZE];
-#endif
-    /*
-        * Caution: This is a converted to BACNET_PRIMITIVE_APPLICATION_DATA_VALUE.
-        * Only some data types may be used!
-        */
-    BACNET_APPLICATION_DATA_VALUE Present_Value;   /* must be set to a valid value
-                                                        * default is Schedule_Default */
-    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
-        Object_Property_References[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
-    uint8_t obj_prop_ref_cnt;       /* actual number of obj_prop references */
-    uint8_t Priority_For_Writing;   /* (1..16) */
-    bool Out_Of_Service;
     bool Changed;
     const char *Object_Name;
     const char *Description;
-};
+} SCHEDULE_DESCR;
 
+typedef struct object_data_t {
+    uint8_t Priority_For_Writing;   /* (1..16) */
+    const char *Object_Name;
+    const char *Description;
+} SCHEDULE_DESCR_T;
 
 BACNET_STACK_EXPORT
 void Schedule_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool Schedule_Valid_Instance(uint32_t object_instance);
@@ -122,6 +102,47 @@ BACNET_STACK_EXPORT
 bool Schedule_Out_Of_Service(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
+BACNET_DAILY_SCHEDULE *
+Schedule_Weekly_Schedule(uint32_t object_instance, unsigned array_index);
+BACNET_STACK_EXPORT
+bool Schedule_Weekly_Schedule_Set(
+    uint32_t object_instance,
+    unsigned array_index,
+    const BACNET_DAILY_SCHEDULE *value);
+
+BACNET_STACK_EXPORT
+BACNET_SPECIAL_EVENT *
+Schedule_Exception_Schedule(uint32_t object_instance, unsigned array_index);
+BACNET_STACK_EXPORT
+bool Schedule_Exception_Schedule_Set(
+    uint32_t object_instance,
+    unsigned array_index,
+    const BACNET_SPECIAL_EVENT *value);
+
+BACNET_STACK_EXPORT
+bool Schedule_List_Of_Object_Property_References_Set(
+    uint32_t object_instance,
+    unsigned index,
+    const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember);
+BACNET_STACK_EXPORT
+bool Schedule_List_Of_Object_Property_References(
+    uint32_t object_instance,
+    unsigned index,
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember);
+BACNET_STACK_EXPORT
+size_t
+Schedule_List_Of_Object_Property_References_Capacity(uint32_t object_instance);
+
+BACNET_STACK_EXPORT
+bool Schedule_Effective_Period_Set(
+    uint32_t object_instance,
+    const BACNET_DATE *start_date,
+    const BACNET_DATE *end_date);
+BACNET_STACK_EXPORT
+bool Schedule_Effective_Period(
+    uint32_t object_instance, BACNET_DATE *start_date, BACNET_DATE *end_date);
+
+BACNET_STACK_EXPORT
 bool Schedule_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
 
@@ -135,12 +156,10 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
  * account */
 BACNET_STACK_EXPORT
 bool Schedule_In_Effective_Period(
-    const struct object_data_schedule *pObject, const BACNET_DATE *date);
-
+    SCHEDULE_DESCR *pObject, const BACNET_DATE *date);
 BACNET_STACK_EXPORT
 void Schedule_Recalculate_PV(
-    struct object_data_schedule *pObject, BACNET_DATE_TIME *date);
-
+    SCHEDULE_DESCR *pObject, BACNET_WEEKDAY wday, const BACNET_TIME *time);
 BACNET_STACK_EXPORT
 void schedule_timer(uint16_t uSeconds);
 
