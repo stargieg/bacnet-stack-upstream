@@ -63,7 +63,9 @@ typedef struct tl_bits {
 
 BACNET_STACK_EXPORT
 void Trend_Log_Property_Lists(
-const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 
 BACNET_STACK_EXPORT
 bool Trend_Log_Valid_Instance(uint32_t object_instance);
@@ -78,7 +80,7 @@ bool Trend_Log_Object_Instance_Add(uint32_t instance);
 
 BACNET_STACK_EXPORT
 bool Trend_Log_Object_Name(
-uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
+    uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
 
 BACNET_STACK_EXPORT
 int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);

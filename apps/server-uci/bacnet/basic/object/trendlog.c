@@ -35,6 +35,22 @@
 #include "bacnet/basic/object/bacfile.h" /* object list dependency */
 #endif
 
+/*Include local header*/
+static void write_error_to_rec(
+    BACNET_ERROR_CLASS error_class, BACNET_ERROR_CODE error_code, int iCount);
+static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
+    int iCount, uint8_t StatusBuf[3]);
+
+#if 0
+/* number of demo objects */
+#ifndef MAX_TREND_LOGS
+#define MAX_TREND_LOGS 8
+#endif
+
+static TL_DATA_REC Logs[MAX_TREND_LOGS][TL_MAX_ENTRIES];
+static TL_LOG_INFO LogInfo[MAX_TREND_LOGS];
+#endif
+
 /* max number of COV properties decoded in a COV notification */
 #ifndef MAX_COV_PROPERTIES
 #define MAX_COV_PROPERTIES 8
@@ -111,21 +127,23 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_TRENDLOG;
 
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Trend_Log_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
-                                                     PROP_OBJECT_NAME,
-                                                     PROP_OBJECT_TYPE,
-                                                     PROP_ENABLE,
-                                                     PROP_STOP_WHEN_FULL,
-                                                     PROP_BUFFER_SIZE,
-                                                     PROP_LOG_BUFFER,
-                                                     PROP_RECORD_COUNT,
-                                                     PROP_TOTAL_RECORD_COUNT,
-                                                     PROP_EVENT_STATE,
-                                                     PROP_LOGGING_TYPE,
-                                                     PROP_STATUS_FLAGS,
-                                                     -1 };
+static const int32_t Trend_Log_Properties_Required[] = {
+    PROP_OBJECT_IDENTIFIER,
+    PROP_OBJECT_NAME,
+    PROP_OBJECT_TYPE,
+    PROP_ENABLE,
+    PROP_STOP_WHEN_FULL,
+    PROP_BUFFER_SIZE,
+    PROP_LOG_BUFFER,
+    PROP_RECORD_COUNT,
+    PROP_TOTAL_RECORD_COUNT,
+    PROP_EVENT_STATE,
+    PROP_LOGGING_TYPE,
+    PROP_STATUS_FLAGS,
+    -1
+};
 
-static const int Trend_Log_Properties_Optional[] = {
+static const int32_t Trend_Log_Properties_Optional[] = {
     PROP_DESCRIPTION, PROP_START_TIME, PROP_STOP_TIME,
     PROP_LOG_DEVICE_OBJECT_PROPERTY, PROP_LOG_INTERVAL,
 
@@ -146,10 +164,12 @@ static const int Trend_Log_Properties_Optional[] = {
     PROP_ALIGN_INTERVALS, PROP_INTERVAL_OFFSET, PROP_TRIGGER, -1
 };
 
-static const int Trend_Log_Properties_Proprietary[] = { -1 };
+static const int32_t Trend_Log_Properties_Proprietary[] = { -1 };
 
 void Trend_Log_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Trend_Log_Properties_Required;
@@ -466,14 +486,13 @@ int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
+    /* Pin down which log to look at */
     pObject = Keylist_Data(Object_List, rpdata->object_instance);
     if (!pObject) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
-        apdu_len = BACNET_STATUS_ERROR;
-        return apdu_len;
+        rpdata->error_class = ERROR_CLASS_OBJECT;
+        rpdata->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+        return BACNET_STATUS_ERROR;
     }
-
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -632,11 +651,12 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_APPLICATION_DATA_VALUE value;
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
     struct object_data *pObject;
     BACNET_DATE start_date, stop_date;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE TempSource;
     bool bEffectiveEnable;
+    int log_index;
     bool is_array;
     struct uci_context *ctxw = NULL;
     char *idx_c = NULL;
@@ -651,9 +671,13 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     /* Pin down which log to look at */
-    pObject = Keylist_Data(Object_List, wp_data->object_instance);
-    if (!pObject)
-        return status;
+    log_index = wp_data->object_instance;
+    pObject = Keylist_Data(Object_List, log_index);
+    if (!pObject) {
+        wp_data->error_class = ERROR_CLASS_OBJECT;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+        return false;
+    }
 
     /* decode the some of the request */
     len = bacapp_decode_application_data(
@@ -706,7 +730,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 /* Only trigger this validation on a potential change of state
                  */
                 if (pObject->bEnable != value.type.Boolean) {
-                    bEffectiveEnable = TL_Is_Enabled(wp_data->object_instance);
+                    bEffectiveEnable = TL_Is_Enabled(log_index);
                     pObject->bEnable = value.type.Boolean;
                     /* To do: what actions do we need to take on writing ? */
                     if (value.type.Boolean == false) {
@@ -714,15 +738,15 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                             /* Only insert record if we really were
                                enabled i.e. times and enable flags */
                             TL_Insert_Status_Rec(
-                                wp_data->object_instance, LOG_STATUS_LOG_DISABLED, true);
+                                log_index, LOG_STATUS_LOG_DISABLED, true);
                         }
                     } else {
-                        if (TL_Is_Enabled(wp_data->object_instance)) {
+                        if (TL_Is_Enabled(log_index)) {
                             /* Have really gone from disabled to enabled as
                              * enable flag and times were correct
                              */
                             TL_Insert_Status_Rec(
-                                wp_data->object_instance, LOG_STATUS_LOG_DISABLED, false);
+                                log_index, LOG_STATUS_LOG_DISABLED, false);
                         }
                     }
                 }
@@ -746,7 +770,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                          */
                         pObject->bEnable = false;
                         TL_Insert_Status_Rec(
-                            wp_data->object_instance, LOG_STATUS_LOG_DISABLED, true);
+                            log_index, LOG_STATUS_LOG_DISABLED, true);
                     }
                 }
             }
@@ -770,7 +794,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     pObject->ulRecordCount = 0;
                     pObject->iIndex = 0;
                     TL_Insert_Status_Rec(
-                        wp_data->object_instance, LOG_STATUS_BUFFER_PURGED, true);
+                        log_index, LOG_STATUS_BUFFER_PURGED, true);
                 }
             }
             break;
@@ -843,7 +867,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     break;
                 }
                 /* First record the current enable state of the log */
-                bEffectiveEnable = TL_Is_Enabled(wp_data->object_instance);
+                bEffectiveEnable = TL_Is_Enabled(log_index);
                 /* Safe to copy the date now */
                 pObject->StartTime.date = start_date;
                 pObject->StartTime.time = value.type.Time;
@@ -859,16 +883,16 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         TL_BAC_Time_To_Local(&pObject->StartTime);
                 }
 
-                if (bEffectiveEnable != TL_Is_Enabled(wp_data->object_instance)) {
+                if (bEffectiveEnable != TL_Is_Enabled(log_index)) {
                     /* Enable status has changed because of time update */
                     if (bEffectiveEnable == true) {
                         /* Say we went from enabled to disabled */
                         TL_Insert_Status_Rec(
-                            wp_data->object_instance, LOG_STATUS_LOG_DISABLED, true);
+                            log_index, LOG_STATUS_LOG_DISABLED, true);
                     } else {
                         /* Say we went from disabled to enabled */
                         TL_Insert_Status_Rec(
-                            wp_data->object_instance, LOG_STATUS_LOG_DISABLED, false);
+                            log_index, LOG_STATUS_LOG_DISABLED, false);
                     }
                 }
             }
@@ -885,7 +909,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             /* Then decode the time part */
             len = bacapp_decode_application_data(
                 wp_data->application_data + len,
-                    wp_data->application_data_len - len, &value);
+                wp_data->application_data_len - len, &value);
 
             if (len) {
                 status = write_property_type_valid(
@@ -894,7 +918,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     break;
                 }
                 /* First record the current enable state of the log */
-                bEffectiveEnable = TL_Is_Enabled(wp_data->object_instance);
+                bEffectiveEnable = TL_Is_Enabled(log_index);
                 /* Safe to copy the date now */
                 pObject->StopTime.date = stop_date;
                 pObject->StopTime.time = value.type.Time;
@@ -910,16 +934,16 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         TL_BAC_Time_To_Local(&pObject->StopTime);
                 }
 
-                if (bEffectiveEnable != TL_Is_Enabled(wp_data->object_instance)) {
+                if (bEffectiveEnable != TL_Is_Enabled(log_index)) {
                     /* Enable status has changed because of time update */
                     if (bEffectiveEnable == true) {
                         /* Say we went from enabled to disabled */
                         TL_Insert_Status_Rec(
-                            wp_data->object_instance, LOG_STATUS_LOG_DISABLED, true);
+                            log_index, LOG_STATUS_LOG_DISABLED, true);
                     } else {
                         /* Say we went from disabled to enabled */
                         TL_Insert_Status_Rec(
-                            wp_data->object_instance, LOG_STATUS_LOG_DISABLED, false);
+                            log_index, LOG_STATUS_LOG_DISABLED, false);
                     }
                 }
             }
@@ -937,7 +961,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             /* We only support references to objects in ourself for now */
             if ((TempSource.deviceIdentifier.type == OBJECT_DEVICE) &&
                 (TempSource.deviceIdentifier.instance !=
-                    Device_Object_Instance_Number())) {
+                 Device_Object_Instance_Number())) {
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code =
                     ERROR_CODE_OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED;
@@ -951,7 +975,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 /* Clear buffer if property being logged is changed */
                 pObject->ulRecordCount = 0;
                 pObject->iIndex = 0;
-                TL_Insert_Status_Rec(wp_data->object_instance, LOG_STATUS_BUFFER_PURGED, true);
+                TL_Insert_Status_Rec(log_index, LOG_STATUS_BUFFER_PURGED, true);
             }
             pObject->Source = TempSource;
             ucix_add_option_int(ctxw, sec, idx_c, "device_id", pObject->Source.deviceIdentifier.instance);
@@ -968,7 +992,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data, &value, BACNET_APPLICATION_TAG_UNSIGNED_INT);
                 if (status) {
                     /* We only log to 1 sec accuracy so must divide by 100
-                        * before passing it on */
+                     * before passing it on */
                     if (0 < value.type.Unsigned_Int / 100) {
                         pObject->ulLogInterval = value.type.Unsigned_Int / 100;
                     } else {
@@ -1137,7 +1161,7 @@ bool TL_Is_Enabled(int iLog)
     if (!pObject)
         return false;
 #if 0
-    printf("\nFlags - %u, Start - %u, Stop - %u\n",
+        debug_printf("\nFlags - %u, Start - %u, Stop - %u\n",
         (unsigned int) pObject->ucTimeFlags,
         (unsigned int) pObject->tStartTime,
         (unsigned int) pObject->tStopTime);
@@ -1145,7 +1169,8 @@ bool TL_Is_Enabled(int iLog)
     if (pObject->bEnable == false) {
         /* Not enabled so time is irrelevant */
         bStatus = false;
-    } else if ((pObject->ucTimeFlags == 0) &&
+    } else if (
+        (pObject->ucTimeFlags == 0) &&
         (pObject->tStopTime < pObject->tStartTime)) {
         /* Start time was after stop time as per 12.25.6 and 12.25.7 */
         bStatus = false;
@@ -1153,8 +1178,8 @@ bool TL_Is_Enabled(int iLog)
         /* enabled and either 1 wild card or none */
         tNow = Trend_Log_Epoch_Seconds_Now();
 #if 0
-        printf("\nFlags - %u, Current - %u, Start - %u, Stop - %u\n",
-            (unsigned int) pObject->ucTimeFlags, (unsigned int) Now,
+        debug_printf("\nFlags - %u, Current - %u, Start - %u, Stop - %u\n",
+            (unsigned int) pObject->ucTimeFlags, (unsigned int) tNow,
             (unsigned int) pObject->tStartTime,
             (unsigned int) pObject->tStopTime);
 #endif
@@ -1170,8 +1195,8 @@ bool TL_Is_Enabled(int iLog)
             }
         } else {
 #if 0
-            printf("\nCurrent - %u, Start - %u, Stop - %u\n",
-                (unsigned int) Now, (unsigned int) pObject->tStartTime,
+            debug_printf("\nCurrent - %u, Start - %u, Stop - %u\n",
+                (unsigned int) tNow, (unsigned int) pObject->tStartTime,
                 (unsigned int) pObject->tStopTime);
 #endif
             /* No wildcards so use both times */
@@ -1224,9 +1249,20 @@ void TL_Local_Time_To_BAC(BACNET_DATE_TIME *bdatetime, bacnet_time_t seconds)
 
 #define TL_MAX_ENC 23 /* Maximum size of encoded log entry, see above */
 
+/**
+ * @brief Handle encoding for the options.
+ * @param apdu - Pointer to the buffer to encode into.
+ * @param pRequest - Pointer to the request data structure containing
+ * the request parameters.
+ * @return APDU length, which could be 0
+ */
 int rr_trend_log_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 {
     struct object_data *pObject;
+
+    if (!pRequest) {
+        return 0;
+    }
     /* Initialise result flags to all false */
     bitstring_init(&pRequest->ResultFlags);
     bitstring_set_bit(&pRequest->ResultFlags, RESULT_FLAG_FIRST_ITEM, false);
@@ -1235,11 +1271,13 @@ int rr_trend_log_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     pRequest->ItemCount = 0; /* Start out with nothing */
 
     pObject = Keylist_Data(Object_List, pRequest->object_instance);
+    if (!pObject) {
+        return 0;
+    }
     /* Bail out now if nowt - should never happen for a Trend Log but ... */
     if (pObject->ulRecordCount == 0) {
-        return (0);
+        return 0;
     }
-
     if ((pRequest->RequestType == RR_BY_POSITION) ||
         (pRequest->RequestType == RR_READ_ALL)) {
         return (TL_encode_by_position(apdu, pRequest));
@@ -1250,14 +1288,18 @@ int rr_trend_log_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     return (TL_encode_by_time(apdu, pRequest));
 }
 
-/****************************************************************************
- * Handle encoding for the By Position and All options.                     *
- * Does All option by converting to a By Position request starting at index *
- * 1 and of maximum log size length.                                        *
- ****************************************************************************/
-
+/**
+ * @brief Handle encoding for the By Position and All options.
+ * @note Performs the All option by converting to a By Position
+ *  request starting at index 1 and of maximum log size length.
+ * @param apdu - Pointer to the buffer to encode into.
+ * @param pRequest - Pointer to the request data structure containing
+ * the request parameters.
+ * @return APDU length, which could be 0
+ */
 int TL_encode_by_position(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 {
+    int log_index = 0;
     int iLen = 0;
     int32_t iTemp = 0;
     struct object_data *pObject;
@@ -1270,14 +1312,13 @@ int TL_encode_by_position(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 
     /* See how much space we have */
     uiRemaining = MAX_APDU - pRequest->Overhead;
-    pObject = Keylist_Data(Object_List, pRequest->object_instance);
-    if (!pObject)
-        return (0);
+    log_index = pRequest->object_instance;
+    pObject = Keylist_Data(Object_List, log_index);
     if (pRequest->RequestType == RR_READ_ALL) {
         /*
-         * Read all the list or as much as will fit in the buffer by selecting
-         * a range that covers the whole list and falling through to the next
-         * section of code
+         * Read all the list or as much as will fit in the buffer by
+         * selecting a range that covers the whole list and falling through
+         * to the next section of code
          */
         pRequest->Count = pObject->ulRecordCount; /* Full list */
         pRequest->Range.RefIndex = 1; /* Starting at the beginning */
@@ -1314,8 +1355,8 @@ int TL_encode_by_position(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     /* From here on in we only have a starting point and a positive count */
 
     if (pRequest->Range.RefIndex >
-        pObject->ulRecordCount) { /* Nothing to return as we are past the end
-                                      of the list */
+        pObject->ulRecordCount) { /* Nothing to return as we are past the
+                                      end of the list */
         return (0);
     }
 
@@ -1331,15 +1372,15 @@ int TL_encode_by_position(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     while (uiIndex <= uiTarget) {
         if (uiRemaining < TL_MAX_ENC) {
             /*
-             * Can't fit any more in! We just set the result flag to say there
-             * was more and drop out of the loop early
+             * Can't fit any more in! We just set the result flag to say
+             * there was more and drop out of the loop early
              */
             bitstring_set_bit(
                 &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
             break;
         }
 
-        iTemp = TL_encode_entry(&apdu[iLen], pRequest->object_instance, uiIndex);
+        iTemp = TL_encode_entry(&apdu[iLen], log_index, uiIndex);
 
         uiRemaining -= iTemp; /* Reduce the remaining space */
         iLen += iTemp; /* and increase the length consumed */
@@ -1360,15 +1401,20 @@ int TL_encode_by_position(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     return (iLen);
 }
 
-/****************************************************************************
- * Handle encoding for the By Sequence option.                              *
- * The fact that the buffer always has at least a single entry is used      *
- * implicetly in the following as we don't have to handle the case of an    *
- * empty buffer.                                                            *
- ****************************************************************************/
-
+/**
+ * @brief Handle encoding for the By Sequence option.
+ * @note The fact that the buffer always has at least
+ *  a single entry is used implicetly in the following
+ *  implementationas we don't have to handle the case
+ *  of an empty buffer.
+ * @param apdu - Pointer to the buffer to encode into.
+ * @param pRequest - Pointer to the request data structure containing
+ * the request parameters.
+ * @return APDU length, which could be 0
+ */
 int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 {
+    int log_index = 0;
     int iLen = 0;
     int32_t iTemp = 0;
     struct object_data *pObject;
@@ -1376,22 +1422,21 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     uint32_t uiIndex = 0; /* Current entry number */
     uint32_t uiFirst = 0; /* Entry number we started encoding from */
     uint32_t uiLast = 0; /* Entry number we finished encoding on */
-    uint32_t uiSequence = 0; /* Tracking sequenc number when encoding */
+    uint32_t uiSequence = 0; /* Tracking sequence number when encoding */
     uint32_t uiRemaining = 0; /* Amount of unused space in packet */
     uint32_t uiFirstSeq = 0; /* Sequence number for 1st record in log */
 
     uint32_t uiBegin = 0; /* Starting Sequence number for request */
     uint32_t uiEnd = 0; /* Ending Sequence number for request */
-    bool bWrapReq =
-        false; /* Has request sequence range spanned the max for uint32_t? */
+    bool bWrapReq = false; /* Has request sequence range spanned the max for
+                              uint32_t? */
     bool bWrapLog =
         false; /* Has log sequence range spanned the max for uint32_t? */
 
     /* See how much space we have */
     uiRemaining = MAX_APDU - pRequest->Overhead;
-    pObject = Keylist_Data(Object_List, pRequest->object_instance);
-    if (!pObject)
-        return (0);
+    log_index = pRequest->object_instance;
+    pObject = Keylist_Data(Object_List, log_index);
     /* Figure out the sequence number for the first record, last is
      * ulTotalRecordCount */
     uiFirstSeq =
@@ -1414,7 +1459,8 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     }
 
     if ((bWrapReq == false) && (bWrapLog == false)) { /* Simple case no wraps */
-        /* If no overlap between request range and buffer contents bail out */
+        /* If no overlap between request range and buffer contents bail out
+         */
         if ((uiEnd < uiFirstSeq) ||
             (uiBegin > pObject->ulTotalRecordCount)) {
             return (0);
@@ -1480,15 +1526,15 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     while (uiSequence != uiEnd + 1) {
         if (uiRemaining < TL_MAX_ENC) {
             /*
-             * Can't fit any more in! We just set the result flag to say there
-             * was more and drop out of the loop early
+             * Can't fit any more in! We just set the result flag to say
+             * there was more and drop out of the loop early
              */
             bitstring_set_bit(
                 &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
             break;
         }
 
-        iTemp = TL_encode_entry(&apdu[iLen], pRequest->object_instance, uiIndex);
+        iTemp = TL_encode_entry(&apdu[iLen], log_index, uiIndex);
 
         uiRemaining -= iTemp; /* Reduce the remaining space */
         iLen += iTemp; /* and increase the length consumed */
@@ -1512,15 +1558,19 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     return (iLen);
 }
 
-/****************************************************************************
- * Handle encoding for the By Time option.                                  *
- * The fact that the buffer always has at least a single entry is used      *
- * implicetly in the following as we don't have to handle the case of an    *
- * empty buffer.                                                            *
- ****************************************************************************/
-
+/**
+ * @brief Handle encoding for the By Time option.
+ * @note The fact that the buffer always has at least a single entry
+ *  is used implicetly in the following implementationas we don't
+ *  have to handle the case of an empty buffer.
+ * @param apdu - Pointer to the buffer to encode into.
+ * @param pRequest - Pointer to the request data structure containing
+ * the request parameters.
+ * @return APDU length, which could be 0
+ */
 int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 {
+    int log_index = 0;
     int iLen = 0;
     int32_t iTemp = 0;
     int iCount = 0;
@@ -1535,9 +1585,8 @@ int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
 
     /* See how much space we have */
     uiRemaining = MAX_APDU - pRequest->Overhead;
-    pObject = Keylist_Data(Object_List, pRequest->object_instance);
-    if (!pObject)
-        return (0);
+    log_index = pRequest->object_instance;
+    pObject = Keylist_Data(Object_List, log_index);
 
     tRefTime = TL_BAC_Time_To_Local(&pRequest->Range.RefTime);
     /* Find correct position for oldest entry in log */
@@ -1555,9 +1604,8 @@ int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
         /* Start out with the sequence number for the last record */
         uiFirstSeq = pObject->ulTotalRecordCount;
         for (;;) {
-            if (pObject->Logs
-                    [(uiIndex + iCount) % TL_MAX_ENTRIES]
-                        .tTimeStamp < tRefTime) {
+            if (pObject->Logs[(uiIndex + iCount) % TL_MAX_ENTRIES]
+                    .tTimeStamp < tRefTime) {
                 break;
             }
 
@@ -1597,9 +1645,8 @@ int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
         uiFirstSeq =
             pObject->ulTotalRecordCount - (pObject->ulRecordCount - 1);
         for (;;) {
-            if (pObject->Logs
-                    [(uiIndex + iCount) % TL_MAX_ENTRIES]
-                        .tTimeStamp > tRefTime) {
+            if (pObject->Logs[(uiIndex + iCount) % TL_MAX_ENTRIES]
+                    .tTimeStamp > tRefTime) {
                 break;
             }
 
@@ -1619,26 +1666,26 @@ int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     while (iCount != 0) {
         if (uiRemaining < TL_MAX_ENC) {
             /*
-             * Can't fit any more in! We just set the result flag to say there
-             * was more and drop out of the loop early
+             * Can't fit any more in! We just set the result flag to say
+             * there was more and drop out of the loop early
              */
             bitstring_set_bit(
                 &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
             break;
         }
 
-        iTemp = TL_encode_entry(&apdu[iLen], pRequest->object_instance, uiIndex);
+        iTemp = TL_encode_entry(&apdu[iLen], log_index, uiIndex);
 
         uiRemaining -= iTemp; /* Reduce the remaining space */
         iLen += iTemp; /* and increase the length consumed */
         uiLast = uiIndex; /* Record the last entry encoded */
         uiIndex++; /* and get ready for next one */
         pRequest->ItemCount++; /* Chalk up another one for the response count */
-        iCount--; /* And finally cross another one off the requested count */
+        iCount--; /* And finally cross another one off the requested count
+                   */
 
-        if (uiIndex >
-            pObject
-                ->ulRecordCount) { /* Finish up if we hit the end of the log */
+        if (uiIndex > pObject->ulRecordCount) { /* Finish up if we hit
+                                                      the end of the log */
             break;
         }
     }
@@ -1657,6 +1704,12 @@ int TL_encode_by_time(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     return (iLen);
 }
 
+/**
+ * @brief Encode a single log entry into the APDU buffer.
+ * @param apdu - Pointer to the buffer to encode into.
+ * @param iLog - Index of the log to encode from.
+ * @param iEntry - Index of the entry to encode (1 based).
+ */
 int TL_encode_entry(uint8_t *apdu, int iLog, int iEntry)
 {
     int iLen = 0;
@@ -1667,8 +1720,6 @@ int TL_encode_entry(uint8_t *apdu, int iLog, int iEntry)
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, iLog);
-    if (!pObject)
-        return (0);
 
     /* Convert from BACnet 1 based to 0 based array index and then
      * handle wrap around of the circular buffer */
@@ -1687,8 +1738,8 @@ int TL_encode_entry(uint8_t *apdu, int iLog, int iEntry)
 
     /* Next comes the actual entry with tag [1] */
     iLen += encode_opening_tag(&apdu[iLen], 1);
-    /* The data entry is tagged individually [0] - [10] to indicate which type
-     */
+    /* The data entry is tagged individually [0] - [10]
+       to indicate which type */
     switch (pSource->ucRecType) {
         case TL_TYPE_STATUS:
             /* Build bit string directly from the stored octet */
@@ -1824,10 +1875,294 @@ static int local_read_property(
     return (len);
 }
 
+/**
+ * @brief Attempt to fetch the logged property and store it in the Trend Log
+ * @param iLog - Index of the log to fetch the property for.
+ */
+static void TL_fetch_property(int iLog)
+{
+    /* This is a big buffer in case someone selects
+       the device object list for example */
+    uint8_t ValueBuf[MAX_APDU];
+    /* Should be tag, bits unused in last octet and 1 byte of data */
+    uint8_t StatusBuf[3];
+    BACNET_ERROR_CLASS error_class = ERROR_CLASS_SERVICES;
+    BACNET_ERROR_CODE error_code = ERROR_CODE_OTHER;
+    int iLen = 0;
+    struct object_data *pObject;
+    uint8_t tag_number = 0;
+    uint32_t len_value_type = 0;
+    BACNET_TAG tag;
+    unsigned max_apdu = 0;
+    BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
+
+    pObject = Keylist_Data(Object_List, iLog);
+
+#if 0
+    /* Record the current time in the log entry and also in the info block
+     * for the log so we can figure out when the next reading is due */
+    TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+    pObject->tLastDataTime = TempRec.tTimeStamp;
+    TempRec.ucStatus = 0;
+#endif
+
+    if (pObject->Source.deviceIdentifier.instance == Device_Object_Instance_Number()) {
+
+    iLen = local_read_property(
+        ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
+    if (iLen < 0) {
+        /* Insert error code into log */
+        write_error_to_rec(error_class, error_code, iLog);
+    } else {
+        /* Decode data returned and see if we can fit it into the log */
+        iLen =
+            decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
+        switch (tag_number) {
+            case BACNET_APPLICATION_TAG_NULL:
+                break;
+
+            case BACNET_APPLICATION_TAG_BOOLEAN:
+                value.type.Boolean = decode_boolean(tag.len_value_type);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            case BACNET_APPLICATION_TAG_UNSIGNED_INT:
+                bacnet_unsigned_decode(
+                    ValueBuf, iLen, tag.len_value_type, &value.type.Unsigned_Int);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            case BACNET_APPLICATION_TAG_SIGNED_INT:
+                bacnet_signed_decode(
+                    ValueBuf, iLen, tag.len_value_type, &value.type.Signed_Int);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            case BACNET_APPLICATION_TAG_REAL:
+                decode_real_safe(
+                    &ValueBuf[iLen], tag.len_value_type, &value.type.Real);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            case BACNET_APPLICATION_TAG_BIT_STRING:
+                bacnet_bitstring_decode(ValueBuf, iLen, tag.len_value_type, &value.type.Bit_String);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            case BACNET_APPLICATION_TAG_ENUMERATED:
+                bacnet_enumerated_decode(
+                    ValueBuf, iLen, tag.len_value_type, &value.type.Enumerated);
+                write_property_to_rec(value,iLog,StatusBuf);
+                break;
+
+            default:
+#if 0
+                /* Fake an error response for any types we cannot handle */
+                TempRec.Datum.Error.usClass = ERROR_CLASS_PROPERTY;
+                TempRec.Datum.Error.usCode = ERROR_CODE_DATATYPE_NOT_SUPPORTED;
+                TempRec.ucRecType = TL_TYPE_ERROR;
+#endif
+                write_error_to_rec(error_class, error_code, iLog);
+                break;
+        }
+#if 0
+        /* Finally insert the status flags into the record */
+        iLen = decode_tag_number_and_value(
+            StatusBuf, &tag_number, &len_value_type);
+        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
+        TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
+    }
+
+    Logs[iLog][CurrentLog->iIndex++] = TempRec;
+    if (CurrentLog->iIndex >= TL_MAX_ENTRIES) {
+        CurrentLog->iIndex = 0;
+    }
+
+    CurrentLog->ulTotalRecordCount++;
+
+    if (CurrentLog->ulRecordCount < TL_MAX_ENTRIES) {
+        CurrentLog->ulRecordCount++;
+#endif
+        }
+    } else {
+        if (!pObject->found) {
+            Send_WhoIs( pObject->Source.deviceIdentifier.instance,
+            pObject->Source.deviceIdentifier.instance);
+        }
+        if (!pObject->found) {
+            pObject->found = address_bind_request(
+                pObject->Source.deviceIdentifier.instance, &max_apdu,
+                &pObject->Target_Address);
+        }
+        if (pObject->found) {
+            pObject->Request_Invoke_ID =
+                Send_Read_Property_Request(pObject->Source.deviceIdentifier.instance,
+                pObject->Source.objectIdentifier.type,
+                pObject->Source.objectIdentifier.instance,
+                PROP_PRESENT_VALUE,
+                BACNET_ARRAY_ALL);
+        }
+    }
+}
+
+/**
+ * @brief Check each log to see if any data needs to be recorded.
+ * @param uSeconds - Number of seconds since last called (not used).
+ */
+void trend_log_timer(uint16_t uSeconds)
+{
+    struct object_data *pObject;
+    int iCount = 0;
+    bacnet_time_t tNow = 0;
+    unsigned max_apdu = 0;
+
+    (void)uSeconds;
+    /* use OS to get the current time */
+    tNow = Trend_Log_Epoch_Seconds_Now();
+    for (iCount = 0; iCount < Keylist_Count(Object_List); iCount++) {
+        pObject = Keylist_Data_Index(Object_List, iCount);
+        if (TL_Is_Enabled(iCount)) {
+            if (pObject->LoggingType == LOGGING_TYPE_POLLED) {
+                /* For polled logs we first need to see if they are clock
+                 * aligned or not.
+                 */
+                if (pObject->bAlignIntervals == true) {
+                    /* Aligned logging so use the combination of the
+                     * interval and the offset to decide when to log. Also
+                     * log a reading if more than interval time has elapsed
+                     * since last reading to ensure we don't miss a reading
+                     * if we aren't called at the precise second when the
+                     * match occurs.
+                     */
+                    /*                if(((tNow % CurrentLog->ulLogInterval)
+                     * >= (CurrentLog->ulIntervalOffset %
+                     * CurrentLog->ulLogInterval)) && */
+                    /*                   ((tNow - CurrentLog->tLastDataTime)
+                     * >= CurrentLog->ulLogInterval)) { */
+                    if ((tNow % pObject->ulLogInterval) ==
+                        (pObject->ulIntervalOffset %
+                         pObject->ulLogInterval)) {
+                        /* Record value if time synchronised trigger
+                         * condition is met and at least one period has
+                         * elapsed.
+                         */
+                        TL_fetch_property(iCount);
+                    } else if (
+                        (tNow - pObject->tLastDataTime) >
+                        pObject->ulLogInterval) {
+                        /* Also record value if we have waited more than a
+                         * period since the last reading. This ensures we
+                         * take a reading as soon as possible after a power
+                         * down if we have been off for more than a single
+                         * period.
+                         */
+                        TL_fetch_property(iCount);
+                    }
+                } else if (
+                    ((tNow - pObject->tLastDataTime) >=
+                     pObject->ulLogInterval) ||
+                    (pObject->bTrigger == true)) {
+                    /* If not aligned take a reading when we have either
+                     * waited long enough or a trigger is set.
+                     */
+                    TL_fetch_property(iCount);
+                }
+                pObject->bTrigger = false; /* Clear this every time */
+            } else if (pObject->LoggingType == LOGGING_TYPE_TRIGGERED) {
+                /* Triggered logs take a reading when the trigger is set and
+                 * then reset the trigger to wait for the next event
+                 */
+                if (pObject->bTrigger == true) {
+                    TL_fetch_property(iCount);
+                    pObject->bTrigger = false;
+                }
+            } else if (pObject->LoggingType == LOGGING_TYPE_COV) {
+                /* COV logs */
+                /* increment timer - exit if timed out */
+                pObject->current_seconds = time(NULL);
+                /* at least one second has passed */
+                if (pObject->current_seconds != pObject->last_seconds) {
+                    /* increment timer - exit if timed out */
+                    pObject->delta_seconds = pObject->current_seconds - pObject->last_seconds;
+                    pObject->elapsed_seconds += pObject->delta_seconds;
+                    tsm_timer_milliseconds((pObject->delta_seconds * 1000));
+                    /* keep track of time for next check */
+                    pObject->last_seconds = pObject->current_seconds;
+                }
+                if (!pObject->found) {
+                    pObject->found = address_bind_request(
+                        pObject->Source.deviceIdentifier.instance, &max_apdu,
+                        &pObject->Target_Address);
+                }
+                if (!pObject->found) {
+                    Send_WhoIs( pObject->Source.deviceIdentifier.instance,
+                    pObject->Source.deviceIdentifier.instance);
+                }
+                if (pObject->found) {
+                    if (pObject->Request_Invoke_ID == 0) {
+                        pObject->Simple_Ack_Detected = false;
+                        pObject->Request_Invoke_ID =
+                            Send_COV_Subscribe(pObject->Source.deviceIdentifier.instance,
+                            &pObject->cov_data);
+                        if (!pObject->cov_data.cancellationRequest &&
+                            (pObject->timeout_seconds < pObject->cov_data.lifetime)) {
+                            /* increase the timeout to the longest lifetime */
+                            pObject->timeout_seconds = pObject->cov_data.lifetime;
+                        }
+                    } else if (tsm_invoke_id_free(pObject->Request_Invoke_ID)) {
+                        if (pObject->cov_data.cancellationRequest &&
+                        pObject->Simple_Ack_Detected) {
+                            pObject->found = NULL;
+                        }
+                    } else if (tsm_invoke_id_failed(pObject->Request_Invoke_ID)) {
+                        tsm_free_invoke_id(pObject->Request_Invoke_ID);
+                        pObject->Error_Detected = true;
+                        pObject->found = NULL;
+                    }
+                } else {
+                    /* exit if timed out */
+                    if (pObject->elapsed_seconds > pObject->timeout_seconds) {
+                        pObject->Error_Detected = true;
+                        pObject->found = NULL;
+                    }
+                }
+                /* COV - so just wait until lifetime value expires */
+                if (pObject->elapsed_seconds > pObject->timeout_seconds) {
+                    tsm_free_invoke_id(pObject->Request_Invoke_ID);
+                    pObject->Request_Invoke_ID = 0;
+                    pObject->elapsed_seconds = 0;
+                    pObject->found = NULL;
+                }
+            }
+        }
+    }
+}
+
+static void write_error_to_rec(
+    BACNET_ERROR_CLASS error_class, BACNET_ERROR_CODE error_code, int iCount)
+{
+    struct object_data *pObject;
+    struct tl_data_record TempRec;
+    pObject = Keylist_Data_Index(Object_List, iCount);
+    TempRec.tTimeStamp = Trend_Log_Epoch_Seconds_Now();
+    pObject->tLastDataTime = TempRec.tTimeStamp;
+    TempRec.Datum.Error.usClass = error_class;
+    TempRec.Datum.Error.usCode = error_code;
+    TempRec.ucRecType = TL_TYPE_ERROR;
+    /* Finally insert the status flags into the record */
+    TempRec.ucStatus = 128;
+    pObject->Logs[pObject->iIndex++] = TempRec;
+    if (pObject->iIndex >= TL_MAX_ENTRIES) {
+        pObject->iIndex = 0;
+    }
+    pObject->ulTotalRecordCount++;
+    if (pObject->ulRecordCount < TL_MAX_ENTRIES) {
+        pObject->ulRecordCount++;
+    }
+}
 
 static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
-    int iCount, uint8_t StatusBuf[3]
-    )
+    int iCount, uint8_t StatusBuf[3])
 {
     int iLen = 0;
     BACNET_BIT_STRING TempBits;
@@ -2003,98 +2338,6 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
     }
 }
 
-/****************************************************************************
- * Attempt to fetch the logged property and store it in the Trend Log       *
- ****************************************************************************/
-
-static void TL_fetch_property(int iLog)
-{
-    uint8_t ValueBuf[MAX_APDU]; /* This is a big buffer in case someone selects
-                                   the device object list for example */
-    uint8_t StatusBuf[3]; /* Should be tag, bits unused in last octet and 1 byte
-                             of data */
-    BACNET_ERROR_CLASS error_class = ERROR_CLASS_SERVICES;
-    BACNET_ERROR_CODE error_code = ERROR_CODE_OTHER;
-    int iLen = 0;
-    BACNET_TAG tag;
-    struct object_data *pObject;
-    unsigned max_apdu = 0;
-    BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
-
-    pObject = Keylist_Data(Object_List, iLog);
-    if (!pObject)
-        return;
-
-    if (pObject->Source.deviceIdentifier.instance == Device_Object_Instance_Number()) {
-
-        iLen = local_read_property(
-            ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
-        if (iLen > 0) {
-            /* Decode data returned and see if we can fit it into the log */
-            iLen =
-                bacnet_tag_decode(ValueBuf, iLen, &tag);
-            value.tag = tag.number;
-            switch (tag.number) {
-                case BACNET_APPLICATION_TAG_BOOLEAN:
-                    value.type.Boolean = decode_boolean(tag.len_value_type);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                case BACNET_APPLICATION_TAG_UNSIGNED_INT:
-                    bacnet_unsigned_decode(
-                        ValueBuf, iLen, tag.len_value_type, &value.type.Unsigned_Int);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                case BACNET_APPLICATION_TAG_SIGNED_INT:
-                    bacnet_signed_decode(
-                        ValueBuf, iLen, tag.len_value_type, &value.type.Signed_Int);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                case BACNET_APPLICATION_TAG_REAL:
-                    decode_real_safe(
-                        &ValueBuf[iLen], tag.len_value_type, &value.type.Real);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                case BACNET_APPLICATION_TAG_BIT_STRING:
-                    bacnet_bitstring_decode(ValueBuf, iLen, tag.len_value_type, &value.type.Bit_String);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                case BACNET_APPLICATION_TAG_ENUMERATED:
-                    bacnet_enumerated_decode(
-                        ValueBuf, iLen, tag.len_value_type, &value.type.Enumerated);
-                    write_property_to_rec(value,iLog,StatusBuf);
-                    break;
-
-                default:
-                    break;
-            }
-        }
-    } else {
-        if (!pObject->found) {
-            Send_WhoIs( pObject->Source.deviceIdentifier.instance,
-            pObject->Source.deviceIdentifier.instance);
-        }
-        if (!pObject->found) {
-            pObject->found = address_bind_request(
-                pObject->Source.deviceIdentifier.instance, &max_apdu,
-                &pObject->Target_Address);
-        }
-        if (pObject->found) {
-            pObject->Request_Invoke_ID =
-                Send_Read_Property_Request(pObject->Source.deviceIdentifier.instance,
-                pObject->Source.objectIdentifier.type,
-                pObject->Source.objectIdentifier.instance,
-                PROP_PRESENT_VALUE,
-                BACNET_ARRAY_ALL);
-        }
-    }
-
-}
-
 /** Handler for a ReadProperty ACK.
  * @ingroup DSRP
  * Doesn't actually do anything, except, for debugging, to
@@ -2107,9 +2350,7 @@ static void TL_fetch_property(int iLog)
  *                          decoded from the APDU header of this message.
  */
 void trend_log_read_property_ack_handler(uint8_t *service_request,
-    uint16_t service_len,
-    BACNET_ADDRESS *src,
-    BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data)
+    uint16_t service_len, BACNET_ADDRESS *src, BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data)
 {
     struct object_data *pObject;
     int iCount = 0;
@@ -2180,9 +2421,7 @@ void trend_log_unconfirmed_cov_notification_handler(
 }
 
 void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
-    uint16_t service_len,
-    BACNET_ADDRESS *src,
-    BACNET_CONFIRMED_SERVICE_DATA *service_data)
+    uint16_t service_len, BACNET_ADDRESS *src, BACNET_CONFIRMED_SERVICE_DATA *service_data)
 {
     struct object_data *pObject;
     int iCount = 0;
@@ -2218,133 +2457,4 @@ void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
     }
 }
 
-/****************************************************************************
- * Check each log to see if any data needs to be recorded.                  *
- ****************************************************************************/
 
-void trend_log_timer(uint16_t uSeconds)
-{
-    struct object_data *pObject;
-    int iCount = 0;
-    bacnet_time_t tNow = 0;
-    unsigned max_apdu = 0;
-
-    (void)uSeconds;
-    /* use OS to get the current time */
-    tNow = Trend_Log_Epoch_Seconds_Now();
-    for (iCount = 0; iCount < Keylist_Count(Object_List); iCount++) {
-        pObject = Keylist_Data_Index(Object_List, iCount);
-        if (TL_Is_Enabled(iCount)) {
-            if (pObject->LoggingType == LOGGING_TYPE_POLLED) {
-                /* For polled logs we first need to see if they are clock
-                 * aligned or not.
-                 */
-                if (pObject->bAlignIntervals == true) {
-                    /* Aligned logging so use the combination of the interval
-                     * and the offset to decide when to log. Also log a reading
-                     * if more than interval time has elapsed since last reading
-                     * to ensure we don't miss a reading if we aren't called at
-                     * the precise second when the match occurs.
-                     */
-                    /*                if(((tNow % pObject->ulLogInterval) >=
-                     * (pObject->ulIntervalOffset %
-                     * pObject->ulLogInterval)) && */
-                    /*                   ((tNow - pObject->tLastDataTime) >=
-                     * pObject->ulLogInterval)) { */
-                    if ((tNow % pObject->ulLogInterval) ==
-                        (pObject->ulIntervalOffset %
-                            pObject->ulLogInterval)) {
-                        /* Record value if time synchronised trigger condition
-                         * is met and at least one period has elapsed.
-                         */
-                        TL_fetch_property(iCount);
-                    } else if (
-                        (tNow - pObject->tLastDataTime) >
-                        pObject->ulLogInterval) {
-                        /* Also record value if we have waited more than a
-                         * period since the last reading. This ensures we take a
-                         * reading as soon as possible after a power down if we
-                         * have been off for more than a single period.
-                         */
-                        TL_fetch_property(iCount);
-                    }
-                } else if (
-                    ((tNow - pObject->tLastDataTime) >=
-                     pObject->ulLogInterval) ||
-                    (pObject->bTrigger == true)) {
-                    /* If not aligned take a reading when we have either waited
-                     * long enough or a trigger is set.
-                     */
-                    TL_fetch_property(iCount);
-                }
-
-                pObject->bTrigger = false; /* Clear this every time */
-            } else if (pObject->LoggingType == LOGGING_TYPE_TRIGGERED) {
-                /* Triggered logs take a reading when the trigger is set and
-                 * then reset the trigger to wait for the next event
-                 */
-                if (pObject->bTrigger == true) {
-                    TL_fetch_property(iCount);
-                    pObject->bTrigger = false;
-                }
-            } else if (pObject->LoggingType == LOGGING_TYPE_COV) {
-                /* COV logs */
-                /* increment timer - exit if timed out */
-                pObject->current_seconds = time(NULL);
-                /* at least one second has passed */
-                if (pObject->current_seconds != pObject->last_seconds) {
-                    /* increment timer - exit if timed out */
-                    pObject->delta_seconds = pObject->current_seconds - pObject->last_seconds;
-                    pObject->elapsed_seconds += pObject->delta_seconds;
-                    tsm_timer_milliseconds((pObject->delta_seconds * 1000));
-                    /* keep track of time for next check */
-                    pObject->last_seconds = pObject->current_seconds;
-                }
-                if (!pObject->found) {
-                    pObject->found = address_bind_request(
-                        pObject->Source.deviceIdentifier.instance, &max_apdu,
-                        &pObject->Target_Address);
-                }
-                if (!pObject->found) {
-                    Send_WhoIs( pObject->Source.deviceIdentifier.instance,
-                    pObject->Source.deviceIdentifier.instance);
-                }
-                if (pObject->found) {
-                    if (pObject->Request_Invoke_ID == 0) {
-                        pObject->Simple_Ack_Detected = false;
-                        pObject->Request_Invoke_ID =
-                            Send_COV_Subscribe(pObject->Source.deviceIdentifier.instance,
-                            &pObject->cov_data);
-                        if (!pObject->cov_data.cancellationRequest &&
-                            (pObject->timeout_seconds < pObject->cov_data.lifetime)) {
-                            /* increase the timeout to the longest lifetime */
-                            pObject->timeout_seconds = pObject->cov_data.lifetime;
-                        }
-                    } else if (tsm_invoke_id_free(pObject->Request_Invoke_ID)) {
-                        if (pObject->cov_data.cancellationRequest &&
-                        pObject->Simple_Ack_Detected) {
-                            pObject->found = NULL;
-                        }
-                    } else if (tsm_invoke_id_failed(pObject->Request_Invoke_ID)) {
-                        tsm_free_invoke_id(pObject->Request_Invoke_ID);
-                        pObject->Error_Detected = true;
-                        pObject->found = NULL;
-                    }
-                } else {
-                    /* exit if timed out */
-                    if (pObject->elapsed_seconds > pObject->timeout_seconds) {
-                        pObject->Error_Detected = true;
-                        pObject->found = NULL;
-                    }
-                }
-                /* COV - so just wait until lifetime value expires */
-                if (pObject->elapsed_seconds > pObject->timeout_seconds) {
-                    tsm_free_invoke_id(pObject->Request_Invoke_ID);
-                    pObject->Request_Invoke_ID = 0;
-                    pObject->elapsed_seconds = 0;
-                    pObject->found = NULL;
-                }
-            }
-        }
-    }
-}
