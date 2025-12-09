@@ -1479,6 +1479,8 @@ unsigned Analog_Output_Event_State(uint32_t object_instance)
     if (pObject) {
         state = pObject->Event_State;
     }
+#else
+    (void)object_instance;
 #endif
 
     return state;
@@ -2574,6 +2576,8 @@ void Analog_Output_Intrinsic_Reporting(
             }
         }
     }
+#else
+    (void)object_instance;
 #endif /* defined(INTRINSIC_REPORTING) */
 }
 

@@ -24,6 +24,11 @@ option(
   ON)
 
 option(
+  INTRINSIC_REPORTING
+  "enable intrinsic reporting"
+  ON)
+
+option(
   BACNET_PROPERTY_LISTS
   "enable property lists"
   ON)
@@ -1371,7 +1376,7 @@ if(SERVER_UCI)
     $<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
     BACNET_STACK_STATIC_DEFINE
     BACFILE
-    INTRINSIC_REPORTING
+    $<$<BOOL:${INTRINSIC_REPORTING}>:INTRINSIC_REPORTING>
     PRIVATE
     PRINT_ENABLED=1)
   if(BACDL_BSC)
@@ -1730,5 +1735,3 @@ message(STATUS "BACNET: BACDL_ARCNET:...................\"${BACDL_ARCNET}\"")
 message(STATUS "BACNET: BACDL_MSTP:.....................\"${BACDL_MSTP}\"")
 message(STATUS "BACNET: BACDL_ZIGBEE:...................\"${BACDL_ZIGBEE}\"")
 message(STATUS "BACNET: BACDL_ETHERNET:.................\"${BACDL_ETHERNET}\"")
-message(STATUS "BACNET: Selected optioss:")
-message(STATUS "BACNET: BAC_ROUTING:....................\"${BAC_ROUTING}\"")

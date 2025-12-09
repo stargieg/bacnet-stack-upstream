@@ -717,13 +717,15 @@ bool Analog_Input_Encode_Value_List(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Event_State != EVENT_STATE_NORMAL) {
+        if (Analog_Input_Event_State(object_instance) != EVENT_STATE_NORMAL){
             in_alarm = true;
         }
-        if (pObject->Reliability != RELIABILITY_NO_FAULT_DETECTED) {
+        if (Analog_Input_Object_Fault(pObject)){
             fault = true;
         }
-        overridden = pObject->Overridden;
+        if (Analog_Input_Overridden(pObject)){
+            overridden = true;
+        }
         out_of_service = pObject->Out_Of_Service;
         present_value = pObject->Prior_Value;
         status = cov_value_list_encode_real(

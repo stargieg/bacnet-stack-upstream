@@ -289,6 +289,8 @@ static unsigned Binary_Output_Event_State(uint32_t object_instance)
     if (pObject) {
         state = pObject->Event_State;
     }
+#else
+    (void)object_instance;
 #endif
 
     return state;
@@ -1392,7 +1394,6 @@ void Binary_Output_Overridden_Set(uint32_t object_instance, bool value)
  */
 int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
-    int len = 0;
     int apdu_len = 0; /* return value */
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
@@ -1403,9 +1404,10 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     uint8_t *apdu = NULL;
     int apdu_size = 0;
 #if defined(INTRINSIC_REPORTING)
+    int len = 0;
     ACKED_INFO *ack_info[MAX_BACNET_EVENT_TRANSITION] = { 0 };
-#endif
     BACNET_DATE_TIME *timestamp[MAX_BACNET_EVENT_TRANSITION];
+#endif
 
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
@@ -2186,6 +2188,8 @@ void Binary_Output_Intrinsic_Reporting(
             }
         }
     }
+#else
+    (void)object_instance;
 #endif /* defined(INTRINSIC_REPORTING) */
 }
 

@@ -1416,6 +1416,8 @@ unsigned Multistate_Output_Event_State(uint32_t object_instance)
     if (pObject) {
         state = pObject->Event_State;
     }
+#else
+    (void)object_instance;
 #endif
 
     return state;
@@ -2406,6 +2408,8 @@ void Multistate_Output_Intrinsic_Reporting(
             }
         }
     }
+#else
+    (void)object_instance;
 #endif /* defined(INTRINSIC_REPORTING) */
 }
 
@@ -2871,9 +2875,11 @@ void Multistate_Output_Init(void)
     char *stats[254];
     uint32_t stats_n = 0;
     uint32_t k = 0;
-    uint32_t l = 0;
     struct object_data *pObject = NULL;
     struct itr_ctx itr_m;
+#if defined(INTRINSIC_REPORTING)
+    uint32_t l = 0;
+#endif
 
     if (!Object_List) {
         Object_List = Keylist_Create();
