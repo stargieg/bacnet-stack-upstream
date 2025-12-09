@@ -120,9 +120,6 @@ bool Analog_Value_Present_Value_Relinquish(uint32_t object_instance, unsigned pr
 BACNET_STACK_EXPORT
 unsigned Analog_Value_Present_Value_Priority(uint32_t object_instance);
 BACNET_STACK_EXPORT
-void Analog_Value_Write_Present_Value_Callback_Set(
-    analog_value_write_present_value_callback cb);
-BACNET_STACK_EXPORT
 float Analog_Value_Relinquish_Default(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Analog_Value_Relinquish_Default_Set(uint32_t object_instance, float value);

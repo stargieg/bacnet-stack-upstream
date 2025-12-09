@@ -723,7 +723,7 @@ bool Analog_Input_Encode_Value_List(
         if (Analog_Input_Object_Fault(pObject)){
             fault = true;
         }
-        if (Analog_Input_Overridden(pObject)){
+        if (Analog_Input_Overridden(object_instance)){
             overridden = true;
         }
         out_of_service = pObject->Out_Of_Service;

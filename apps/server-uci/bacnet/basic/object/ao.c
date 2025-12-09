@@ -1543,7 +1543,7 @@ bool Analog_Output_Encode_Value_List(
         if (Analog_Output_Object_Fault(pObject)){
             fault = true;
         }
-        if (Analog_Output_Overridden(pObject)){
+        if (Analog_Output_Overridden(object_instance)){
             overridden = true;
         }
         status = cov_value_list_encode_real(

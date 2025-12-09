@@ -1947,9 +1947,10 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 stats_n = Multistate_Output_Max_States(wp_data->object_instance);
                 for (k = 0 ; k < stats_n; k++) {
                     pName = Multistate_Output_State_Text(wp_data->object_instance, k+1);
-                    if (pName)
+                    if (pName) {
                         characterstring_init_ansi(&char_string, pName);
                         sprintf(stats[k], "%s", char_string.value);
+                    }
                 }
                 ucix_set_list(ctxw, sec, idx_c, "state",
                 stats, stats_n);
