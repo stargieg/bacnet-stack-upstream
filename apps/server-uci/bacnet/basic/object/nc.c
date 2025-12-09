@@ -1012,8 +1012,8 @@ void Notification_Class_common_reporting_function(
             break;
     }
 
-    /* send notifications for active recipients */
-    debug_printf_stderr(
+    /* TODO send notifications for active recipients */
+    debug_printf(
         "Notification Class[%u]: send notifications\n",
         event_data->notificationClass);
     /* pointer to first recipient */
@@ -1035,7 +1035,7 @@ void Notification_Class_common_reporting_function(
             if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                 /* send notification to the specified device */
                 device_id = pBacDest->Recipient.type.device.instance;
-                debug_printf_stderr(
+                debug_printf(
                     "Notification Class[%u]: send notification to %u\n",
                     event_data->notificationClass, (unsigned)device_id);
                 if (pBacDest->ConfirmedNotify == true) {
@@ -1045,7 +1045,7 @@ void Notification_Class_common_reporting_function(
                 }
             } else if (
                 pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
-                debug_printf_stderr(
+                debug_printf(
                     "Notification Class[%u]: send notification to ADDR\n",
                     event_data->notificationClass);
                 /* send notification to the address indicated */
