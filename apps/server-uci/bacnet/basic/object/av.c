@@ -23,10 +23,16 @@
 #include "bacnet/proplist.h"
 #include "bacnet/timestamp.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/object/device.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
-#include "bacnet/basic/object/device.h"
 #include "bacnet/basic/ucix/ucix.h"
+#if defined(INTRINSIC_REPORTING)
+#include "bacnet/basic/object/nc.h"
+#include "bacnet/alarm_ack.h"
+#include "bacnet/getevent.h"
+#include "bacnet/get_alarm_sum.h"
+#endif
 /* me! */
 #include "bacnet/basic/object/av.h"
 
@@ -201,6 +207,38 @@ void Analog_Value_Property_Lists(
 
     return;
 }
+
+/**
+* Analog_Value_Object() replaced by
+* Keylist_Data(Object_List, object_instance)
+* 
+* Analog_Value_Object_Index() replaced by
+* Keylist_Data(Object_List, Analog_Value_Index_To_Instance(index)
+* 
+*/
+#if 0
+/**
+ * @brief Gets an object from the list using an instance number as the key
+ * @param  object_instance - object-instance number of the object
+ * @return object found in the list, or NULL if not found
+ */
+static struct analog_value_descr *Analog_Value_Object(uint32_t object_instance)
+{
+    return Keylist_Data(Object_List, object_instance);
+}
+
+#if defined(INTRINSIC_REPORTING)
+/**
+ * @brief Gets an object from the list using its index in the list
+ * @param index - index of the object in the list
+ * @return object found in the list, or NULL if not found
+ */
+static struct analog_value_descr *Analog_Value_Object_Index(int index)
+{
+    return Keylist_Data_Index(Object_List, index);
+}
+#endif
+#endif
 
 /**
  * @brief Determines if a given object instance is valid
@@ -1837,14 +1875,6 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->object_property != PROP_PRIORITY_ARRAY) &&
-        (rpdata->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -1884,14 +1914,6 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    if ((wp_data->object_property != PROP_PRIORITY_ARRAY) &&
-        (wp_data->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        /*  only array properties can have array options */
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     ctxw = ucix_init(sec);

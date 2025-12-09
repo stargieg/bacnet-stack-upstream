@@ -20,10 +20,10 @@
 #include "bacnet/proplist.h"
 #include "bacnet/timestamp.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/object/device.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
-#include "bacnet/basic/object/device.h"
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #include "bacnet/alarm_ack.h"
@@ -109,7 +109,7 @@ static analog_input_write_present_value_callback
 
 /* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int32_t Properties_Required[] = { 
+static const int32_t Properties_Required[] = {
     /* unordered list of required properties */
     PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,  PROP_OBJECT_TYPE,
     PROP_PRESENT_VALUE,     PROP_STATUS_FLAGS, PROP_EVENT_STATE,
@@ -121,7 +121,7 @@ static const int32_t Properties_Required[] = {
     -1
 };
 
-static const int32_t Properties_Optional[] = { 
+static const int32_t Properties_Optional[] = {
     /* unordered list of optional properties */
     PROP_DESCRIPTION,
     PROP_RELIABILITY,
@@ -216,6 +216,38 @@ void Analog_Input_Property_Lists(
 }
 
 /**
+* Analog_Input_Object() replaced by
+* Keylist_Data(Object_List, object_instance)
+* 
+* Analog_Input_Object_Index() replaced by
+* Keylist_Data(Object_List, Analog_Input_Index_To_Instance(index)
+* 
+*/
+#if 0
+/**
+ * @brief Gets an object from the list using an instance number as the key
+ * @param  object_instance - object-instance number of the object
+ * @return object found in the list, or NULL if not found
+ */
+static struct analog_input_descr *Analog_Input_Object(uint32_t object_instance)
+{
+    return Keylist_Data(Object_List, object_instance);
+}
+
+#if defined(INTRINSIC_REPORTING)
+/**
+ * @brief Gets an object from the list using its index in the list
+ * @param index - index of the object in the list
+ * @return object found in the list, or NULL if not found
+ */
+static struct analog_input_descr *Analog_Input_Object_Index(int index)
+{
+    return Keylist_Data_Index(Object_List, index);
+}
+#endif
+#endif
+
+/**
  * @brief Determines if a given object instance is valid
  * @param  object_instance - object-instance number of the object
  * @return  true if the instance is valid, and false if not
@@ -234,7 +266,7 @@ bool Analog_Input_Valid_Instance(uint32_t object_instance)
 
 /**
  * @brief Determines the number of objects
- * @return  Number of objects -1
+ * @return  Number of objects
  */
 unsigned Analog_Input_Count(void)
 {
@@ -368,7 +400,7 @@ bool Analog_Input_Present_Value_Set(
 bool Analog_Input_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
-    char name_text[32] = "";
+    char text_string[32] = "";
     bool status = false;
     struct object_data *pObject;
 
@@ -379,9 +411,9 @@ bool Analog_Input_Object_Name(
                 characterstring_init_ansi(object_name, pObject->Object_Name);
         } else {
             snprintf(
-                name_text, sizeof(name_text), "ANALOG INPUT %lu",
+                text_string, sizeof(text_string), "ANALOG INPUT %lu",
                 (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, name_text);
+            status = characterstring_init_ansi(object_name, text_string);
         }
     }
 
@@ -607,14 +639,12 @@ bool Analog_Input_Reliability_Set(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (value <= 255) {
-            fault = Analog_Input_Object_Fault(pObject);
-            pObject->Reliability = value;
-            if (fault != Analog_Input_Object_Fault(pObject)) {
-                pObject->Changed = true;
-            }
-            status = true;
+        fault = Analog_Input_Object_Fault(pObject);
+        pObject->Reliability = value;
+        if (fault != Analog_Input_Object_Fault(pObject)) {
+            pObject->Changed = true;
         }
+        status = true;
     }
 
     return status;
@@ -1845,16 +1875,6 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) &&
-        (rpdata->object_property != PROP_PRIORITY_ARRAY) &&
-        (rpdata->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        fprintf(stderr, "Send ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY\n");
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -1894,14 +1914,6 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    /*  only array properties can have array options */
-    if ((wp_data->object_property != PROP_PRIORITY_ARRAY) &&
-        (wp_data->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     ctxw = ucix_init(sec);

@@ -15,11 +15,12 @@
 #include "bacnet/bactext.h"
 #include "bacnet/proplist.h"
 #include "bacnet/timestamp.h"
-#include "bacnet/basic/sys/keylist.h"
-#include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
+#include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/basic/object/device.h"
+/* me! */
 #include "bacnet/basic/object/schedule.h"
 
 static const char *sec = "bacnet_sc";
@@ -896,13 +897,6 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
     }
 
-    if ((apdu_len >= 0) && (rpdata->object_property != PROP_WEEKLY_SCHEDULE) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
-
     return apdu_len;
 }
 
@@ -1231,7 +1225,6 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     SCHEDULE_DESCR *pObject;
     int len;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
-    bool is_array;
     BACNET_TIME_VALUE time_value;
     BACNET_UNSIGNED_INTEGER unsigned_value = 0;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE obj_prop_ref_value;
@@ -1248,14 +1241,6 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int value_c_len = 0;
 
 
-    /*  only array properties can have array options */
-    is_array = property_list_bacnet_array_member(
-        wp_data->object_type, wp_data->object_property);
-    if (!is_array && (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        return false;
-    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,

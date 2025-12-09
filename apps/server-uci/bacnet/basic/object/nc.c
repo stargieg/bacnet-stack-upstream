@@ -18,21 +18,21 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/bacdest.h"
-#include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/datetime.h"
 #include "bacnet/event.h"
 #include "bacnet/wp.h"
-#include "bacnet/basic/sys/keylist.h"
-#include "bacnet/basic/object/device.h"
 /* basic objects and services */
 #include "bacnet/basic/object/device.h"
-#include "bacnet/basic/object/nc.h"
 #include "bacnet/basic/binding/address.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/object/device.h"
+#include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
+#include "bacnet/basic/ucix/ucix.h"
 #include "bacnet/basic/tsm/tsm.h"
 #include "bacnet/datalink/datalink.h"
-
+/* me! */
+#include "bacnet/basic/object/nc.h"
 
 #if defined(INTRINSIC_REPORTING)
 /* buffer for sending event messages */
