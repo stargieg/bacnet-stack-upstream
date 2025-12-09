@@ -9,7 +9,6 @@
  */
 #include "bacnet/datalink/datalink.h"
 
-#if defined(BACDL_MULTIPLE) || defined FOR_DOXYGEN
 #if defined(BACDL_ETHERNET)
 #include "bacnet/datalink/ethernet.h"
 #endif
@@ -388,13 +387,16 @@ void datalink_maintenance_timer(uint16_t seconds)
 {
     switch (Datalink_Transport) {
         case DATALINK_NONE:
+            (void)seconds;
             break;
 #if defined(BACDL_ARCNET)
         case DATALINK_ARCNET:
+            (void)seconds;
             break;
 #endif
 #if defined(BACDL_ETHERNET)
         case DATALINK_ETHERNET:
+            (void)seconds;
             break;
 #endif
 #if defined(BACDL_BIP)
@@ -409,6 +411,7 @@ void datalink_maintenance_timer(uint16_t seconds)
 #endif
 #if defined(BACDL_MSTP)
         case DATALINK_MSTP:
+            (void)seconds;
             break;
 #endif
 #if defined(BACDL_BSC)
@@ -420,7 +423,6 @@ void datalink_maintenance_timer(uint16_t seconds)
             break;
     }
 }
-#endif
 
 #if defined(BACDL_NONE)
 bool datalink_init(char *ifname)
