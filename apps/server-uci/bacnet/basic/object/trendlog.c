@@ -1161,24 +1161,28 @@ bool TL_Is_Enabled(int iLog)
     if (!pObject)
         return false;
 #if 0
-        debug_printf("\nFlags - %u, Start - %u, Stop - %u\n",
+        debug_printf("Trendlog[%i]: Enable %i Flags - %u, Start - %u, Stop - %u\n",
+        (unsigned int) iLog,
+        (unsigned int) pObject->bEnable,
         (unsigned int) pObject->ucTimeFlags,
         (unsigned int) pObject->tStartTime,
         (unsigned int) pObject->tStopTime);
 #endif
     if (pObject->bEnable == false) {
         /* Not enabled so time is irrelevant */
+        debug_printf("Trendlog[%i]: Disbaled by Enable = false\n",(unsigned int) iLog);
         bStatus = false;
     } else if (
         (pObject->ucTimeFlags == 0) &&
         (pObject->tStopTime < pObject->tStartTime)) {
         /* Start time was after stop time as per 12.25.6 and 12.25.7 */
+        debug_printf("Trendlog[%i]: Disbaled Start time was after stop time\n",(unsigned int) iLog);
         bStatus = false;
     } else if (pObject->ucTimeFlags != (TL_T_START_WILD | TL_T_STOP_WILD)) {
         /* enabled and either 1 wild card or none */
         tNow = Trend_Log_Epoch_Seconds_Now();
 #if 0
-        debug_printf("\nFlags - %u, Current - %u, Start - %u, Stop - %u\n",
+        debug_printf("Flags - %u, Current - %u, Start - %u, Stop - %u\n",
             (unsigned int) pObject->ucTimeFlags, (unsigned int) tNow,
             (unsigned int) pObject->tStartTime,
             (unsigned int) pObject->tStopTime);
@@ -1186,22 +1190,26 @@ bool TL_Is_Enabled(int iLog)
         if ((pObject->ucTimeFlags & TL_T_START_WILD) != 0) {
             /* wild card start time */
             if (tNow > pObject->tStopTime) {
+                debug_printf("Trendlog[%i]: Disbaled Stop time is in the past\n",(unsigned int) iLog);
                 bStatus = false;
             }
         } else if ((pObject->ucTimeFlags & TL_T_STOP_WILD) != 0) {
             /* wild card stop time */
             if (tNow < pObject->tStartTime) {
+                debug_printf("Trendlog[%i]: Disbaled Start time is in the future\n",(unsigned int) iLog);
                 bStatus = false;
             }
         } else {
 #if 0
-            debug_printf("\nCurrent - %u, Start - %u, Stop - %u\n",
-                (unsigned int) tNow, (unsigned int) pObject->tStartTime,
+            debug_printf("Trendlog[%i]: Current - %u, Start - %u, Stop - %u\n",
+                (unsigned int) iLog, (unsigned int) tNow,
+                (unsigned int) pObject->tStartTime,
                 (unsigned int) pObject->tStopTime);
 #endif
             /* No wildcards so use both times */
             if ((tNow < pObject->tStartTime) ||
                 (tNow > pObject->tStopTime)) {
+                debug_printf("Trendlog[%i]: Disbaled Start time is in the future or Stop time is in the past\n",(unsigned int) iLog);
                 bStatus = false;
             }
         }
@@ -1890,8 +1898,6 @@ static void TL_fetch_property(int iLog)
     BACNET_ERROR_CODE error_code = ERROR_CODE_OTHER;
     int iLen = 0;
     struct object_data *pObject;
-    uint8_t tag_number = 0;
-    uint32_t len_value_type = 0;
     BACNET_TAG tag;
     unsigned max_apdu = 0;
     BACNET_APPLICATION_DATA_VALUE value; /* for decode value data */
@@ -1912,13 +1918,18 @@ static void TL_fetch_property(int iLog)
         ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
     if (iLen < 0) {
         /* Insert error code into log */
+        debug_printf("Trendlog[%i]: Error local_read_property error_class %i error_code %i\n",
+            (unsigned int) iLog, (unsigned int) error_class, (unsigned int) error_code);
         write_error_to_rec(error_class, error_code, iLog);
     } else {
         /* Decode data returned and see if we can fit it into the log */
         iLen =
-            decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
-        switch (tag_number) {
+            bacnet_tag_decode(ValueBuf, iLen, &tag);
+        value.tag = tag.number;
+        switch (tag.number) {
             case BACNET_APPLICATION_TAG_NULL:
+                debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
+                    (unsigned int) iLog);
                 break;
 
             case BACNET_APPLICATION_TAG_BOOLEAN:
@@ -1962,6 +1973,8 @@ static void TL_fetch_property(int iLog)
                 TempRec.Datum.Error.usCode = ERROR_CODE_DATATYPE_NOT_SUPPORTED;
                 TempRec.ucRecType = TL_TYPE_ERROR;
 #endif
+                debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG error_class %i error_code %i\n",
+                    (unsigned int) iLog, (unsigned int) error_class, (unsigned int) error_code);
                 write_error_to_rec(error_class, error_code, iLog);
                 break;
         }
@@ -2173,6 +2186,8 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
     pObject = Keylist_Data_Index(Object_List, iCount);
     switch (value.tag) {
     case BACNET_APPLICATION_TAG_NULL:
+        debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
+            (unsigned int) iCount);
         TempRec.ucRecType = TL_TYPE_NULL;
         break;
 
