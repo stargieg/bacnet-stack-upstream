@@ -419,7 +419,7 @@ int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_ACK_REQUIRED:
-            Notification_Class_Get_Ack_Required(rpdata->object_instance, u8Val);
+            Notification_Class_Get_Ack_Required(rpdata->object_instance, &u8Val);
 
             bitstring_init(&bit_string);
             bitstring_set_bit(
@@ -865,9 +865,7 @@ void Notification_Class_Set_Priorities(
         int i;
 
         for (i = 0; i < 3; i++) {
-            if (PriorityArray[i] <= 255) {
-                pObject->Priority[i] = PriorityArray[i];
-            }
+            pObject->Priority[i] = PriorityArray[i];
         }
     }
 }
@@ -890,7 +888,7 @@ void Notification_Class_Get_Ack_Required(
 
     pObject = Keylist_Data(Object_List, Object_Instance);
     if (pObject) {
-        pAckRequired = pObject->Ack_Required;
+        *pAckRequired = pObject->Ack_Required;
     } else {
         *pAckRequired = 0;
         return; /* unknown object */
