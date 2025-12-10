@@ -92,9 +92,9 @@ static enum {
 static BACNET_IP_ADDRESS BBMD_Address;
 static bool BBMD_Address_Valid;
 static uint16_t BBMD_Result = 0;
-#if defined(BACDL_BIP) && BBMD_ENABLED
 static BACNET_IP_BROADCAST_DISTRIBUTION_TABLE_ENTRY BBMD_Table_Entry;
 #endif
+
 static uint32_t Network_Port_Instance = 1;
 
 /**
@@ -112,6 +112,8 @@ void dlenv_debug_disable(void)
 {
     Datalink_Debug = false;
 }
+
+#if defined(BACDL_BIP)
 
 /* Simple setters for BBMD registration variables. */
 
@@ -346,6 +348,7 @@ static int bbmd6_register_as_foreign_device(void)
 #endif
 
 
+#if defined(BACDL_BIP)
 /**
  * @brief
  *
@@ -361,7 +364,9 @@ static void bip_network_port_activate_changes(uint32_t instance)
     (void)instance;
 #endif
 }
+#endif
 
+#if defined(BACDL_BIP)
 /**
  * @brief
  *
@@ -377,6 +382,7 @@ static void bip_network_port_discard_changes(uint32_t instance)
     (void)instance;
 #endif
 }
+#endif
 
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #if defined(BACDL_BIP)
