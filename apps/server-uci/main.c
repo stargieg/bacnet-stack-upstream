@@ -71,7 +71,8 @@ static enum {
     DATALINK_BIP,
     DATALINK_BIP6,
     DATALINK_MSTP,
-    DATALINK_BSC
+    DATALINK_BSC,
+    DATALINK_ZIGBEE
 } Datalink_Transport;
 
 
@@ -97,6 +98,7 @@ static struct mstimer BACnet_Object_Timer;
 /** Buffer used for receiving */
 #if 0
 static uint8_t Rx_Buf[MAX_MPDU] = { 0 };
+
 /* configure an example structured view object subordinate list */
 #if (BACNET_PROTOCOL_REVISION >= 4)
 #define LIGHTING_OBJECT_WATTS OBJECT_ACCUMULATOR
@@ -125,6 +127,7 @@ static uint8_t Rx_Buf[MAX_MPDU] = { 0 };
 #else
 #define LIGHTING_OBJECT_RELAY OBJECT_BINARY_OUTPUT
 #endif
+
 static BACNET_SUBORDINATE_DATA Lighting_Subordinate[] = {
     { 0, LIGHTING_OBJECT_WATTS, 1, "watt-hours", 0, 0, NULL },
     { 0, LIGHTING_OBJECT_ADR, 1, "demand-response", 0, 0, NULL },
@@ -192,6 +195,9 @@ static uint8_t MSTP_Rx_Buf[DLMSTP_MPDU_MAX] = { 0 };
 #if defined(BACDL_BSC)
 static uint8_t BSC_Rx_Buf[BSC_MPDU_MAX] = { 0 };
 #endif
+#if defined(BACDL_ZIGBEE)
+static uint8_t ZIGBEE_Rx_Buf[BZLL_MPDU_MAX] = { 0 };
+#endif
 
 /** Initialize the handlers we will utilize.
  * @see Device_Init, apdu_set_unconfirmed_handler, apdu_set_confirmed_handler
@@ -207,7 +213,7 @@ static void Init_Service_Handlers(void)
 #if 0
     /* create some dynamically created objects as examples */
     object_data.object_instance = BACNET_MAX_INSTANCE;
-    for (i = 0; i <= BACNET_OBJECT_TYPE_LAST; i++) {
+    for (i = 0; i <= BACNET_OBJECT_TYPE_RESERVED_MIN; i++) {
         object_data.object_type = i;
         if (Device_Create_Object(&object_data)) {
             printf(
@@ -215,11 +221,10 @@ static void Init_Service_Handlers(void)
                 (unsigned)object_data.object_instance);
         }
     }
-    /* update structured view with this device instance */
-    Structured_View_Update();
 #endif
     /* we need to handle who-is to support dynamic device binding */
-    apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_IS, handler_who_is);
+    apdu_set_unconfirmed_handler(
+        SERVICE_UNCONFIRMED_WHO_IS, handler_who_is_who_am_i_unicast);
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_WHO_HAS, handler_who_has);
 
 
@@ -263,6 +268,8 @@ static void Init_Service_Handlers(void)
         SERVICE_UNCONFIRMED_UTC_TIME_SYNCHRONIZATION, handler_timesync_utc);
     apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_TIME_SYNCHRONIZATION, handler_timesync);
+    apdu_set_unconfirmed_handler(
+        SERVICE_UNCONFIRMED_YOU_ARE, handler_you_are_json_print);
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_SUBSCRIBE_COV, handler_cov_subscribe);
     apdu_set_unconfirmed_handler(
@@ -477,6 +484,11 @@ int main(int argc, char *argv[])
             printf("BSC Socket Max APDU: %d\n", BSC_MPDU_MAX);
 #endif
             break;
+        case DATALINK_ZIGBEE:
+#if defined(BACDL_ZIGBEE)
+            printf("Zigbee Max APDU: %d\n", BZLL_MPDU_MAX);
+#endif
+            break;
         default:
             printf("No Datalink APDU: %d\n", MAX_APDU);
             break;
@@ -485,6 +497,18 @@ int main(int argc, char *argv[])
     atexit(datalink_cleanup);
     /* broadcast an I-Am on startup */
     Send_I_Am(&Handler_Transmit_Buffer[0]);
+#if BACNET_PROTOCOL_REVISION >= 22
+    if (Device_Object_Instance_Number() == BACNET_MAX_INSTANCE) {
+        apdu_set_unconfirmed_handler(
+            SERVICE_UNCONFIRMED_YOU_ARE, handler_you_are_device_id_set);
+        /* The Who-Am-I service is used by a sending BACnet-user
+           to indicate that it requires identity configuration
+           via the You-Are service. */
+        Send_Who_Am_I_Broadcast(
+            Device_Vendor_Identifier(), Device_Model_Name(),
+            Device_Serial_Number());
+    }
+#endif
     /* loop forever */
     for (;;) {
         /* input */
@@ -517,6 +541,11 @@ int main(int argc, char *argv[])
 #if defined(BACDL_BSC)
             case DATALINK_BSC:
                 pdu_len = datalink_receive(&src, &BSC_Rx_Buf[0], BSC_MPDU_MAX, timeout);
+                break;
+#endif
+#if defined(BACDL_ZIGBEE)
+            case DATALINK_ZIGBEE:
+                pdu_len = datalink_receive(&src, &ZIGBEE_Rx_Buf[0], BZLL_MPDU_MAX, timeout);
                 break;
 #endif
             default:
@@ -554,6 +583,11 @@ int main(int argc, char *argv[])
 #if defined(BACDL_BSC)
                 case DATALINK_BSC:
                     npdu_handler(&src, &BSC_Rx_Buf[0], pdu_len);
+                    break;
+#endif
+#if defined(BACDL_ZIGBEE)
+                case DATALINK_ZIGBEE:
+                    npdu_handler(&src, &ZIGBEE_Rx_Buf[0], pdu_len);
                     break;
 #endif
                 default:

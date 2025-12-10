@@ -52,35 +52,8 @@ void dlenv_debug_enable(void);
 BACNET_STACK_EXPORT
 int dlenv_register_as_foreign_device(void);
 
-#if 0
 BACNET_STACK_EXPORT
 void dlenv_network_port_init(void);
-#endif
-#if defined(BACDL_ARCNET)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_arcnet(void);
-#endif
-#if defined(BACDL_ETHERNET)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_ethernet(void);
-#endif
-#if defined(BACDL_BIP)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_bip(void);
-#endif
-#if defined(BACDL_BIP6)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_bip6(void);
-#endif
-#if defined(BACDL_MSTP)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_mstp(void);
-#endif
-#if defined(BACDL_BSC)
-BACNET_STACK_EXPORT
-void dlenv_network_port_init_bsc(void);
-#endif
-
 
 BACNET_STACK_EXPORT
 void dlenv_maintenance_timer(uint16_t elapsed_seconds);
@@ -93,6 +66,29 @@ void dlenv_bbmd_ttl_set(uint16_t ttl_secs);
 
 BACNET_STACK_EXPORT
 int dlenv_bbmd_result(void);
+
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bip(uint32_t Network_Port_Instance);
+
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bip6(uint32_t Network_Port_Instance);
+
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_mstp(uint32_t Network_Port_Instance);
+
+BACNET_STACK_EXPORT
+void dlenv_network_port_init_bsc(
+    uint32_t instance,
+    char *primary_hub_uri,
+    char *failover_hub_uri,
+    char *filename_ca_1_cert,
+    char *filename_ca_2_cert,
+    char *filename_cert,
+    char *filename_key,
+    char *direct_binding,
+    char *hub_binding,
+    char *direct_connect_initiate,
+    char *direct_connect_accept_urls);
 
 #ifdef __cplusplus
 }
