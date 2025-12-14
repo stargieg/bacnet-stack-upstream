@@ -471,7 +471,7 @@ void dlenv_network_port_init_mstp(uint32_t instance)
     if (Datalink_Debug) {
         debug_fprintf(
             stderr,
-            "Network Interface %s mode=MSTP bitrate=%ld mac[0]=%ld "
+            "Network Port[%lu] mode=MSTP bitrate=%ld mac[0]=%ld "
             "max_info_frames=%ld, max_master=%ld\n",
             (unsigned long)instance, baud_rate, mac_address, max_info_frames,
             max_master);
