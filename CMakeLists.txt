@@ -1354,6 +1354,11 @@ if(SERVER_UCI)
     $<$<BOOL:${BACDL_BSC}>:${BACNET_PORT_DIRECTORY_PATH}/websocket-global.c>
     ${BACNET_PORT_DIRECTORY_PATH}/mstimer-init.c)
 
+  if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+      target_sources(server-uci PUBLIC
+        $<$<BOOL:${BACDL_MSTP}>:${BACNET_PORT_DIRECTORY_PATH}/termios2.h>
+      )
+  endif()
   target_include_directories(
     server-uci
     PUBLIC
