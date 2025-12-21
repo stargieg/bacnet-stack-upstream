@@ -1,0 +1,37 @@
+--- a/include/asm-generic/ioctl.h	2025-12-21 11:29:43.600190923 +0100
++++ b/include/asm-generic/ioctl.h	2025-12-21 11:33:11.600751227 +0100
+@@ -72,7 +72,7 @@
+ 	 ((nr)   << _IOC_NRSHIFT) | \
+ 	 ((size) << _IOC_SIZESHIFT))
+ 
+-#define _IOC_TYPECHECK(t) (sizeof(t))
++#define _IOC_TYPECHECK(t) ((int)sizeof(t))
+ 
+ /*
+  * Used to create numbers.
+@@ -81,9 +81,9 @@
+  * means userland is reading and kernel is writing.
+  */
+ #define _IO(type,nr)		_IOC(_IOC_NONE,(type),(nr),0)
+-#define _IOR(type,nr,size)	_IOC(_IOC_READ,(type),(nr),(_IOC_TYPECHECK(size)))
+-#define _IOW(type,nr,size)	_IOC(_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
+-#define _IOWR(type,nr,size)	_IOC(_IOC_READ|_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
++#define _IOR(type,nr,size)	_IOC(_IOC_READ,(type),(nr),(_IOC_TYPECHECK(size))) 
++#define _IOW(type,nr,size)	_IOC(_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size))) 
++#define _IOWR(type,nr,size)	_IOC(_IOC_READ|_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size))) 
+ #define _IOR_BAD(type,nr,size)	_IOC(_IOC_READ,(type),(nr),sizeof(size))
+ #define _IOW_BAD(type,nr,size)	_IOC(_IOC_WRITE,(type),(nr),sizeof(size))
+ #define _IOWR_BAD(type,nr,size)	_IOC(_IOC_READ|_IOC_WRITE,(type),(nr),sizeof(size))
+--- a/include/asm-generic/ioctls.h	2025-12-21 11:29:07.141725962 +0100
++++ b/include/asm-generic/ioctls.h	2025-12-21 11:32:21.486147003 +0100
+@@ -58,8 +58,8 @@
+ #define TIOCSBRK	0x5427  /* BSD compatibility */
+ #define TIOCCBRK	0x5428  /* BSD compatibility */
+ #define TIOCGSID	0x5429  /* Return the session ID of FD */
+-#define TCGETS2		_IOR('T', 0x2A, struct termios2)
+-#define TCSETS2		_IOW('T', 0x2B, struct termios2)
++#define TCGETS2 	_IOR('T', 0x2A, struct termios2)
++#define TCSETS2 	_IOW('T', 0x2B, struct termios2)
+ #define TCSETSW2	_IOW('T', 0x2C, struct termios2)
+ #define TCSETSF2	_IOW('T', 0x2D, struct termios2)
+ #define TIOCGRS485	0x542E
