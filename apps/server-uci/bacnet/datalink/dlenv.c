@@ -429,12 +429,12 @@ void dlenv_network_port_init_bip(uint32_t instance)
     Network_Port_Remote_BBMD_BIP_Lifetime_Set(instance, BBMD_TTL_Seconds);
     Network_Port_BBMD_Accept_FD_Registrations_Set(
         instance, bvlc_bbmd_accept_fd_registrations());
+    Network_Port_APDU_Length_Set(instance, BIP_APDU_MAX);
 #endif
     /* common NP data */
     Network_Port_Reliability_Set(instance, RELIABILITY_NO_FAULT_DETECTED);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -489,7 +489,9 @@ void dlenv_network_port_init_mstp(uint32_t instance)
     Network_Port_Reliability_Set(instance, RELIABILITY_NO_FAULT_DETECTED);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+#ifdef BACDL_MSTP
+    Network_Port_APDU_Length_Set(instance, DLMSTP_APDU_MAX);
+#endif
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -531,7 +533,9 @@ void dlenv_network_port_init_bip6(uint32_t instance)
     Network_Port_Link_Speed_Set(instance, 0.0);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+#ifdef BACDL_BIP6
+    Network_Port_APDU_Length_Set(instance, BIP6_APDU_MAX);
+#endif
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -559,7 +563,9 @@ void dlenv_network_port_init_zigbee(uint32_t instance)
     Network_Port_Link_Speed_Set(instance, 0.0);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
+#ifdef BACDL_ZIGBEE
+    Network_Port_APDU_Length_Set(instance, BZLL_MPDU_MAX);
+#endif
     Network_Port_Network_Number_Set(instance, 0);
     /* last thing - clear pending changes - we don't want to set these
        since they are already set */
@@ -628,11 +634,11 @@ void dlenv_network_port_init_bsc(
     Network_Port_Reliability_Set(instance, RELIABILITY_NO_FAULT_DETECTED);
     Network_Port_Out_Of_Service_Set(instance, false);
     Network_Port_Quality_Set(instance, PORT_QUALITY_UNKNOWN);
-    Network_Port_APDU_Length_Set(instance, MAX_APDU);
     Network_Port_Network_Number_Set(instance, 0);
 
     /* SC parameters */
 #ifdef BACDL_BSC
+    Network_Port_APDU_Length_Set(instance, BSC_APDU_MAX);
     bsc_generate_random_uuid(&uuid);
     Network_Port_SC_Local_UUID_Set(instance, (BACNET_UUID *)&uuid);
     bsc_generate_random_vmac(&vmac);
@@ -953,6 +959,8 @@ int dlenv_init(void)
     char *direct_connect_accept_urls = NULL;
     char option_chr[16];
     char ifname[32];
+    int apdu_size;
+
     ctx = ucix_init("bacnet_dev");
     if (!ctx) {
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
@@ -1023,6 +1031,7 @@ int dlenv_init(void)
         break;
     case DATALINK_MSTP:
         port_type = PORT_TYPE_MSTP;
+        apdu_size = DLMSTP_MPDU_MAX;
 #if defined(BACDL_MSTP)
         dlmstp_set_max_info_frames(ucix_get_option_int(ctx,
             "bacnet_dev", "0", "max_info_frames", 1));
