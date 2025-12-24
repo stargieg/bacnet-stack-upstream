@@ -21,6 +21,13 @@ The git repositories are hosted at the following sites:
 
 ### Added
 
+* Added API and optional properties to basic load control object example
+  Refactored BACnetShedLevel encoding, decoding, and printing into separate
+  file. Added BACnetShedLevel validation testing. (#1187)
+* Added API for Analog_Input_Notification_Class, Analog_Input_Event_Enable,
+  and Analog_Input_Notify_Type. (#1184)
+* Added API and optional properties to basic lighting output object example
+  for power and feedback value. (#1185)
 * Added properties to the Channel object write member value coercion
   minimal properties supported. (#1176)
 * Added Send_x_Address() API to ReadPropertyMultiple, WritePropertyMultiple,
@@ -45,6 +52,9 @@ The git repositories are hosted at the following sites:
 
 ### Changed
 
+* Changed the load control object AbleToMeetShed to only check for immediate
+  shed ability and added CanNowComplyWithShed function to attempt to meet the
+  shed request while in the non-compliant state. (#1191)
 * Changed the size of MAX_HEADER in BACDL_MULTIPLE because 8 is not
   big enough for some datalinks (e.g. mstp). (#1170)
 * Changed printf() in many apps to use debug_printf() and friends. (#1168)
@@ -56,6 +66,13 @@ The git repositories are hosted at the following sites:
 
 ### Fixed
 
+* Fixed lighting-output object blink warn to honor blink-warn-enable.
+  Fixed the blink warn logic for a non-zero percent value blink inhibit.
+  Fixed the warn relinquish to actually relinquish. (#1192)
+* Fixed channel-value encoding in the channel object when no-coercian
+  is required for lighting-command, color-command, and xy-color. (#1190)
+* Fixed NULL handling in CharacterString sprintf which caused an endless
+  loop. (#1189)
 * Fixed a regression in the rpm_ack_object_property_process() function
   that prevented proper parsing of multi-object ReadPropertyMultiple ACK
   responses. The bug was introduced in PR [#765] and caused the function
