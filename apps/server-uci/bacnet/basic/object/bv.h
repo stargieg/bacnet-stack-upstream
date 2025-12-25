@@ -156,10 +156,13 @@ BACNET_STACK_EXPORT
 void Binary_Value_Cleanup(void);
 
 BACNET_STACK_EXPORT
-unsigned Binary_Value_Event_State(uint32_t object_instance);
-
+const char *Binary_Value_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-bool Binary_Value_Event_State_Set(uint32_t object_instance,unsigned state);
+bool Binary_Value_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT

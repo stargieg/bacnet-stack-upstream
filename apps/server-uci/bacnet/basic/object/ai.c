@@ -66,10 +66,13 @@ struct object_data {
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
+    const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
+    const char *Event_Message_Texts_Custom[MAX_BACNET_EVENT_TRANSITION];
     /* time to generate event notification */
     uint32_t Remaining_Time_Delay;
     /* AckNotification informations */
     ACK_NOTIFICATION Ack_notify_data;
+    BACNET_RELIABILITY Last_ToFault_Event_Reliability;
 #endif /* INTRINSIC_REPORTING */
 };
 
@@ -96,6 +99,8 @@ struct object_data_t {
     unsigned Event_Enable:3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
+    const char *Event_Message_Texts;
+    const char *Event_Message_Texts_Custom;
 #endif /* INTRINSIC_REPORTING */
 };
 
@@ -141,6 +146,7 @@ static const int32_t Properties_Optional[] = {
     PROP_NOTIFY_TYPE,
     PROP_EVENT_TIME_STAMPS,
     PROP_EVENT_DETECTION_ENABLE,
+    PROP_EVENT_MESSAGE_TEXTS,
 #endif
     -1
 };
@@ -502,52 +508,6 @@ unsigned Analog_Input_Event_State(uint32_t object_instance)
 
     return state;
 }
-
-#if defined(INTRINSIC_REPORTING)
-/**
- * For a given object instance-number, gets the event-detection-enable property
- * value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-detection-enable property value
- */
-bool Analog_Input_Event_Detection_Enable(uint32_t object_instance)
-{
-    bool retval = false;
-
-    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
-
-    if (pObject) {
-        retval = pObject->Event_Detection_Enable;
-    }
-
-    return retval;
-}
-
-/**
- * For a given object instance-number, sets the event-detection-enable property
- * value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-detection-enable property value
- */
-bool Analog_Input_Event_Detection_Enable_Set(
-    uint32_t object_instance, bool value)
-{
-    bool retval = false;
-
-    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
-
-    if (pObject) {
-        pObject->Event_Detection_Enable = value;
-        retval = true;
-    }
-
-    return retval;
-}
-#endif
 
 /**
  * @brief For a given object instance-number, returns the description
@@ -1204,6 +1164,126 @@ bool Analog_Input_Notify_Type_Set(uint32_t object_instance, uint8_t value)
     return status;
 }
 
+static void
+Analog_Input_Reset_Event_Properties(uint32_t object_instance)
+{
+    unsigned j;
+    struct object_data *pObject;
+    /* initialize Event time stamps using wildcards
+            and set Acked_transitions */
+    pObject = Keylist_Data(Object_List, object_instance);
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
+        datetime_wildcard_set(&pObject->Event_Time_Stamps[j]);
+        pObject->Acked_Transitions[j].bIsAcked = true;
+        pObject->Event_Message_Texts[j] = NULL;
+    }
+    pObject->Event_State = EVENT_STATE_NORMAL;
+    pObject->Last_ToFault_Event_Reliability = RELIABILITY_NO_FAULT_DETECTED;
+}
+
+/**
+ * For a given object instance-number, gets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Input_Event_Detection_Enable(uint32_t object_instance)
+{
+    bool retval = false;
+
+    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
+
+    if (pObject) {
+        retval = pObject->Event_Detection_Enable;
+    }
+
+    return retval;
+}
+
+/**
+ * For a given object instance-number, sets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Input_Event_Detection_Enable_Set(
+    uint32_t object_instance, bool value)
+{
+    bool retval = false;
+
+    struct object_data *pObject = Keylist_Data(Object_List, object_instance);
+
+    if (pObject) {
+        pObject->Event_Detection_Enable = value;
+        if (!pObject->Event_Detection_Enable) {
+            /*When this property is FALSE, Event_State shall be NORMAL, and the
+            properties Acked_Transitions, Event_Time_Stamps, and
+            Event_Message_Texts shall be equal to their respective initial
+            conditions.*/
+            Analog_Input_Reset_Event_Properties(object_instance);
+        }
+        retval = true;
+    }
+
+    return retval;
+}
+
+/**
+ * @brief For a given object instance-number and event transition, returns the
+ * event message text
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @return event message text or NULL if object not found or transition invalid
+ */
+const char *Analog_Input_Event_Message_Text(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition)
+{
+    const char *text = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        text = pObject->Event_Message_Texts[transition];
+        if (!text) {
+            text = "";
+        }
+    }
+
+    return text;
+}
+
+/**
+ * @brief For a given object instance-number and event transition, sets the
+ * custom event message text
+ * NOTE: Event_Message_Text will be generated on event if custom_text is null
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @param  custom_text - holds the event message text to be set
+ * @return  true if custom event message text was set
+ */
+
+bool Analog_Input_Event_Message_Text_Custom_Set(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition,
+    const char *const custom_text)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        pObject->Event_Message_Texts_Custom[transition] = custom_text;
+        status = true;
+    }
+
+    return status;
+}
+
 
 /**
  * @brief Encode a EventTimeStamps property element
@@ -1248,6 +1328,32 @@ static int Analog_Input_Event_Time_Stamps_Encode(
         }
     } else {
         apdu_len = BACNET_STATUS_ERROR;
+    }
+
+    return apdu_len;
+}
+
+/**
+ * @brief Encode a BACnetARRAY property element
+ * @param object_instance [in] object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
+ */
+static int Analog_Input_Event_Message_Texts_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
+{
+    int apdu_len = BACNET_STATUS_ERROR;
+    const char *text = NULL; /* return value */
+    BACNET_CHARACTER_STRING char_string = { 0 };
+
+    text = Analog_Input_Event_Message_Text(object_instance, index);
+    if (text) {
+        characterstring_init_ansi(&char_string, text);
+        apdu_len = encode_application_character_string(apdu, &char_string);
     }
 
     return apdu_len;
@@ -1870,6 +1976,19 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
             break;
+        case PROP_EVENT_MESSAGE_TEXTS:
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Analog_Input_Event_Message_Texts_Encode,
+                MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+            }
+            break;
 #endif
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
@@ -2257,6 +2376,22 @@ void Analog_Input_Write_Present_Value_Callback_Set(
     Analog_Input_Write_Present_Value_Callback = cb;
 }
 
+#if defined(INTRINSIC_REPORTING)
+static const char *Analog_Input_Event_Message(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *default_text)
+{
+    struct object_data *pObject = NULL;
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION &&
+        pObject->Event_Message_Texts_Custom[transition]) {
+        return pObject->Event_Message_Texts_Custom[transition];
+    }
+    return default_text;
+}
+#endif
+
 /**
  * @brief Handles the Intrinsic Reporting Service for the Analog Input Object
  * @param  object_instance - object-instance number of the object
@@ -2265,12 +2400,15 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
 {
 #if defined(INTRINSIC_REPORTING)
     BACNET_EVENT_NOTIFICATION_DATA event_data = { 0 };
-    BACNET_CHARACTER_STRING msgText = { 0 };
+    const char *msgText = NULL;
+    BACNET_CHARACTER_STRING msgCharString = { 0 };
     struct object_data *pObject = NULL;
     uint8_t FromState = 0;
     uint8_t ToState = 0;
     float ExceededLimit = 0.0f;
     float PresentVal = 0.0f;
+    BACNET_RELIABILITY Reliability = RELIABILITY_NO_FAULT_DETECTED;
+    BACNET_PROPERTY_VALUE propertyValues = { 0 };
     bool SendNotify = false;
 
     pObject = Keylist_Data(Object_List, object_instance);
@@ -2290,149 +2428,182 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         ToState = pObject->Ack_notify_data.EventState;
         debug_printf(
             "Analog-Input[%d]: Send AckNotification.\n", object_instance);
-        characterstring_init_ansi(&msgText, "AckNotification");
+        msgText = "AckNotification";
         /* Notify Type */
         event_data.notifyType = NOTIFY_ACK_NOTIFICATION;
         /* Send EventNotification. */
         SendNotify = true;
     } else {
-        /* actual Present_Value */
         PresentVal = Analog_Input_Present_Value(object_instance);
         FromState = pObject->Event_State;
-        switch (pObject->Event_State) {
-            case EVENT_STATE_NORMAL:
-                /* A TO-OFFNORMAL event is generated under these conditions:
-                   (a) the Present_Value must exceed the High_Limit for a
-                   minimum period of time, specified in the Time_Delay property,
-                   and (b) the HighLimitEnable flag must be set in the
-                   Limit_Enable property, and
-                   (c) the TO-OFFNORMAL flag must be set in the Event_Enable
-                   property. */
-                if ((PresentVal > pObject->High_Limit) &&
-                    ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
-                     EVENT_HIGH_LIMIT_ENABLE) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                     EVENT_ENABLE_TO_OFFNORMAL)) {
-                    if (!pObject->Remaining_Time_Delay) {
-                        pObject->Event_State = EVENT_STATE_HIGH_LIMIT;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+        Reliability = pObject->Reliability;
+        if (Reliability != RELIABILITY_NO_FAULT_DETECTED) {
+            /*Fault detection takes precedence over the detection of normal and
+            offnormal states. As such, when Reliability has a value other than
+            NO_FAULT_DETECTED, the event-state-detection process will determine
+            the object's event state to be FAULT.*/
+            pObject->Event_State = EVENT_STATE_FAULT;
+        } else if (FromState == EVENT_STATE_FAULT) {
+            pObject->Event_State = EVENT_STATE_NORMAL;
+        } else {
+            switch (pObject->Event_State) {
+                case EVENT_STATE_NORMAL:
+                    /* A TO-OFFNORMAL event is generated under these conditions:
+                    (a) the Present_Value must exceed the High_Limit for a
+                    minimum period of time, specified in the Time_Delay
+                    property, and (b) the HighLimitEnable flag must be set in
+                    the Limit_Enable property, and (c) the TO-OFFNORMAL flag
+                    must be set in the Event_Enable property. */
+                    if ((PresentVal > pObject->High_Limit) &&
+                        ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
+                         EVENT_HIGH_LIMIT_ENABLE) &&
+                        ((pObject->Event_Enable &
+                          EVENT_ENABLE_TO_OFFNORMAL) ==
+                         EVENT_ENABLE_TO_OFFNORMAL)) {
+                        if (!pObject->Remaining_Time_Delay) {
+                            pObject->Event_State = EVENT_STATE_HIGH_LIMIT;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
-                    break;
-                }
-                /* A TO-OFFNORMAL event is generated under these conditions:
-                   (a) the Present_Value must exceed the Low_Limit plus the
-                   Deadband for a minimum period of time, specified in the
-                   Time_Delay property, and (b) the LowLimitEnable flag must be
-                   set in the Limit_Enable property, and
-                   (c) the TO-NORMAL flag must be set in the Event_Enable
-                   property. */
-                if ((PresentVal < pObject->Low_Limit) &&
-                    ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
-                     EVENT_LOW_LIMIT_ENABLE) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                     EVENT_ENABLE_TO_OFFNORMAL)) {
-                    if (!pObject->Remaining_Time_Delay) {
-                        pObject->Event_State = EVENT_STATE_LOW_LIMIT;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+                    /* A TO-OFFNORMAL event is generated under these conditions:
+                    (a) the Present_Value must exceed the Low_Limit plus the
+                    Deadband for a minimum period of time, specified in the
+                    Time_Delay property, and (b) the LowLimitEnable flag must be
+                    set in the Limit_Enable property, and
+                    (c) the TO-NORMAL flag must be set in the Event_Enable
+                    property. */
+                    if ((PresentVal < pObject->Low_Limit) &&
+                        ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
+                         EVENT_LOW_LIMIT_ENABLE) &&
+                        ((pObject->Event_Enable &
+                          EVENT_ENABLE_TO_OFFNORMAL) ==
+                         EVENT_ENABLE_TO_OFFNORMAL)) {
+                        if (!pObject->Remaining_Time_Delay) {
+                            pObject->Event_State = EVENT_STATE_LOW_LIMIT;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
+                    /* value of the object is still in the same event state */
+                    pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-                }
-                /* value of the object is still in the same event state */
-                pObject->Remaining_Time_Delay = pObject->Time_Delay;
-                break;
-            case EVENT_STATE_HIGH_LIMIT:
-                /* Once exceeded, the Present_Value must fall below the
-                   High_Limit minus the Deadband before a TO-NORMAL event is
-                   generated under these conditions: (a) the Present_Value must
-                   fall below the High_Limit minus the Deadband for a minimum
-                   period of time, specified in the Time_Delay property, and (b)
-                   the HighLimitEnable flag must be set in the Limit_Enable
-                   property, and (c) the TO-NORMAL flag must be set in the
-                   Event_Enable property. */
-                if (((PresentVal <
-                      pObject->High_Limit - pObject->Deadband) &&
-                     ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
-                      EVENT_HIGH_LIMIT_ENABLE) &&
-                     ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                      EVENT_ENABLE_TO_NORMAL)) ||
-                    /* 13.3.6 (c) If pCurrentState is HIGH_LIMIT, and the
-                     * HighLimitEnable flag of pLimitEnable is FALSE, then
-                     * indicate a transition to the NORMAL event state. */
-                    (!(pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE))) {
-                    if ((!pObject->Remaining_Time_Delay) ||
+                case EVENT_STATE_HIGH_LIMIT:
+                    /* Once exceeded, the Present_Value must fall below the
+                    High_Limit minus the Deadband before a TO-NORMAL event is
+                    generated under these conditions: (a) the Present_Value must
+                    fall below the High_Limit minus the Deadband for a minimum
+                    period of time, specified in the Time_Delay property, and
+                    (b) the HighLimitEnable flag must be set in the Limit_Enable
+                    property, and (c) the TO-NORMAL flag must be set in the
+                    Event_Enable property. */
+                    if (((PresentVal <
+                          pObject->High_Limit - pObject->Deadband) &&
+                         ((pObject->Limit_Enable & EVENT_HIGH_LIMIT_ENABLE) ==
+                          EVENT_HIGH_LIMIT_ENABLE) &&
+                         ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                          EVENT_ENABLE_TO_NORMAL)) ||
+                        /* 13.3.6 (c) If pCurrentState is HIGH_LIMIT, and the
+                         * HighLimitEnable flag of pLimitEnable is FALSE, then
+                         * indicate a transition to the NORMAL event state. */
                         (!(pObject->Limit_Enable &
                            EVENT_HIGH_LIMIT_ENABLE))) {
-                        pObject->Event_State = EVENT_STATE_NORMAL;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+                        if ((!pObject->Remaining_Time_Delay) ||
+                            (!(pObject->Limit_Enable &
+                               EVENT_HIGH_LIMIT_ENABLE))) {
+                            pObject->Event_State = EVENT_STATE_NORMAL;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
+                    /* value of the object is still in the same event state */
+                    pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-                }
-                /* value of the object is still in the same event state */
-                pObject->Remaining_Time_Delay = pObject->Time_Delay;
-                break;
-            case EVENT_STATE_LOW_LIMIT:
-                /* Once the Present_Value has fallen below the Low_Limit,
-                   the Present_Value must exceed the Low_Limit plus the Deadband
-                   before a TO-NORMAL event is generated under these conditions:
-                   (a) the Present_Value must exceed the Low_Limit plus the
-                   Deadband for a minimum period of time, specified in the
-                   Time_Delay property, and (b) the LowLimitEnable flag must be
-                   set in the Limit_Enable property, and
-                   (c) the TO-NORMAL flag must be set in the Event_Enable
-                   property. */
-                if (((PresentVal >
-                      pObject->Low_Limit + pObject->Deadband) &&
-                     ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
-                      EVENT_LOW_LIMIT_ENABLE) &&
-                     ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                      EVENT_ENABLE_TO_NORMAL)) ||
-                    /* 13.3.6 (f) If pCurrentState is LOW_LIMIT, and the
-                     * LowLimitEnable flag of pLimitEnable is FALSE, then
-                     * indicate a transition to the NORMAL event state. */
-                    (!(pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE))) {
-                    if ((!pObject->Remaining_Time_Delay) ||
+                case EVENT_STATE_LOW_LIMIT:
+                    /* Once the Present_Value has fallen below the Low_Limit,
+                    the Present_Value must exceed the Low_Limit plus the
+                    Deadband before a TO-NORMAL event is generated under these
+                    conditions: (a) the Present_Value must exceed the Low_Limit
+                    plus the Deadband for a minimum period of time, specified in
+                    the Time_Delay property, and (b) the LowLimitEnable flag
+                    must be set in the Limit_Enable property, and (c) the
+                    TO-NORMAL flag must be set in the Event_Enable property. */
+                    if (((PresentVal >
+                          pObject->Low_Limit + pObject->Deadband) &&
+                         ((pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE) ==
+                          EVENT_LOW_LIMIT_ENABLE) &&
+                         ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                          EVENT_ENABLE_TO_NORMAL)) ||
+                        /* 13.3.6 (f) If pCurrentState is LOW_LIMIT, and the
+                         * LowLimitEnable flag of pLimitEnable is FALSE, then
+                         * indicate a transition to the NORMAL event state. */
                         (!(pObject->Limit_Enable & EVENT_LOW_LIMIT_ENABLE))) {
-                        pObject->Event_State = EVENT_STATE_NORMAL;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+                        if ((!pObject->Remaining_Time_Delay) ||
+                            (!(pObject->Limit_Enable &
+                               EVENT_LOW_LIMIT_ENABLE))) {
+                            pObject->Event_State = EVENT_STATE_NORMAL;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
+                    /* value of the object is still in the same event state */
+                    pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-                }
-                /* value of the object is still in the same event state */
-                pObject->Remaining_Time_Delay = pObject->Time_Delay;
-                break;
-            default:
-                return; /* shouldn't happen */
-        } /* switch (FromState) */
+                default:
+                    return; /* shouldn't happen */
+            } /* switch (FromState) */
+        }
         ToState = pObject->Event_State;
-        if (FromState != ToState) {
+        if (FromState != ToState ||
+            (ToState == EVENT_STATE_FAULT &&
+             Reliability != pObject->Last_ToFault_Event_Reliability)) {
             /* Event_State has changed.
                Need to fill only the basic parameters of this type of event.
                Other parameters will be filled in common function. */
             switch (ToState) {
                 case EVENT_STATE_HIGH_LIMIT:
                     ExceededLimit = pObject->High_Limit;
-                    characterstring_init_ansi(&msgText, "Goes to high limit");
+                    msgText = Analog_Input_Event_Message(
+                        object_instance, TRANSITION_TO_OFFNORMAL,
+                        "Goes to high limit");
                     break;
 
                 case EVENT_STATE_LOW_LIMIT:
                     ExceededLimit = pObject->Low_Limit;
-                    characterstring_init_ansi(&msgText, "Goes to low limit");
+                    msgText = Analog_Input_Event_Message(
+                        object_instance, TRANSITION_TO_OFFNORMAL,
+                        "Goes to low limit");
                     break;
 
                 case EVENT_STATE_NORMAL:
                     if (FromState == EVENT_STATE_HIGH_LIMIT) {
                         ExceededLimit = pObject->High_Limit;
-                        characterstring_init_ansi(
-                            &msgText, "Back to normal state from high limit");
-                    } else {
+                        msgText = Analog_Input_Event_Message(
+                            object_instance, TRANSITION_TO_NORMAL,
+                            "Back to normal state from high limit");
+                    } else if (FromState == EVENT_STATE_LOW_LIMIT) {
                         ExceededLimit = pObject->Low_Limit;
-                        characterstring_init_ansi(
-                            &msgText, "Back to normal state from low limit");
+                        msgText = Analog_Input_Event_Message(
+                            object_instance, TRANSITION_TO_NORMAL,
+                            "Back to normal state from low limit");
+                    } else {
+                        ExceededLimit = 0;
+                        msgText = Analog_Input_Event_Message(
+                            object_instance, TRANSITION_TO_NORMAL,
+                            "Back to normal state from fault");
                     }
+                    break;
+
+                case EVENT_STATE_FAULT:
+                    ExceededLimit = 0;
+                    msgText = Analog_Input_Event_Message(
+                        object_instance, TRANSITION_TO_FAULT,
+                        bactext_reliability_name(Reliability));
+                    pObject->Last_ToFault_Event_Reliability = Reliability;
                     break;
 
                 default:
@@ -2460,23 +2631,35 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
             datetime_local(
                 &event_data.timeStamp.value.dateTime.date,
                 &event_data.timeStamp.value.dateTime.time, NULL, NULL);
-            /* fill Event_Time_Stamps */
+            /* set eventType and fill Event_Time_Stamps and
+             * Event_Message_Texts*/
             switch (ToState) {
                 case EVENT_STATE_HIGH_LIMIT:
                 case EVENT_STATE_LOW_LIMIT:
+                    event_data.eventType = EVENT_OUT_OF_RANGE;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+                        msgText;
                     break;
                 case EVENT_STATE_FAULT:
+                    event_data.eventType = EVENT_CHANGE_OF_RELIABILITY;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_FAULT],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_FAULT] =
+                        msgText;
                     break;
                 case EVENT_STATE_NORMAL:
+                    event_data.eventType = FromState == EVENT_STATE_FAULT
+                        ? EVENT_CHANGE_OF_RELIABILITY
+                        : EVENT_OUT_OF_RANGE;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
+                        msgText;
                     break;
                 default:
                     break;
@@ -2486,16 +2669,21 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
             switch (ToState) {
                 case EVENT_STATE_HIGH_LIMIT:
                 case EVENT_STATE_LOW_LIMIT:
+                    event_data.eventType = EVENT_OUT_OF_RANGE;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL]);
                     break;
                 case EVENT_STATE_FAULT:
+                    event_data.eventType = EVENT_CHANGE_OF_RELIABILITY;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_FAULT]);
                     break;
                 case EVENT_STATE_NORMAL:
+                    event_data.eventType = FromState == EVENT_STATE_FAULT
+                        ? EVENT_CHANGE_OF_RELIABILITY
+                        : EVENT_OUT_OF_RANGE;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL]);
@@ -2506,10 +2694,9 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         }
         /* Notification Class */
         event_data.notificationClass = pObject->Notification_Class;
-        /* Event Type */
-        event_data.eventType = EVENT_OUT_OF_RANGE;
         /* Message Text */
-        event_data.messageText = &msgText;
+        characterstring_init_ansi(&msgCharString, msgText);
+        event_data.messageText = &msgCharString;
         /* Notify Type */
         /* filled before */
         /* From State */
@@ -2520,31 +2707,59 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         event_data.toState = pObject->Event_State;
         /* Event Values */
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
-            /* Value that exceeded a limit. */
-            event_data.notificationParams.outOfRange.exceedingValue =
-                PresentVal;
-            /* Status_Flags of the referenced object. */
-            bitstring_init(
-                &event_data.notificationParams.outOfRange.statusFlags);
-            bitstring_set_bit(
-                &event_data.notificationParams.outOfRange.statusFlags,
-                STATUS_FLAG_IN_ALARM,
-                pObject->Event_State != EVENT_STATE_NORMAL);
-            bitstring_set_bit(
-                &event_data.notificationParams.outOfRange.statusFlags,
-                STATUS_FLAG_FAULT, false);
-            bitstring_set_bit(
-                &event_data.notificationParams.outOfRange.statusFlags,
-                STATUS_FLAG_OVERRIDDEN, false);
-            bitstring_set_bit(
-                &event_data.notificationParams.outOfRange.statusFlags,
-                STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
-            /* Deadband used for limit checking. */
-            event_data.notificationParams.outOfRange.deadband =
-                pObject->Deadband;
-            /* Limit that was exceeded. */
-            event_data.notificationParams.outOfRange.exceededLimit =
-                ExceededLimit;
+            if (event_data.eventType == EVENT_OUT_OF_RANGE) {
+                /* Value that exceeded a limit. */
+                event_data.notificationParams.outOfRange.exceedingValue =
+                    PresentVal;
+                /* Status_Flags of the referenced object. */
+                bitstring_init(
+                    &event_data.notificationParams.outOfRange.statusFlags);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_IN_ALARM,
+                    pObject->Event_State != EVENT_STATE_NORMAL);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_FAULT, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OVERRIDDEN, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
+                /* Deadband used for limit checking. */
+                event_data.notificationParams.outOfRange.deadband =
+                    pObject->Deadband;
+                /* Limit that was exceeded. */
+                event_data.notificationParams.outOfRange.exceededLimit =
+                    ExceededLimit;
+            } else {
+                event_data.notificationParams.changeOfReliability.reliability =
+                    Reliability;
+
+                propertyValues.propertyIdentifier = PROP_PRESENT_VALUE;
+                propertyValues.propertyArrayIndex = BACNET_ARRAY_ALL;
+                propertyValues.value.tag = BACNET_APPLICATION_TAG_REAL;
+                propertyValues.value.type.Real = PresentVal;
+                event_data.notificationParams.changeOfReliability
+                    .propertyValues = &propertyValues;
+
+                bitstring_init(&event_data.notificationParams
+                                    .changeOfReliability.statusFlags);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_IN_ALARM, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_FAULT,
+                    pObject->Event_State != EVENT_STATE_NORMAL);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OVERRIDDEN, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
+            }
         }
         /* add data from notification class */
         debug_printf(
@@ -2882,9 +3097,6 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
     struct object_data *pObject = NULL;
     int index = 0;
     unsigned priority = 0;
-#if defined(INTRINSIC_REPORTING)
-    unsigned j;
-#endif
 
     if (!Object_List) {
         Object_List = Keylist_Create();
@@ -2925,12 +3137,6 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
             pObject->Time_Delay = 0;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
-            /* initialize Event time stamps using wildcards
-            and set Acked_transitions */
-            for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
-                datetime_wildcard_set(&pObject->Event_Time_Stamps[j]);
-                pObject->Acked_Transitions[j].bIsAcked = true;
-            }
 #endif
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
@@ -2938,6 +3144,9 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
                 free(pObject);
                 return BACNET_MAX_INSTANCE;
             }
+#if defined(INTRINSIC_REPORTING)
+            Analog_Input_Reset_Event_Properties(object_instance);
+#endif
         } else {
             return BACNET_MAX_INSTANCE;
         }

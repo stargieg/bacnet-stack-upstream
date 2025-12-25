@@ -67,10 +67,13 @@ struct object_data {
     unsigned Notify_Type : 1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
+    const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
+    const char *Event_Message_Texts_Custom[MAX_BACNET_EVENT_TRANSITION];
     /* time to generate event notification */
     uint32_t Remaining_Time_Delay;
     /* AckNotification information */
     ACK_NOTIFICATION Ack_notify_data;
+    BACNET_RELIABILITY Last_ToFault_Event_Reliability;
     BACNET_BINARY_PV Alarm_Value;
 #endif
 };
@@ -137,6 +140,7 @@ static const int32_t Binary_Value_Properties_Optional[] = {
     PROP_NOTIFY_TYPE,
     PROP_EVENT_TIME_STAMPS,
     PROP_EVENT_DETECTION_ENABLE,
+    PROP_EVENT_MESSAGE_TEXTS,
 #endif
     -1
 };
@@ -710,6 +714,127 @@ void Binary_Value_Change_Of_Value_Clear(uint32_t object_instance)
 
     return;
 }
+
+/**
+ * For a given object instance-number, gets the event-state property value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-state property value
+ */
+unsigned Binary_Value_Event_State(uint32_t object_instance)
+{
+    unsigned state = EVENT_STATE_NORMAL;
+#if !defined(INTRINSIC_REPORTING)
+    (void)object_instance;
+#else
+    struct object_data *pObject = Binary_Value_Object(object_instance);
+
+    if (pObject) {
+        state = pObject->Event_State;
+    }
+#endif
+
+    return state;
+}
+
+
+#if defined(INTRINSIC_REPORTING)
+static void
+Binary_Value_Reset_Event_Properties(uint32_t object_instance)
+{
+    unsigned j;
+    struct object_data *pObject;
+    /* initialize Event time stamps using wildcards
+            and set Acked_transitions */
+    pObject = Keylist_Data(Object_List, object_instance);
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
+        datetime_wildcard_set(&pObject->Event_Time_Stamps[j]);
+        pObject->Acked_Transitions[j].bIsAcked = true;
+        pObject->Event_Message_Texts[j] = NULL;
+    }
+    pObject->Event_State = EVENT_STATE_NORMAL;
+    pObject->Last_ToFault_Event_Reliability = RELIABILITY_NO_FAULT_DETECTED;
+}
+
+/**
+ * @brief For a given object instance-number and event transition, returns the
+ * event message text
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @return event message text or NULL if object not found or transition invalid
+ */
+const char *Binary_Value_Event_Message_Text(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition)
+{
+    const char *text = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        text = pObject->Event_Message_Texts[transition];
+        if (!text) {
+            text = "";
+        }
+    }
+
+    return text;
+}
+
+/**
+ * @brief For a given object instance-number and event transition, sets the
+ * custom event message text
+ * NOTE: Event_Message_Text will be generated on event if custom_text is null
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @param  custom_text - holds the event message text to be set
+ * @return  true if custom event message text was set
+ */
+
+bool Binary_Value_Event_Message_Text_Custom_Set(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition,
+    const char *const custom_text)
+{
+    bool status = false; /* return value */
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        pObject->Event_Message_Texts_Custom[transition] = custom_text;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Encode a BACnetARRAY property element
+ * @param object_instance [in] object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
+ */
+static int Binary_Value_Event_Message_Texts_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX index, uint8_t *apdu)
+{
+    int apdu_len = BACNET_STATUS_ERROR;
+    const char *text = NULL; /* return value */
+    BACNET_CHARACTER_STRING char_string = { 0 };
+
+    text = Binary_Value_Event_Message_Text(object_instance, index);
+    if (text) {
+        characterstring_init_ansi(&char_string, text);
+        apdu_len = encode_application_character_string(apdu, &char_string);
+    }
+
+    return apdu_len;
+}
+#endif
 
 /**
  * @brief For a given object instance-number, loads the value_list with the COV
@@ -1446,6 +1571,19 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
             break;
+        case PROP_EVENT_MESSAGE_TEXTS:
+            apdu_len = bacnet_array_encode(
+                rpdata->object_instance, rpdata->array_index,
+                Binary_Value_Event_Message_Texts_Encode,
+                MAX_BACNET_EVENT_TRANSITION, apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
+            }
+            break;
 #endif
         default:
             rpdata->error_class = ERROR_CLASS_PROPERTY;
@@ -1843,9 +1981,6 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
         if (pObject) {
-#if defined(INTRINSIC_REPORTING)
-            unsigned j;
-#endif
             pObject->Object_Name = NULL;
             pObject->Description = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
@@ -1865,12 +2000,6 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
             pObject->Event_Detection_Enable = true;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
-            /* initialize Event time stamps using wildcards and set
-             * Acked_transitions */
-            for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
-                datetime_wildcard_set(&pObject->Event_Time_Stamps[j]);
-                pObject->Acked_Transitions[j].bIsAcked = true;
-            }
 
             /* Set handler for GetEventInformation function */
             handler_get_event_information_set(
@@ -1887,6 +2016,9 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
                 free(pObject);
                 return BACNET_MAX_INSTANCE;
             }
+#if defined(INTRINSIC_REPORTING)
+            Binary_Value_Reset_Event_Properties(object_instance);
+#endif
         } else {
             return BACNET_MAX_INSTANCE;
         }
@@ -2024,7 +2156,7 @@ static void uci_list(const char *sec_idx,
 }
 
 /**
- * Initializes the Binary Input object data
+ * Initializes the Binary Value object data
  */
 void Binary_Value_Init(void)
 {
@@ -2089,29 +2221,6 @@ void Binary_Value_Init(void)
 #endif
 }
 
-/**
- * For a given object instance-number, gets the event-state property value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-state property value
- */
-unsigned Binary_Value_Event_State(uint32_t object_instance)
-{
-    unsigned state = EVENT_STATE_NORMAL;
-#if !defined(INTRINSIC_REPORTING)
-    (void)object_instance;
-#else
-    struct object_data *pObject = Binary_Value_Object(object_instance);
-
-    if (pObject) {
-        state = pObject->Event_State;
-    }
-#endif
-
-    return state;
-}
-
 #if defined(INTRINSIC_REPORTING)
 /**
  * For a given object instance-number, gets the event-detection-enable property
@@ -2157,6 +2266,13 @@ bool Binary_Value_Event_Detection_Enable_Set(
 
     if (pObject) {
         pObject->Event_Detection_Enable = value;
+        if (!pObject->Event_Detection_Enable) {
+            /*When this property is FALSE, Event_State shall be NORMAL, and the
+            properties Acked_Transitions, Event_Time_Stamps, and
+            Event_Message_Texts shall be equal to their respective initial
+            conditions.*/
+            Binary_Value_Reset_Event_Properties(object_instance);
+        }
         retval = true;
     }
 #endif
@@ -2610,16 +2726,35 @@ bool Binary_Value_Alarm_Value_Set(
 }
 #endif /* (INTRINSIC_REPORTING) */
 
+#if defined(INTRINSIC_REPORTING)
+static const char *Binary_Value_Event_Message(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *default_text)
+{
+    struct object_data *pObject = NULL;
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION &&
+        pObject->Event_Message_Texts_Custom[transition]) {
+        return pObject->Event_Message_Texts_Custom[transition];
+    }
+    return default_text;
+}
+#endif
+
 void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
 {
 #if !(defined(INTRINSIC_REPORTING))
     (void)object_instance;
 #else
     BACNET_EVENT_NOTIFICATION_DATA event_data = { 0 };
-    BACNET_CHARACTER_STRING msgText = { 0 };
+    const char *msgText = NULL;
+    BACNET_CHARACTER_STRING msgCharString = { 0 };
     uint8_t FromState = 0;
     uint8_t ToState = 0;
     BACNET_BINARY_PV PresentVal = BINARY_INACTIVE;
+    BACNET_RELIABILITY Reliability = RELIABILITY_NO_FAULT_DETECTED;
+    BACNET_PROPERTY_VALUE propertyValues = { 0 };
     bool SendNotify = false;
     struct object_data *pObject = Binary_Value_Object(object_instance);
 
@@ -2639,7 +2774,7 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         ToState = pObject->Ack_notify_data.EventState;
         debug_printf(
             "Binary-Value[%d]: Send AckNotification.\n", object_instance);
-        characterstring_init_ansi(&msgText, "AckNotification");
+        msgText = "AckNotification";
 
         /* Notify Type */
         event_data.notifyType = NOTIFY_ACK_NOTIFICATION;
@@ -2650,77 +2785,97 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* actual Present_Value */
         PresentVal = Binary_Value_Present_Value(object_instance);
         FromState = pObject->Event_State;
-        switch (pObject->Event_State) {
-            case EVENT_STATE_NORMAL:
-                /* (a) If pCurrentState is NORMAL, and pMonitoredValue is equal
-                   to any of the values contained in pAlarmValues for
-                       pTimeDelay, then indicate a transition to the OFFNORMAL
-                   event state.
-                */
-                if ((PresentVal == pObject->Alarm_Value) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
-                     EVENT_ENABLE_TO_OFFNORMAL)) {
-                    if (!pObject->Remaining_Time_Delay) {
-                        pObject->Event_State = EVENT_STATE_OFFNORMAL;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+        Reliability = pObject->Reliability;
+        if (Reliability != RELIABILITY_NO_FAULT_DETECTED) {
+            /*Fault detection takes precedence over the detection of normal and
+            offnormal states. As such, when Reliability has a value other than
+            NO_FAULT_DETECTED, the event-state-detection process will determine
+            the object's event state to be FAULT.*/
+            pObject->Event_State = EVENT_STATE_FAULT;
+        } else if (FromState == EVENT_STATE_FAULT) {
+            pObject->Event_State = EVENT_STATE_NORMAL;
+        } else {
+            switch (pObject->Event_State) {
+                case EVENT_STATE_NORMAL:
+                    /* (a) If pCurrentState is NORMAL, and pMonitoredValue is equal
+                    to any of the values contained in pAlarmValues for
+                        pTimeDelay, then indicate a transition to the OFFNORMAL
+                    event state.
+                    */
+                    if ((PresentVal == pObject->Alarm_Value) &&
+                        ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
+                            EVENT_ENABLE_TO_OFFNORMAL)) {
+                        if (!pObject->Remaining_Time_Delay) {
+                            pObject->Event_State = EVENT_STATE_OFFNORMAL;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
+
+                    /* value of the object is still in the same event state */
+                    pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-                }
 
-                /* value of the object is still in the same event state */
-                pObject->Remaining_Time_Delay = pObject->Time_Delay;
-                break;
-
-            case EVENT_STATE_OFFNORMAL:
-                /* (b) If pCurrentState is OFFNORMAL, and pMonitoredValue is not
-                   equal to any of the values contained in pAlarmValues for
-                   pTimeDelayNormal, then indicate a transition to the NORMAL
-                   event state.
-                */
-                if ((PresentVal != pObject->Alarm_Value) &&
-                    ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                     EVENT_ENABLE_TO_NORMAL)) {
-                    if (!pObject->Remaining_Time_Delay) {
-                        pObject->Event_State = EVENT_STATE_NORMAL;
-                    } else {
-                        pObject->Remaining_Time_Delay--;
+                case EVENT_STATE_OFFNORMAL:
+                    /* (b) If pCurrentState is OFFNORMAL, and pMonitoredValue is not
+                    equal to any of the values contained in pAlarmValues for
+                    pTimeDelayNormal, then indicate a transition to the NORMAL
+                    event state.
+                    */
+                    if (PresentVal != pObject->Alarm_Value &&
+                        ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                          EVENT_ENABLE_TO_NORMAL)) {
+                        if (!pObject->Remaining_Time_Delay) {
+                            pObject->Event_State = EVENT_STATE_NORMAL;
+                        } else {
+                            pObject->Remaining_Time_Delay--;
+                        }
+                        break;
                     }
+
+                    /* value of the object is still in the same event state */
+                    pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-                }
 
-                /* value of the object is still in the same event state */
-                pObject->Remaining_Time_Delay = pObject->Time_Delay;
-                break;
-
-            default:
-                return; /* shouldn't happen */
-        } /* switch (FromState) */
+                default:
+                    return; /* shouldn't happen */
+            } /* switch (FromState) */
+        }
 
         ToState = pObject->Event_State;
 
-        if (FromState != ToState) {
+        if (FromState != ToState ||
+            (ToState == EVENT_STATE_FAULT &&
+             Reliability != pObject->Last_ToFault_Event_Reliability)) {
             /* Event_State has changed.
                Need to fill only the basic parameters of this type of event.
                Other parameters will be filled in common function. */
 
             switch (ToState) {
                 case EVENT_STATE_NORMAL:
-                    if (pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) {
-                        characterstring_init_ansi(
-                            &msgText, "Back to normal state from off-normal");
-                        /* Send EventNotification. */
-                        SendNotify = true;
+                    if (FromState == EVENT_STATE_OFFNORMAL) {
+                        msgText = Binary_Value_Event_Message(
+                            object_instance, TRANSITION_TO_NORMAL,
+                            "Back to normal state from off-normal");
+                    } else {
+                        msgText = Binary_Value_Event_Message(
+                            object_instance, TRANSITION_TO_NORMAL,
+                            "Back to normal state from fault");
                     }
                     break;
 
                 case EVENT_STATE_OFFNORMAL:
-                    if (pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) {
-                        characterstring_init_ansi(
-                            &msgText, "Back to off-normal state from normal");
-                        /* Send EventNotification. */
-                        SendNotify = true;
-                    }
+                    msgText = Binary_Value_Event_Message(
+                        object_instance, TRANSITION_TO_NORMAL,
+                        "Goes to off-normal");
+                    break;
+
+                case EVENT_STATE_FAULT:
+                    msgText = Binary_Value_Event_Message(
+                        object_instance, TRANSITION_TO_FAULT,
+                        bactext_reliability_name(Reliability));
+                    pObject->Last_ToFault_Event_Reliability = Reliability;
                     break;
 
                 default:
@@ -2733,6 +2888,9 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
 
+            /* Send EventNotification. */
+            SendNotify = true;
+
         }
     }
 
@@ -2743,24 +2901,36 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
 
         /* Time Stamp */
         event_data.timeStamp.tag = TIME_STAMP_DATETIME;
+        Device_getCurrentDateTime(&event_data.timeStamp.value.dateTime);
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
-            Device_getCurrentDateTime(&event_data.timeStamp.value.dateTime);
-            /* fill Event_Time_Stamps */
+            /* set eventType and fill Event_Time_Stamps and
+             * Event_Message_Texts*/
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
+                    event_data.eventType = EVENT_CHANGE_OF_STATE;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+                        msgText;
                     break;
                 case EVENT_STATE_FAULT:
+                    event_data.eventType = EVENT_CHANGE_OF_RELIABILITY;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_FAULT],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_FAULT] =
+                        msgText;
                     break;
                 case EVENT_STATE_NORMAL:
+                    event_data.eventType = FromState == EVENT_STATE_FAULT
+                        ? EVENT_CHANGE_OF_RELIABILITY
+                        : EVENT_CHANGE_OF_STATE;
                     datetime_copy(
                         &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL],
                         &event_data.timeStamp.value.dateTime);
+                    pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
+                        msgText;
                     break;
                 default:
                     break;
@@ -2768,20 +2938,25 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         } else {
             /* fill event_data timeStamp */
             switch (ToState) {
+                case EVENT_STATE_OFFNORMAL:
+                    event_data.eventType = EVENT_CHANGE_OF_STATE;
+                    datetime_copy(
+                        &event_data.timeStamp.value.dateTime,
+                        &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL]);
+                    break;
                 case EVENT_STATE_FAULT:
+                    event_data.eventType = EVENT_CHANGE_OF_RELIABILITY;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_FAULT]);
                     break;
                 case EVENT_STATE_NORMAL:
+                    event_data.eventType = FromState == EVENT_STATE_FAULT
+                        ? EVENT_CHANGE_OF_RELIABILITY
+                        : EVENT_CHANGE_OF_STATE;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_NORMAL]);
-                    break;
-                case EVENT_STATE_OFFNORMAL:
-                    datetime_copy(
-                        &event_data.timeStamp.value.dateTime,
-                        &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL]);
                     break;
                 default:
                     break;
@@ -2791,11 +2966,9 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* Notification Class */
         event_data.notificationClass = pObject->Notification_Class;
 
-        /* Event Type */
-        event_data.eventType = EVENT_CHANGE_OF_STATE;
-
         /* Message Text */
-        event_data.messageText = &msgText;
+        characterstring_init_ansi(&msgCharString, msgText);
+        event_data.messageText = &msgCharString;
 
         /* Notify Type */
         /* filled before */
@@ -2810,28 +2983,53 @@ void Binary_Value_Intrinsic_Reporting(uint32_t object_instance)
 
         /* Event Values */
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
-            /* Value that exceeded a limit. */
-            event_data.notificationParams.changeOfState.newState =
-                (BACNET_PROPERTY_STATE) {
-                    .tag = PROP_STATE_BINARY_VALUE,
-                    .state = { .binaryValue = pObject->Prior_Value }
-                };
-            /* Status_Flags of the referenced object. */
-            bitstring_init(
-                &event_data.notificationParams.changeOfState.statusFlags);
-            bitstring_set_bit(
-                &event_data.notificationParams.changeOfState.statusFlags,
-                STATUS_FLAG_IN_ALARM,
-                pObject->Event_State != EVENT_STATE_NORMAL);
-            bitstring_set_bit(
-                &event_data.notificationParams.changeOfState.statusFlags,
-                STATUS_FLAG_FAULT, false);
-            bitstring_set_bit(
-                &event_data.notificationParams.changeOfState.statusFlags,
-                STATUS_FLAG_OVERRIDDEN, false);
-            bitstring_set_bit(
-                &event_data.notificationParams.changeOfState.statusFlags,
-                STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
+            if (event_data.eventType == EVENT_CHANGE_OF_STATE) {
+                /* Value that exceeded a limit. */
+                event_data.notificationParams.changeOfState.newState.tag = PROP_STATE_BINARY_VALUE;
+                event_data.notificationParams.changeOfState.newState.state.binaryValue = pObject->Prior_Value;
+                /* Status_Flags of the referenced object. */
+                bitstring_init(
+                    &event_data.notificationParams.changeOfState.statusFlags);
+                bitstring_set_bit(
+                    &event_data.notificationParams.changeOfState.statusFlags,
+                    STATUS_FLAG_IN_ALARM,
+                    pObject->Event_State != EVENT_STATE_NORMAL);
+                bitstring_set_bit(
+                    &event_data.notificationParams.changeOfState.statusFlags,
+                    STATUS_FLAG_FAULT, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.changeOfState.statusFlags,
+                    STATUS_FLAG_OVERRIDDEN, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.changeOfState.statusFlags,
+                    STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
+            } else {
+                event_data.notificationParams.changeOfReliability.reliability =
+                    Reliability;
+
+                propertyValues.propertyIdentifier = PROP_PRESENT_VALUE;
+                propertyValues.propertyArrayIndex = BACNET_ARRAY_ALL;
+                propertyValues.value.tag = BACNET_APPLICATION_TAG_BOOLEAN;
+                propertyValues.value.type.Boolean = PresentVal;
+                event_data.notificationParams.changeOfReliability
+                    .propertyValues = &propertyValues;
+
+                bitstring_init(&event_data.notificationParams
+                                    .changeOfReliability.statusFlags);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_IN_ALARM, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_FAULT,
+                    pObject->Event_State != EVENT_STATE_NORMAL);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OVERRIDDEN, false);
+                bitstring_set_bit(
+                    &event_data.notificationParams.outOfRange.statusFlags,
+                    STATUS_FLAG_OUT_OF_SERVICE, pObject->Out_Of_Service);
+            }
         }
 
         /* add data from notification class */

@@ -76,9 +76,13 @@ BACNET_STACK_EXPORT
 float Analog_Value_Present_Value(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
-unsigned Analog_Value_Event_State(uint32_t object_instance);
+const char *Analog_Value_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-bool Analog_Value_Event_State_Set(uint32_t object_instance, unsigned state);
+bool Analog_Value_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 
 BACNET_STACK_EXPORT
 bool Analog_Value_Change_Of_Value(uint32_t instance);

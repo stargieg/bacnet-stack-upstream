@@ -959,7 +959,6 @@ int dlenv_init(void)
     char *direct_connect_accept_urls = NULL;
     char option_chr[16];
     char ifname[32];
-    int apdu_size;
 
     ctx = ucix_init("bacnet_dev");
     if (!ctx) {
@@ -1031,7 +1030,6 @@ int dlenv_init(void)
         break;
     case DATALINK_MSTP:
         port_type = PORT_TYPE_MSTP;
-        apdu_size = DLMSTP_MPDU_MAX;
 #if defined(BACDL_MSTP)
         dlmstp_set_max_info_frames(ucix_get_option_int(ctx,
             "bacnet_dev", "0", "max_info_frames", 1));

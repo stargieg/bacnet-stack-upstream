@@ -90,12 +90,13 @@ BACNET_STACK_EXPORT
 void Multistate_Input_Write_Disable(uint32_t instance);
 
 BACNET_STACK_EXPORT
-unsigned Multistate_Input_Event_State(
-    uint32_t object_instance);
+const char *Multistate_Input_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-bool Multistate_Input_Event_State_Set(
+bool Multistate_Input_Event_Message_Text_Custom_Set(
     uint32_t object_instance,
-    unsigned state);
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 
 BACNET_STACK_EXPORT
 bool Multistate_Input_Change_Of_Value(uint32_t instance);

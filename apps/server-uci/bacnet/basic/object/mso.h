@@ -88,12 +88,13 @@ void Multistate_Output_Write_Present_Value_Callback_Set(
     multistate_output_write_present_value_callback cb);
 
 BACNET_STACK_EXPORT
-unsigned Multistate_Output_Event_State(
-    uint32_t object_instance);
+const char *Multistate_Output_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-bool Multistate_Output_Event_State_Set(
+bool Multistate_Output_Event_Message_Text_Custom_Set(
     uint32_t object_instance,
-    unsigned state);
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 
 BACNET_STACK_EXPORT
 bool Multistate_Output_Change_Of_Value(uint32_t instance);

@@ -104,7 +104,13 @@ BACNET_STACK_EXPORT
 void Binary_Input_Out_Of_Service_Set(uint32_t object_instance, bool value);
 
 BACNET_STACK_EXPORT
-unsigned Binary_Input_Event_State(uint32_t object_instance);
+const char *Binary_Input_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
+BACNET_STACK_EXPORT
+bool Binary_Input_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
 
 BACNET_STACK_EXPORT
 bool Binary_Input_Encode_Value_List(

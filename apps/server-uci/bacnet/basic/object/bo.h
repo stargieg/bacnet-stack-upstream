@@ -98,6 +98,15 @@ BACNET_STACK_EXPORT
 void Binary_Output_Out_Of_Service_Set(uint32_t object_instance, bool value);
 
 BACNET_STACK_EXPORT
+const char *Binary_Output_Event_Message_Text(
+    uint32_t object_instance, enum BACnetEventTransitionBits transition);
+BACNET_STACK_EXPORT
+bool Analog_Output_Event_Message_Text_Custom_Set(
+    uint32_t object_instance,
+    enum BACnetEventTransitionBits transition,
+    const char *custom_text);
+
+BACNET_STACK_EXPORT
 const char *Binary_Output_Description(uint32_t instance);
 BACNET_STACK_EXPORT
 bool Binary_Output_Description_Set(
