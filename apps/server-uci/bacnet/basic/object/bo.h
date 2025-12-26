@@ -101,7 +101,7 @@ BACNET_STACK_EXPORT
 const char *Binary_Output_Event_Message_Text(
     uint32_t object_instance, enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-bool Analog_Output_Event_Message_Text_Custom_Set(
+bool Binary__Output_Event_Message_Text_Custom_Set(
     uint32_t object_instance,
     enum BACnetEventTransitionBits transition,
     const char *custom_text);
