@@ -35,40 +35,6 @@
 #include "bacnet/basic/sys/platform.h"
 #include "bacnet/bacapp.h"
 
-#if defined(BACAPP_SHED_LEVEL)
-/**
- * @brief Print a value to a string for EPICS
- * @param str - destination string, or NULL for length only
- * @param str_len - length of the destination string, or 0 for length only
- * @param value - value to be printed
- * @return number of characters written to the string
- */
-static int bacapp_snprintf_shed_level(
-    char *str, size_t str_len, const BACNET_SHED_LEVEL *value)
-{
-    int length = 0;
-
-    switch (value->type) {
-        case BACNET_SHED_TYPE_PERCENT:
-            length = bacapp_snprintf(
-                str, str_len, "%u%%", (unsigned)value->value.percent);
-            break;
-        case BACNET_SHED_TYPE_LEVEL:
-            length = bacapp_snprintf(
-                str, str_len, "%u", (unsigned)value->value.level);
-            break;
-        case BACNET_SHED_TYPE_AMOUNT:
-            length = bacapp_snprintf(
-                str, str_len, "%f", (double)value->value.amount);
-            break;
-        default:
-            break;
-    }
-
-    return length;
-}
-#endif
-
 /**
  * @brief Print a value to a string for EPICS
  * @param str - destination string, or NULL for length only
@@ -201,7 +167,7 @@ static int bacapp_snprintf_enumerated(
             ret_val = bacapp_snprintf_property_identifier(str, str_len, value);
             break;
         case PROP_OBJECT_TYPE:
-            if (value <= BACNET_OBJECT_TYPE_LAST) {
+            if (value <= BACNET_OBJECT_TYPE_RESERVED_MIN) {
                 ret_val = bacapp_snprintf(
                     str, str_len, "%s", bactext_object_type_name(value));
             } else if (value <= BACNET_OBJECT_TYPE_RESERVED_MAX) {
@@ -391,7 +357,7 @@ static int bacapp_snprintf_object_id(
 
     slen = bacapp_snprintf(str, str_len, "(");
     ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
-    if (object_id->type <= BACNET_OBJECT_TYPE_LAST) {
+    if (object_id->type <= BACNET_OBJECT_TYPE_RESERVED_MIN) {
         slen = bacapp_snprintf(
             str, str_len, "%s, ", bactext_object_type_name(object_id->type));
     } else if (object_id->type < BACNET_OBJECT_TYPE_RESERVED_MAX) {

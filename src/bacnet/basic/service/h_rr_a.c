@@ -185,18 +185,14 @@ void handler_read_range_ack(
     (void)service_data; /* we could use these... */
     len = rr_ack_decode_service_request(service_request, service_len, &data);
     if (len > 0) {
-        PrintReadRangeData(&data);
-    } else {
-#if PRINT_ENABLED
-        fprintf(stderr, "Received ReadRange Ack!\n");
-#endif
-
-    if (len > 0) {
-        fprintf(stderr, "Received ReadRange Len: %i\n",len);
         if (data.object_type == OBJECT_TRENDLOG) {
             PrintReadRangeDataTrendlog(&data);
         } else {
             PrintReadRangeData(&data);
         }
+    } else {
+#if PRINT_ENABLED
+        fprintf(stderr, "Received ReadRange Ack!\n");
+#endif
     }
 }
