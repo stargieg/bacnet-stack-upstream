@@ -543,6 +543,11 @@ const char *Binary_Input_Event_Message_Text(
     if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
         text = pObject->Event_Message_Texts[transition];
         if (!text) {
+            text = Notification_Class_Event_Message_Text(
+                    pObject->Notification_Class,
+                    transition);
+        }
+        if (!text) {
             text = "";
         }
     }
@@ -2008,7 +2013,7 @@ static void uci_list(const char *sec_idx,
 void Binary_Input_Init(void)
 {
     struct uci_context *ctx;
-    struct object_data_t tObject;
+    struct object_data_t tObject = { 0 };
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
 
@@ -2628,11 +2633,21 @@ static const char *Binary_Input_Event_Message(
     enum BACnetEventTransitionBits transition,
     const char *default_text)
 {
+    const char *text = NULL;
     struct object_data *pObject = NULL;
     pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION &&
-        pObject->Event_Message_Texts_Custom[transition]) {
-        return pObject->Event_Message_Texts_Custom[transition];
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        text = pObject->Event_Message_Texts[transition];
+        if (!text) {
+            text = Notification_Class_Event_Message_Text(
+                    pObject->Notification_Class,
+                    transition);
+        }
+        if (!text) {
+            return default_text;
+        } else {
+            return text;
+        }
     }
     return default_text;
 }
@@ -2763,7 +2778,7 @@ void Binary_Input_Intrinsic_Reporting(uint32_t object_instance)
 
                 case EVENT_STATE_OFFNORMAL:
                     msgText = Binary_Input_Event_Message(
-                        object_instance, TRANSITION_TO_NORMAL,
+                        object_instance, TRANSITION_TO_OFFNORMAL,
                         "Goes to off-normal");
                     break;
 

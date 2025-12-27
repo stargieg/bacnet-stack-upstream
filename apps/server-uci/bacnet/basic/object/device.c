@@ -2562,7 +2562,7 @@ struct object_functions *Device_Object_Functions(void)
 void Device_Init(object_functions_t *object_table)
 {
     struct object_functions *pObject = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    BACNET_CHARACTER_STRING option_str = { 0 };
     const char *option = NULL;
     const char *sec_idx = "0";
     struct uci_context *ctx;

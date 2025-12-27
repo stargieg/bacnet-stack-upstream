@@ -69,7 +69,10 @@ unsigned Notification_Class_Instance_To_Index(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Notification_Class_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
-
+BACNET_STACK_EXPORT
+const char *Notification_Class_Event_Message_Text(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
 int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 

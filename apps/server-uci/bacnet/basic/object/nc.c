@@ -47,6 +47,7 @@ struct object_data {
     BACNET_DESTINATION Recipient_List[NC_MAX_RECIPIENTS];
     const char *Object_Name;
     const char *Description;
+    const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
 };
 
 struct object_data_t {
@@ -141,6 +142,15 @@ static void uci_list(const char *sec_idx,
     pObject->Priority[TRANSITION_TO_OFFNORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_offnormal", ictx->Object.Priority[TRANSITION_TO_OFFNORMAL]);
     pObject->Priority[TRANSITION_TO_FAULT] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_fault", ictx->Object.Priority[TRANSITION_TO_FAULT]);
     pObject->Priority[TRANSITION_TO_NORMAL] = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "prio_normal", ictx->Object.Priority[TRANSITION_TO_NORMAL]);
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "evt_msg_offnormal");
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] = strndup(option,option_str.length);
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Event_Message_Texts[TRANSITION_TO_FAULT] = strndup(option,option_str.length);
+    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
+    if (option && characterstring_init_ansi(&option_str, option))
+        pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] = strndup(option,option_str.length);
 
     ucirecp_n = ucix_get_list(ucirecp, ictx->ctx, ictx->section, sec_idx,
         "recipient");
@@ -251,9 +261,9 @@ static void uci_list(const char *sec_idx,
 void Notification_Class_Init(void)
 {
     struct uci_context *ctx;
-    struct object_data_t tObject;
+    struct object_data_t tObject = { 0 };
     const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    BACNET_CHARACTER_STRING option_str = { 0 };
     struct itr_ctx itr_m;
     Object_List = Keylist_Create();
     ctx = ucix_init(sec);
@@ -340,6 +350,32 @@ bool Notification_Class_Object_Name(
 
     return status;
 }
+
+/**
+ * @brief For a given object instance-number and event transition, returns the
+ * event message text
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @return event message text or NULL if object not found or transition invalid
+ */
+const char *Notification_Class_Event_Message_Text(
+    const uint32_t object_instance,
+    const enum BACnetEventTransitionBits transition)
+{
+    const char *text = NULL;
+    const struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && transition < MAX_BACNET_EVENT_TRANSITION) {
+        text = pObject->Event_Message_Texts[transition];
+        if (!text) {
+            text = "";
+        }
+    }
+
+    return text;
+}
+
 
 int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {

@@ -255,9 +255,9 @@ static void uci_list(const char *sec_idx,
 void Schedule_Init(void)
 {
     struct uci_context *ctx;
-    SCHEDULE_DESCR_T tObject;
+    SCHEDULE_DESCR_T tObject = { 0 };
     const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    BACNET_CHARACTER_STRING option_str = { 0 };
     struct itr_ctx itr_m;
 
     if (!Object_List) {

@@ -333,9 +333,9 @@ static void uci_list(const char *sec_idx,
 void Trend_Log_Init(void)
 {
     struct uci_context *ctx;
-    struct object_data_t tObject;
+    struct object_data_t tObject = { 0 };
     const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    BACNET_CHARACTER_STRING option_str = { 0 };
     struct itr_ctx itr_m;
     Object_List = Keylist_Create();
     ctx = ucix_init(sec);
