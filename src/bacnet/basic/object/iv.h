@@ -20,9 +20,20 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/**
+ * @brief Callback for gateway write present value request
+ * @param  object_instance - object-instance number of the object
+ * @param  old_value - integer preset-value prior to write
+ * @param  value - integer preset-value of the write
+ */
+typedef void (*integer_value_write_present_value_callback)(
+    uint32_t object_instance, int32_t old_value, int32_t value);
+
 BACNET_STACK_EXPORT
 void Integer_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary);
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
 BACNET_STACK_EXPORT
 bool Integer_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -45,6 +56,10 @@ int Integer_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
 
 BACNET_STACK_EXPORT
 bool Integer_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+
+BACNET_STACK_EXPORT
+void Integer_Value_Write_Present_Value_Callback_Set(
+    integer_value_write_present_value_callback cb);
 
 BACNET_STACK_EXPORT
 bool Integer_Value_Present_Value_Set(
@@ -70,12 +85,12 @@ bool Integer_Value_Description(
 BACNET_STACK_EXPORT
 bool Integer_Value_Description_Set(uint32_t instance, const char *new_name);
 BACNET_STACK_EXPORT
-char *Integer_Value_Description_ANSI(uint32_t object_instance);
+const char *Integer_Value_Description_ANSI(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
-uint16_t Integer_Value_Units(uint32_t instance);
+BACNET_ENGINEERING_UNITS Integer_Value_Units(uint32_t instance);
 BACNET_STACK_EXPORT
-bool Integer_Value_Units_Set(uint32_t instance, uint16_t unit);
+bool Integer_Value_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS unit);
 
 BACNET_STACK_EXPORT
 bool Integer_Value_Out_Of_Service(uint32_t instance);
@@ -83,16 +98,19 @@ BACNET_STACK_EXPORT
 void Integer_Value_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
 
 BACNET_STACK_EXPORT
-void Integer_Value_Init(void);
+void *Integer_Value_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Integer_Value_Context_Set(uint32_t object_instance, void *context);
 
 BACNET_STACK_EXPORT
 uint32_t Integer_Value_Create(uint32_t object_instance);
-
 BACNET_STACK_EXPORT
 bool Integer_Value_Delete(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 void Integer_Value_Cleanup(void);
+BACNET_STACK_EXPORT
+void Integer_Value_Init(void);
 
 #ifdef __cplusplus
 }

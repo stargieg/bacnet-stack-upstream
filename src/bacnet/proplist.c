@@ -17,12 +17,12 @@
 /**
  * Function that returns the number of BACnet object properties in a list
  *
- * @param pList - array of type 'int' that is a list of BACnet object
+ * @param pList - array of type 'int32_t' that is a list of BACnet object
  * properties, terminated by a '-1' value.
  */
-unsigned property_list_count(const int *pList)
+uint32_t property_list_count(const int32_t *pList)
 {
-    unsigned property_count = 0;
+    uint32_t property_count = 0;
 
     if (pList) {
         while (*pList != -1) {
@@ -37,12 +37,12 @@ unsigned property_list_count(const int *pList)
 /**
  * For a given object property, returns the true if in the property list
  *
- * @param pList - array of type 'int' that is a list of BACnet object
+ * @param pList - array of type 'int32_t' that is a list of BACnet object
  * @param object_property - property enumeration or propritary value
  *
  * @return true if object_property is a member of the property list
  */
-bool property_list_member(const int *pList, int object_property)
+bool property_list_member(const int32_t *pList, int32_t object_property)
 {
     bool status = false;
 
@@ -61,17 +61,20 @@ bool property_list_member(const int *pList, int object_property)
 
 /**
  * @brief Determine if the object property is a member of any of the lists
- * @param pRequired - array of type 'int' that is a list of BACnet properties
- * @param pOptional - array of type 'int' that is a list of BACnet properties
- * @param pProprietary - array of type 'int' that is a list of BACnet properties
+ * @param pRequired - array of type 'int32_t' that is a list of BACnet
+ * properties
+ * @param pOptional - array of type 'int32_t' that is a list of BACnet
+ * properties
+ * @param pProprietary - array of type 'int32_t' that is a list of BACnet
+ * properties
  * @param object_property - object-property to be checked
  * @return true if the property is a member of any of these lists
  */
 bool property_lists_member(
-    const int *pRequired,
-    const int *pOptional,
-    const int *pProprietary,
-    int object_property)
+    const int32_t *pRequired,
+    const int32_t *pOptional,
+    const int32_t *pProprietary,
+    int32_t object_property)
 {
     bool found = false;
 
@@ -98,19 +101,19 @@ bool property_lists_member(
  */
 int property_list_encode(
     BACNET_READ_PROPERTY_DATA *rpdata,
-    const int *pListRequired,
-    const int *pListOptional,
-    const int *pListProprietary)
+    const int32_t *pListRequired,
+    const int32_t *pListOptional,
+    const int32_t *pListProprietary)
 {
     int apdu_len = 0; /* return value */
     uint8_t *apdu = NULL;
     int max_apdu_len = 0;
     uint32_t count = 0;
-    unsigned required_count = 0;
-    unsigned optional_count = 0;
-    unsigned proprietary_count = 0;
+    uint32_t required_count = 0;
+    uint32_t optional_count = 0;
+    uint32_t proprietary_count = 0;
     int len = 0;
-    unsigned i = 0; /* loop index */
+    uint32_t i = 0; /* loop index */
 
     required_count = property_list_count(pListRequired);
     optional_count = property_list_count(pListOptional);
@@ -281,31 +284,17 @@ int property_list_common_encode(
     apdu = rpdata->application_data;
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
-            /*  only array properties can have array options */
-            if (rpdata->array_index != BACNET_ARRAY_ALL) {
-                rpdata->error_class = ERROR_CLASS_PROPERTY;
-                rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-                apdu_len = BACNET_STATUS_ERROR;
-            } else {
-                /* Device Object exception: requested instance
-                   may not match our instance if a wildcard */
-                if (rpdata->object_type == OBJECT_DEVICE) {
-                    rpdata->object_instance = device_instance_number;
-                }
-                apdu_len = encode_application_object_id(
-                    &apdu[0], rpdata->object_type, rpdata->object_instance);
+            /* Device Object exception: requested instance
+                may not match our instance if a wildcard */
+            if (rpdata->object_type == OBJECT_DEVICE) {
+                rpdata->object_instance = device_instance_number;
             }
+            apdu_len = encode_application_object_id(
+                &apdu[0], rpdata->object_type, rpdata->object_instance);
             break;
         case PROP_OBJECT_TYPE:
-            /*  only array properties can have array options */
-            if (rpdata->array_index != BACNET_ARRAY_ALL) {
-                rpdata->error_class = ERROR_CLASS_PROPERTY;
-                rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-                apdu_len = BACNET_STATUS_ERROR;
-            } else {
-                apdu_len = encode_application_enumerated(
-                    &apdu[0], rpdata->object_type);
-            }
+            apdu_len =
+                encode_application_enumerated(&apdu[0], rpdata->object_type);
             break;
         default:
             break;
@@ -337,7 +326,7 @@ bool property_list_common(BACNET_PROPERTY_ID property)
 
 /* standard properties that are arrays
    but not required to be supported in every object */
-static const int Properties_BACnetARRAY[] = {
+static const int32_t Properties_BACnetARRAY[] = {
     /* unordered list of properties */
     PROP_OBJECT_LIST,
     PROP_STRUCTURED_OBJECT_LIST,
@@ -368,7 +357,6 @@ static const int Properties_BACnetARRAY[] = {
     PROP_CONTROL_GROUPS,
     PROP_BIT_TEXT,
     PROP_PORT_FILTER,
-    PROP_NOTIFICATION_CLASS,
     PROP_STATE_CHANGE_VALUES,
     PROP_LINK_SPEEDS,
     PROP_IP_DNS_SERVER,
@@ -391,6 +379,12 @@ static const int Properties_BACnetARRAY[] = {
     PROP_WEEKLY_SCHEDULE,
     PROP_EXCEPTION_SCHEDULE,
     PROP_TAGS,
+    PROP_ISSUER_CERTIFICATE_FILES,
+    PROP_NEGATIVE_ACCESS_RULES,
+    PROP_POSITIVE_ACCESS_RULES,
+#if (INT_MAX > 0xFFFF)
+    PROP_SC_HUB_FUNCTION_ACCEPT_URIS,
+#endif
     -1
 };
 
@@ -400,10 +394,10 @@ static const int Properties_BACnetARRAY[] = {
  *
  * @param object_type - enumerated BACNET_OBJECT_TYPE
  * @return returns a pointer to a '-1' terminated array of
- * type 'int' that contain BACnet object properties for the given object
+ * type 'int32_t' that contain BACnet object properties for the given object
  * type.
  */
-const int *property_list_bacnet_array(void)
+const int32_t *property_list_bacnet_array(void)
 {
     return Properties_BACnetARRAY;
 }
@@ -417,7 +411,8 @@ const int *property_list_bacnet_array(void)
 bool property_list_bacnet_array_member(
     BACNET_OBJECT_TYPE object_type, BACNET_PROPERTY_ID object_property)
 {
-    /* exceptions where property is an BACnetARRAY only in specific objects */
+    /* exceptions where a property is an BACnetARRAY or a BACnetLIST
+       only in specific object types */
     switch (object_type) {
         case OBJECT_GLOBAL_GROUP:
             switch (object_property) {
@@ -435,6 +430,14 @@ bool property_list_bacnet_array_member(
                     break;
             }
             break;
+        case OBJECT_LOOP:
+            switch (object_property) {
+                case PROP_ACTION:
+                    return false;
+                default:
+                    break;
+            }
+            break;
         default:
             break;
     }
@@ -448,7 +451,7 @@ bool property_list_bacnet_array_member(
 }
 
 /* standard properties that are BACnetLIST */
-static const int Properties_BACnetLIST[] = {
+static const int32_t Properties_BACnetLIST[] = {
     /* unordered list of properties */
     PROP_DATE_LIST,
     PROP_VT_CLASSES_SUPPORTED,
@@ -460,6 +463,7 @@ static const int Properties_BACnetLIST[] = {
     PROP_UTC_TIME_SYNCHRONIZATION_RECIPIENTS,
     PROP_ACTIVE_COV_MULTIPLE_SUBSCRIPTIONS,
     PROP_LIST_OF_GROUP_MEMBERS,
+    PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES,
     PROP_ACCEPTED_MODES,
     PROP_LIFE_SAFETY_ALARM_VALUES,
     PROP_ALARM_VALUES,
@@ -489,6 +493,7 @@ static const int Properties_BACnetLIST[] = {
     PROP_ROUTING_TABLE,
     PROP_LANDING_CALLS,
     PROP_FAULT_SIGNALS,
+    PROP_ADDITIONAL_REFERENCE_PORTS,
     -1
 };
 
@@ -497,10 +502,10 @@ static const int Properties_BACnetLIST[] = {
  *
  * @param object_type - enumerated BACNET_OBJECT_TYPE
  * @return returns a pointer to a '-1' terminated array of
- * type 'int' that contain BACnet object properties for the given object
+ * type 'int32_t' that contain BACnet object properties for the given object
  * type.
  */
-const int *property_list_bacnet_list(void)
+const int32_t *property_list_bacnet_list(void)
 {
     return Properties_BACnetLIST;
 }
@@ -524,11 +529,10 @@ bool property_list_bacnet_list_member(
                     break;
             }
             break;
-        case OBJECT_SCHEDULE:
-        case OBJECT_TIMER:
+        case OBJECT_CHANNEL:
             switch (object_property) {
                 case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
-                    return true;
+                    return false;
                 default:
                     break;
             }
@@ -543,4 +547,54 @@ bool property_list_bacnet_list_member(
     }
 
     return property_list_member(Properties_BACnetLIST, object_property);
+}
+
+/**
+ * @brief Determine if the object property is a commandable member
+ *
+ * 19.2.1.1 Commandable Properties
+ * The prioritization scheme is applied to certain properties of objects.
+ * The standard commandable properties and objects are as follows.
+ *
+ * @param object_type - object-type to be checked
+ * @param object_property - object-property to be checked
+ * @return true if the property is a commandable member
+ */
+bool property_list_commandable_member(
+    BACNET_OBJECT_TYPE object_type, BACNET_PROPERTY_ID object_property)
+{
+    bool status = false;
+
+    switch (object_type) {
+        case OBJECT_ACCESS_DOOR:
+        case OBJECT_ANALOG_OUTPUT:
+        case OBJECT_ANALOG_VALUE:
+        case OBJECT_BINARY_LIGHTING_OUTPUT:
+        case OBJECT_BINARY_OUTPUT:
+        case OBJECT_BINARY_VALUE:
+        case OBJECT_BITSTRING_VALUE:
+        case OBJECT_CHANNEL:
+        case OBJECT_CHARACTERSTRING_VALUE:
+        case OBJECT_DATE_VALUE:
+        case OBJECT_DATE_PATTERN_VALUE:
+        case OBJECT_DATETIME_VALUE:
+        case OBJECT_DATETIME_PATTERN_VALUE:
+        case OBJECT_INTEGER_VALUE:
+        case OBJECT_LARGE_ANALOG_VALUE:
+        case OBJECT_LIGHTING_OUTPUT:
+        case OBJECT_MULTI_STATE_OUTPUT:
+        case OBJECT_MULTI_STATE_VALUE:
+        case OBJECT_OCTETSTRING_VALUE:
+        case OBJECT_POSITIVE_INTEGER_VALUE:
+        case OBJECT_TIME_VALUE:
+        case OBJECT_TIME_PATTERN_VALUE:
+            if (object_property == PROP_PRESENT_VALUE) {
+                status = true;
+            }
+            break;
+        default:
+            break;
+    }
+
+    return status;
 }

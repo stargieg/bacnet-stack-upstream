@@ -49,17 +49,29 @@ struct object_data Object_List[BACNET_NETWORK_PORTS_MAX];
 static uint32_t Link_Speeds[] = {9600, 19200, 38400, 57600, 76800, 115200 };
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Network_Port_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
+static const int32_t Network_Port_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME, PROP_OBJECT_TYPE, PROP_STATUS_FLAGS, PROP_RELIABILITY,
     PROP_OUT_OF_SERVICE, PROP_NETWORK_TYPE, PROP_PROTOCOL_LEVEL,
-    PROP_NETWORK_NUMBER, PROP_NETWORK_NUMBER_QUALITY, PROP_CHANGES_PENDING,
-    PROP_APDU_LENGTH, PROP_LINK_SPEED, -1 };
-
-static const int Network_Port_Properties_Optional[] = { PROP_MAC_ADDRESS,
-    PROP_MAX_MASTER, PROP_MAX_INFO_FRAMES, PROP_LINK_SPEEDS,
+    PROP_CHANGES_PENDING,
+#if (BACNET_PROTOCOL_REVISION < 24)
+    PROP_APDU_LENGTH,
+    PROP_NETWORK_NUMBER,
+    PROP_NETWORK_NUMBER_QUALITY,
+    PROP_LINK_SPEED,
+#endif
     -1 };
 
-static const int Network_Port_Properties_Proprietary[] = { -1 };
+static const int32_t Network_Port_Properties_Optional[] = { PROP_MAC_ADDRESS,
+    PROP_MAX_MASTER, PROP_MAX_INFO_FRAMES, PROP_LINK_SPEEDS,
+#if (BACNET_PROTOCOL_REVISION >= 24)
+    PROP_APDU_LENGTH,
+    PROP_NETWORK_NUMBER,
+    PROP_NETWORK_NUMBER_QUALITY,
+    PROP_LINK_SPEED,
+#endif
+    -1 };
+
+static const int32_t Network_Port_Properties_Proprietary[] = { -1 };
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -74,9 +86,9 @@ static const int Network_Port_Properties_Proprietary[] = { -1 };
  * BACnet proprietary properties for this object.
  */
 void Network_Port_Property_List(uint32_t object_instance,
-    const int **pRequired,
-    const int **pOptional,
-    const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     (void)object_instance;
     if (pRequired) {
@@ -104,7 +116,7 @@ void Network_Port_Property_List(uint32_t object_instance,
  * BACnet proprietary properties for this object.
  */
 void Network_Port_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired, const int32_t **pOptional, const int32_t **pProprietary)
 {
     Network_Port_Property_List(
         BACNET_NETWORK_PORT_INSTANCE, pRequired, pOptional, pProprietary);
@@ -660,18 +672,6 @@ bool Network_Port_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    if ((wp_data->object_property != PROP_LINK_SPEEDS) &&
-        (wp_data->object_property != PROP_IP_DNS_SERVER) &&
-        (wp_data->object_property != PROP_IPV6_DNS_SERVER) &&
-        (wp_data->object_property != PROP_EVENT_MESSAGE_TEXTS) &&
-        (wp_data->object_property != PROP_EVENT_MESSAGE_TEXTS_CONFIG) &&
-        (wp_data->object_property != PROP_TAGS) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        /*  only array properties can have array options */
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     /* FIXME: len < application_data_len: more data? */

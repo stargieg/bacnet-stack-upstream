@@ -1,10 +1,10 @@
-/**************************************************************************
- *
- * Copyright (C) 2008 Steve Karg <skarg@users.sourceforge.net>
- *
- * SPDX-License-Identifier: MIT
- *
- *********************************************************************/
+/**
+ * @file
+ * @brief Provides Linux-specific DataLink functions for MS/TP.
+ * @author Steve Karg <skarg@users.sourceforge.net>
+ * @date 2008
+ * @copyright SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
+ */
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -15,7 +15,6 @@
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/bacdef.h"
 #include "bacnet/bacaddr.h"
 #include "bacnet/npdu.h"
 #include "bacnet/datalink/mstp.h"
@@ -26,10 +25,6 @@
 #include "rs485.h"
 /* OS Specific include */
 #include "bacport.h"
-
-/** @file linux/dlmstp_port.c  Provides Linux-specific DataLink functions for
- * MS/TP.
- */
 
 #define BACNET_PDU_CONTROL_BYTE_OFFSET 1
 #define BACNET_DATA_EXPECTING_REPLY_BIT 2
@@ -102,7 +97,8 @@ void dlmstp_cleanup(void *poPort)
     }
 
     /* restore the old port settings */
-    tcsetattr(poSharedData->RS485_Handle, TCSANOW, &poSharedData->RS485_oldtio);
+    termios2_tcsetattr(
+        poSharedData->RS485_Handle, TCSANOW, &poSharedData->RS485_oldtio2);
     close(poSharedData->RS485_Handle);
 
     pthread_cond_destroy(&poSharedData->Received_Frame_Flag);
@@ -214,11 +210,13 @@ static void *dlmstp_receive_fsm_task(void *pArg)
     for (;;) {
         /* only do receive state machine while we don't have a frame */
         if ((mstp_port->ReceivedValidFrame == false) &&
+            (mstp_port->ReceivedValidFrameNotForUs == false) &&
             (mstp_port->ReceivedInvalidFrame == false)) {
             do {
                 RS485_Check_UART_Data(mstp_port);
                 MSTP_Receive_Frame_FSM((struct mstp_port_struct_t *)pArg);
                 received_frame = mstp_port->ReceivedValidFrame ||
+                    mstp_port->ReceivedValidFrameNotForUs ||
                     mstp_port->ReceivedInvalidFrame;
                 if (received_frame) {
                     pthread_cond_signal(&poSharedData->Received_Frame_Flag);
@@ -249,11 +247,13 @@ static void *dlmstp_master_fsm_task(void *pArg)
 
     for (;;) {
         if (mstp_port->ReceivedValidFrame == false &&
+            mstp_port->ReceivedValidFrameNotForUs == false &&
             mstp_port->ReceivedInvalidFrame == false) {
             RS485_Check_UART_Data(mstp_port);
             MSTP_Receive_Frame_FSM(mstp_port);
         }
-        if (mstp_port->ReceivedValidFrame || mstp_port->ReceivedInvalidFrame) {
+        if (mstp_port->ReceivedValidFrame || mstp_port->ReceivedInvalidFrame ||
+            mstp_port->ReceivedValidFrameNotForUs) {
             run_master = true;
         } else {
             silence = mstp_port->SilenceTimer(NULL);
@@ -391,138 +391,6 @@ void MSTP_Send_Frame(
     RS485_Send_Frame(mstp_port, buffer, nbytes);
 }
 
-static bool dlmstp_compare_data_expecting_reply(
-    const uint8_t *request_pdu,
-    uint16_t request_pdu_len,
-    uint8_t src_address,
-    const uint8_t *reply_pdu,
-    uint16_t reply_pdu_len,
-    uint8_t dest_address)
-{
-    uint16_t offset;
-    /* One way to check the message is to compare NPDU
-       src, dest, along with the APDU type, invoke id.
-       Seems a bit overkill */
-    struct DER_compare_t {
-        BACNET_NPDU_DATA npdu_data;
-        BACNET_ADDRESS address;
-        uint8_t pdu_type;
-        uint8_t invoke_id;
-        uint8_t service_choice;
-    };
-    struct DER_compare_t request;
-    struct DER_compare_t reply;
-
-    /* unused parameters */
-    (void)request_pdu_len;
-    (void)reply_pdu_len;
-
-    /* decode the request data */
-    request.address.mac[0] = src_address;
-    request.address.mac_len = 1;
-    offset = bacnet_npdu_decode(
-        request_pdu, request_pdu_len, NULL, &request.address,
-        &request.npdu_data);
-    if (request.npdu_data.network_layer_message) {
-        debug_printf("DLMSTP: DER Compare failed: "
-                     "Request is Network message.\n");
-        return false;
-    }
-    request.pdu_type = request_pdu[offset] & 0xF0;
-    if (request.pdu_type != PDU_TYPE_CONFIRMED_SERVICE_REQUEST) {
-        debug_printf("DLMSTP: DER Compare failed: "
-                     "Not Confirmed Request.\n");
-        return false;
-    }
-    request.invoke_id = request_pdu[offset + 2];
-    /* segmented message? */
-    if (request_pdu[offset] & BIT(3)) {
-        request.service_choice = request_pdu[offset + 5];
-    } else {
-        request.service_choice = request_pdu[offset + 3];
-    }
-    /* decode the reply data */
-    reply.address.mac[0] = dest_address;
-    reply.address.mac_len = 1;
-    offset = bacnet_npdu_decode(
-        reply_pdu, reply_pdu_len, &reply.address, NULL, &reply.npdu_data);
-    if (reply.npdu_data.network_layer_message) {
-        debug_printf("DLMSTP: DER Compare failed: "
-                     "Reply is Network message.\n");
-        return false;
-    }
-    /* reply could be a lot of things:
-       confirmed, simple ack, abort, reject, error */
-    reply.pdu_type = reply_pdu[offset] & 0xF0;
-    switch (reply.pdu_type) {
-        case PDU_TYPE_SIMPLE_ACK:
-            reply.invoke_id = reply_pdu[offset + 1];
-            reply.service_choice = reply_pdu[offset + 2];
-            break;
-        case PDU_TYPE_COMPLEX_ACK:
-            reply.invoke_id = reply_pdu[offset + 1];
-            /* segmented message? */
-            if (reply_pdu[offset] & BIT(3)) {
-                reply.service_choice = reply_pdu[offset + 4];
-            } else {
-                reply.service_choice = reply_pdu[offset + 2];
-            }
-            break;
-        case PDU_TYPE_ERROR:
-            reply.invoke_id = reply_pdu[offset + 1];
-            reply.service_choice = reply_pdu[offset + 2];
-            break;
-        case PDU_TYPE_REJECT:
-        case PDU_TYPE_ABORT:
-            reply.invoke_id = reply_pdu[offset + 1];
-            break;
-        default:
-            return false;
-    }
-    /* these don't have service choice included */
-    if ((reply.pdu_type == PDU_TYPE_REJECT) ||
-        (reply.pdu_type == PDU_TYPE_ABORT)) {
-        if (request.invoke_id != reply.invoke_id) {
-            debug_printf("DLMSTP: DER Compare failed: "
-                         "Invoke ID mismatch.\n");
-            return false;
-        }
-    } else {
-        if (request.invoke_id != reply.invoke_id) {
-            debug_printf("DLMSTP: DER Compare failed: "
-                         "Invoke ID mismatch.\n");
-            return false;
-        }
-        if (request.service_choice != reply.service_choice) {
-            debug_printf("DLMSTP: DER Compare failed: "
-                         "Service choice mismatch.\n");
-            return false;
-        }
-    }
-    if (request.npdu_data.protocol_version !=
-        reply.npdu_data.protocol_version) {
-        debug_printf("DLMSTP: DER Compare failed: "
-                     "NPDU Protocol Version mismatch.\n");
-        return false;
-    }
-#if 0
-    /* the NDPU priority doesn't get passed through the stack, and
-       all outgoing messages have NORMAL priority */
-    if (request.npdu_data.priority != reply.npdu_data.priority) {
-        debug_printf(
-            "DLMSTP: DER Compare failed: " "NPDU Priority mismatch.\n");
-        return false;
-    }
-#endif
-    if (!bacnet_address_same(&request.address, &reply.address)) {
-        debug_printf("DLMSTP: DER Compare failed: "
-                     "BACnet Address mismatch.\n");
-        return false;
-    }
-
-    return true;
-}
-
 /* Get the reply to a DATA_EXPECTING_REPLY frame, or nothing */
 uint16_t MSTP_Get_Reply(struct mstp_port_struct_t *mstp_port, unsigned timeout)
 { /* milliseconds to wait for a packet */
@@ -541,7 +409,7 @@ uint16_t MSTP_Get_Reply(struct mstp_port_struct_t *mstp_port, unsigned timeout)
     }
     pkt = (struct mstp_pdu_packet *)Ringbuf_Peek(&poSharedData->PDU_Queue);
     /* is this the reply to the DER? */
-    matched = dlmstp_compare_data_expecting_reply(
+    matched = npdu_is_data_expecting_reply(
         &mstp_port->InputBuffer[0], mstp_port->DataLength,
         mstp_port->SourceAddress, (uint8_t *)&pkt->buffer[0], pkt->length,
         pkt->destination_mac);
@@ -550,7 +418,7 @@ uint16_t MSTP_Get_Reply(struct mstp_port_struct_t *mstp_port, unsigned timeout)
         while (!matched &&
                (pkt = (struct mstp_pdu_packet *)Ringbuf_Peek_Next(
                     &poSharedData->PDU_Queue, (uint8_t *)pkt)) != NULL) {
-            matched = dlmstp_compare_data_expecting_reply(
+            matched = npdu_is_data_expecting_reply(
                 &mstp_port->InputBuffer[0], mstp_port->DataLength,
                 mstp_port->SourceAddress, (uint8_t *)&pkt->buffer[0],
                 pkt->length, pkt->destination_mac);
@@ -771,7 +639,7 @@ bool dlmstp_init(void *poPort, char *ifname)
     unsigned long hThread = 0;
     int rv = 0;
     SHARED_MSTP_DATA *poSharedData;
-    struct termios newtio;
+    struct termios2 newtio;
     struct mstp_port_struct_t *mstp_port = (struct mstp_port_struct_t *)poPort;
     if (!mstp_port) {
         return false;
@@ -820,18 +688,22 @@ bool dlmstp_init(void *poPort, char *ifname)
     fcntl(poSharedData->RS485_Handle, F_SETFL, 0);
 #endif
     /* save current serial port settings */
-    tcgetattr(poSharedData->RS485_Handle, &poSharedData->RS485_oldtio);
+    termios2_tcgetattr(
+        poSharedData->RS485_Handle, &poSharedData->RS485_oldtio2);
     /* clear struct for new port settings */
-    bzero(&newtio, sizeof(newtio));
+    memset(&newtio, 0, sizeof(newtio));
     /*
-       BAUDRATE: Set bps rate. You could also use cfsetispeed and cfsetospeed.
+       BOTHER: Set bps rate.
+       https://man7.org/linux/man-pages/man2/TCSETS.2const.html
        CRTSCTS : output hardware flow control (only used if the cable has
        all necessary lines. See sect. 7 of Serial-HOWTO)
-       CLOCAL  : local connection, no modem contol
+       CLOCAL  : local connection, no modem control
        CREAD   : enable receiving characters
      */
     newtio.c_cflag =
-        poSharedData->RS485_Baud | poSharedData->RS485MOD | CLOCAL | CREAD;
+        poSharedData->RS485MOD | CLOCAL | CREAD | BOTHER | (BOTHER << IBSHIFT);
+    newtio.c_ispeed = poSharedData->RS485_Baud;
+    newtio.c_ospeed = poSharedData->RS485_Baud;
     /* Raw input */
     newtio.c_iflag = 0;
     /* Raw output */
@@ -839,10 +711,10 @@ bool dlmstp_init(void *poPort, char *ifname)
     /* no processing */
     newtio.c_lflag = 0;
     /* activate the settings for the port after flushing I/O */
-    tcsetattr(poSharedData->RS485_Handle, TCSAFLUSH, &newtio);
+    termios2_tcsetattr(poSharedData->RS485_Handle, TCSAFLUSH, &newtio);
     /* flush any data waiting */
     usleep(200000);
-    tcflush(poSharedData->RS485_Handle, TCIOFLUSH);
+    termios2_tcflush(poSharedData->RS485_Handle, TCIOFLUSH);
     /* ringbuffer */
     FIFO_Init(
         &poSharedData->Rx_FIFO, poSharedData->Rx_Buffer,

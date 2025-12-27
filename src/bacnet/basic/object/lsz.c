@@ -40,6 +40,7 @@ struct object_data {
     uint8_t Reliability;
     const char *Object_Name;
     OS_Keylist Zone_Members;
+    void *Context;
 };
 /* Key List for storing the object data sorted by instance number  */
 static OS_Keylist Object_List;
@@ -47,7 +48,7 @@ static OS_Keylist Object_List;
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_LIFE_SAFETY_ZONE;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Life_Safety_Zone_Properties_Required[] = {
+static const int32_t Life_Safety_Zone_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,    PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,          PROP_PRESENT_VALUE,
     PROP_TRACKING_VALUE,       PROP_STATUS_FLAGS,
@@ -58,9 +59,9 @@ static const int Life_Safety_Zone_Properties_Required[] = {
     PROP_MAINTENANCE_REQUIRED, -1
 };
 
-static const int Life_Safety_Zone_Properties_Optional[] = { -1 };
+static const int32_t Life_Safety_Zone_Properties_Optional[] = { -1 };
 
-static const int Life_Safety_Zone_Properties_Proprietary[] = { -1 };
+static const int32_t Life_Safety_Zone_Properties_Proprietary[] = { -1 };
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -74,7 +75,9 @@ static const int Life_Safety_Zone_Properties_Proprietary[] = { -1 };
  * BACnet proprietary properties for this object.
  */
 void Life_Safety_Zone_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Life_Safety_Zone_Properties_Required;
@@ -209,8 +212,8 @@ bool Life_Safety_Zone_Object_Name(
                 characterstring_init_ansi(object_name, pObject->Object_Name);
         } else {
             snprintf(
-                name_text, sizeof(name_text), "LIFE-SAFETY-ZONE-%u",
-                object_instance);
+                name_text, sizeof(name_text), "LIFE-SAFETY-ZONE-%lu",
+                (unsigned long)object_instance);
             status = characterstring_init_ansi(object_name, name_text);
         }
     }
@@ -412,9 +415,7 @@ void Life_Safety_Zone_Out_Of_Service_Set(uint32_t object_instance, bool value)
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Out_Of_Service != value) {
-            pObject->Out_Of_Service = value;
-        }
+        pObject->Out_Of_Service = value;
     }
 }
 
@@ -614,9 +615,7 @@ void Life_Safety_Zone_Maintenance_Required_Set(
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        if (pObject->Maintenance_Required != value) {
-            pObject->Maintenance_Required = value;
-        }
+        pObject->Maintenance_Required = value;
     }
 }
 
@@ -709,8 +708,7 @@ int Life_Safety_Zone_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], mode);
             break;
         case PROP_ACCEPTED_MODES:
-            for (mode = MIN_LIFE_SAFETY_MODE; mode < MAX_LIFE_SAFETY_MODE;
-                 mode++) {
+            for (mode = 0; mode < LIFE_SAFETY_MODE_RESERVED_MIN; mode++) {
                 len = encode_application_enumerated(&apdu[apdu_len], mode);
                 apdu_len += len;
             }
@@ -738,12 +736,6 @@ int Life_Safety_Zone_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -765,18 +757,12 @@ bool Life_Safety_Zone_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
         return false;
     }
-    /*  only array properties can have array options */
-    if (wp_data->array_index != BACNET_ARRAY_ALL) {
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        return false;
-    }
     switch (wp_data->object_property) {
         case PROP_MODE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
-                if (value.type.Enumerated <= MAX_LIFE_SAFETY_MODE) {
+                if (value.type.Enumerated <= LIFE_SAFETY_MODE_PROPRIETARY_MAX) {
                     Life_Safety_Zone_Mode_Set(
                         wp_data->object_instance,
                         (BACNET_LIFE_SAFETY_MODE)value.type.Enumerated);
@@ -862,6 +848,38 @@ bool Life_Safety_Zone_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 }
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Life_Safety_Zone_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Life_Safety_Zone_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates an object and initialize its properties to defaults
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -871,6 +889,9 @@ uint32_t Life_Safety_Zone_Create(uint32_t object_instance)
     struct object_data *pObject = NULL;
     int index = 0;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {

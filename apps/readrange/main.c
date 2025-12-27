@@ -12,7 +12,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <time.h> /* for time */
 #if (__STDC_VERSION__ >= 199901L) && defined(__STDC_ISO_10646__)
 #include <locale.h>
@@ -119,7 +118,7 @@ static void Init_Service_Handlers(void)
         SERVICE_CONFIRMED_READ_RANGE, handler_read_range_ack);
 
     /* handle any errors coming back */
-    apdu_set_error_handler(SERVICE_CONFIRMED_READ_PROPERTY, MyErrorHandler);
+    apdu_set_error_handler(SERVICE_CONFIRMED_READ_RANGE, MyErrorHandler);
     apdu_set_abort_handler(MyAbortHandler);
     apdu_set_reject_handler(MyRejectHandler);
 }
@@ -174,15 +173,19 @@ static void print_help(const char *filename)
     printf("count:\n"
            "This integer parameter is the number of elements to read.\n");
     printf("\n");
-    printf("Example:\n"
-           "If you want read the Log_Buffer of Trend Log 2\n"
-           "in Device 123, from starting position 1 and read 10 entries,\n"
+    printf("Examples:\n"
+           "If you want read the Log_Buffer of Trend Log 2 in Device 123,"
+           "from starting position 1 and read 10 entries,\n"
            "you could send the following commands:\n");
     printf("%s 123 trend-log 2 log-buffer 1 1 10\n", filename);
-    printf("%s 123 trend-log 2 log-buffer 2 1 10\n", filename);
-    printf("%s 123 trend-log 2 log-buffer 3 2014/1/1 00:00:01 10\n", filename);
     printf("%s 123 20 2 131 1 1 10\n", filename);
+    printf("from starting sequence 1 and read 10 entries,\n"
+           "you could send the following commands:\n");
+    printf("%s 123 trend-log 2 log-buffer 2 1 10\n", filename);
     printf("%s 123 20 2 131 2 1 10\n", filename);
+    printf("from starting date/time 1/1/2014 00:00:01 and read 10 entries,\n"
+           "you could send the following commands:\n");
+    printf("%s 123 trend-log 2 log-buffer 3 2014/1/1 00:00:01 10\n", filename);
     printf("%s 123 20 2 131 3 2014/1/1 00:00:01 10\n", filename);
 }
 
@@ -222,7 +225,7 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
-    if (argc < 5) {
+    if (argc < 6) {
         print_usage(filename);
         return 0;
     }

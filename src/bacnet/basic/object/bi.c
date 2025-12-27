@@ -21,16 +21,14 @@
 #include "bacnet/rp.h"
 #include "bacnet/wp.h"
 #include "bacnet/cov.h"
+#include "bacnet/proplist.h"
+/* basic objects and services */
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
+#include "bacnet/basic/sys/debug.h"
 /* me! */
 #include "bacnet/basic/object/bi.h"
-
-#include "bacnet/basic/sys/debug.h"
-#if !defined(PRINT)
-#define PRINT debug_perror
-#endif
 
 static const char *Default_Active_Text = "Active";
 static const char *Default_Inactive_Text = "Inactive";
@@ -46,6 +44,7 @@ struct object_data {
     const char *Active_Text;
     const char *Inactive_Text;
     const char *Description;
+    void *Context;
 #if defined(INTRINSIC_REPORTING) && (BINARY_INPUT_INTRINSIC_REPORTING)
     uint32_t Time_Delay;
     uint32_t Notification_Class;
@@ -69,21 +68,16 @@ static const BACNET_OBJECT_TYPE Object_Type = OBJECT_BINARY_INPUT;
 static binary_input_write_present_value_callback
     Binary_Input_Write_Present_Value_Callback;
 
-/* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Properties_Required[] = {
-    PROP_OBJECT_IDENTIFIER,
-    PROP_OBJECT_NAME,
-    PROP_OBJECT_TYPE,
-    PROP_PRESENT_VALUE,
-    PROP_STATUS_FLAGS,
-    PROP_EVENT_STATE,
-    PROP_OUT_OF_SERVICE,
-    PROP_POLARITY,
-    -1
+static const int32_t Properties_Required[] = {
+    /* unordered list of required properties */
+    PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,  PROP_OBJECT_TYPE,
+    PROP_PRESENT_VALUE,     PROP_STATUS_FLAGS, PROP_EVENT_STATE,
+    PROP_OUT_OF_SERVICE,    PROP_POLARITY,     -1
 };
 
-static const int Properties_Optional[] = {
+static const int32_t Properties_Optional[] = {
+    /* unordered list of optional properties */
     PROP_RELIABILITY,
     PROP_DESCRIPTION,
     PROP_ACTIVE_TEXT,
@@ -101,8 +95,7 @@ static const int Properties_Optional[] = {
     -1
 };
 
-static const int Properties_Proprietary[] = { -1 };
-/* clang-format on */
+static const int32_t Properties_Proprietary[] = { -1 };
 
 /**
  * Initialize the pointers for the required, the optional and the properitary
@@ -113,7 +106,9 @@ static const int Properties_Proprietary[] = { -1 };
  * @param pProprietary - Pointer to the pointer of properitary values.
  */
 void Binary_Input_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Properties_Required;
@@ -284,13 +279,28 @@ BACNET_BINARY_PV Binary_Input_Present_Value(uint32_t object_instance)
 /**
  * @brief For a given object instance-number, checks the present-value for COV
  * @param  pObject - specific object with valid data
- * @param  value - floating point analog value
+ * @param  value - binary value
  */
 static void Binary_Input_Present_Value_COV_Detect(
     struct object_data *pObject, BACNET_BINARY_PV value)
 {
     if (pObject) {
         if (Binary_Present_Value(pObject->Present_Value) != value) {
+            pObject->Change_Of_Value = true;
+        }
+    }
+}
+
+/**
+ * @brief For a given object instance-number, checks the out-of-service for COV
+ * @param  pObject - specific object with valid data
+ * @param  value - out-of-service value
+ */
+static void
+Binary_Input_Out_Of_Service_COV_Detect(struct object_data *pObject, bool value)
+{
+    if (pObject) {
+        if (pObject->Out_Of_Service != value) {
             pObject->Change_Of_Value = true;
         }
     }
@@ -328,10 +338,8 @@ void Binary_Input_Out_Of_Service_Set(uint32_t object_instance, bool value)
 
     pObject = Binary_Input_Object(object_instance);
     if (pObject) {
-        if (pObject->Out_Of_Service != value) {
-            pObject->Out_Of_Service = value;
-            pObject->Change_Of_Value = true;
-        }
+        Binary_Input_Out_Of_Service_COV_Detect(pObject, value);
+        pObject->Out_Of_Service = value;
     }
 
     return;
@@ -522,7 +530,7 @@ bool Binary_Input_Present_Value_Set(
  * For a given object instance-number, sets the present-value
  *
  * @param  object_instance - object-instance number of the object
- * @param  value - floating point analog value
+ * @param  value - binary present-value
  * @param  error_class - the BACnet error class
  * @param  error_code - BACnet Error code
  *
@@ -563,6 +571,43 @@ static bool Binary_Input_Present_Value_Write(
         } else {
             *error_class = ERROR_CLASS_PROPERTY;
             *error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        *error_class = ERROR_CLASS_OBJECT;
+        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, sets the out-of-service flag
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  value - boolean out-of-service value
+ * @param  error_class - the BACnet error class
+ * @param  error_code - BACnet Error code
+ *
+ * @return  true if value is set, or false if not set or error occurred
+ */
+static bool Binary_Input_Out_Of_Service_Write(
+    uint32_t object_instance,
+    bool value,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code)
+{
+    bool status = false;
+    struct object_data *pObject;
+
+    pObject = Binary_Input_Object(object_instance);
+    if (pObject) {
+        if (pObject->Write_Enabled) {
+            Binary_Input_Out_Of_Service_COV_Detect(pObject, value);
+            pObject->Out_Of_Service = value;
+            status = true;
+        } else {
+            *error_class = ERROR_CLASS_PROPERTY;
+            *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
         }
     } else {
         *error_class = ERROR_CLASS_OBJECT;
@@ -908,7 +953,9 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         case PROP_STATUS_FLAGS:
             /* note: see the details in the standard on how to use these */
             bitstring_init(&bit_string);
-            bitstring_set_bit(&bit_string, STATUS_FLAG_IN_ALARM, false);
+            bitstring_set_bit(
+                &bit_string, STATUS_FLAG_IN_ALARM,
+                pObject->Event_State != EVENT_STATE_NORMAL);
             state = Binary_Input_Fault(rpdata->object_instance);
             bitstring_set_bit(&bit_string, STATUS_FLAG_FAULT, state);
             bitstring_set_bit(&bit_string, STATUS_FLAG_OVERRIDDEN, false);
@@ -917,8 +964,8 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
             break;
         case PROP_EVENT_STATE:
-            apdu_len =
-                encode_application_enumerated(&apdu[0], EVENT_STATE_NORMAL);
+            apdu_len = encode_application_enumerated(
+                &apdu[0], Binary_Input_Event_State(rpdata->object_instance));
             break;
         case PROP_OUT_OF_SERVICE:
             state = Binary_Input_Out_Of_Service(rpdata->object_instance);
@@ -1031,12 +1078,6 @@ int Binary_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -1073,12 +1114,6 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 #endif
         return BACNET_STATUS_ERROR;
     }
-    /*  only array properties can have array options */
-    if (wp_data->array_index != BACNET_ARRAY_ALL) {
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        return false;
-    }
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
@@ -1093,8 +1128,9 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
-                Binary_Input_Out_Of_Service_Set(
-                    wp_data->object_instance, value.type.Boolean);
+                status = Binary_Input_Out_Of_Service_Write(
+                    wp_data->object_instance, value.type.Boolean,
+                    &wp_data->error_class, &wp_data->error_code);
             }
             break;
         case PROP_POLARITY:
@@ -1253,6 +1289,38 @@ void Binary_Input_Write_Disable(uint32_t object_instance)
 }
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Binary_Input_Context_Get(uint32_t object_instance)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Binary_Input_Context_Set(uint32_t object_instance, void *context)
+{
+    struct object_data *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * Creates a Binary Input object
  * @param object_instance - object-instance number of the object
  */
@@ -1261,6 +1329,9 @@ uint32_t Binary_Input_Create(uint32_t object_instance)
     struct object_data *pObject = NULL;
     int index = 0;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {
@@ -1730,7 +1801,7 @@ int Binary_Input_Alarm_Summary(
     struct object_data *pObject = Binary_Input_Object_Index(index);
 
     if (getalarm_data == NULL) {
-        PRINT(
+        debug_printf(
             "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
             __LINE__, (void *)getalarm_data);
         return -2;
@@ -1917,7 +1988,8 @@ void Binary_Input_Intrinsic_Reporting(uint32_t object_instance)
         pObject->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
-        PRINT("Binary-Input[%d]: Send AckNotification.\n", object_instance);
+        debug_printf(
+            "Binary-Input[%d]: Send AckNotification.\n", object_instance);
         characterstring_init_ansi(&msgText, "AckNotification");
 
         /* Notify Type */
@@ -1997,7 +2069,7 @@ void Binary_Input_Intrinsic_Reporting(uint32_t object_instance)
                 default:
                     break;
             } /* switch (ToState) */
-            PRINT(
+            debug_printf(
                 "Binary-Input[%d]: Event_State goes from %.128s to %.128s.\n",
                 object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
@@ -2110,7 +2182,7 @@ void Binary_Input_Intrinsic_Reporting(uint32_t object_instance)
         }
 
         /* add data from notification class */
-        PRINT(
+        debug_printf(
             "Binary-Input[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
@@ -2127,7 +2199,7 @@ void Binary_Input_Intrinsic_Reporting(uint32_t object_instance)
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
-            PRINT("Binary-Input[%d]: Ack Required!\n", object_instance);
+            debug_printf("Binary-Input[%d]: Ack Required!\n", object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                     pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]

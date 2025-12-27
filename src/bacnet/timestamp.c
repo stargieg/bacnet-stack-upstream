@@ -13,8 +13,6 @@
 #include "bacnet/datetime.h"
 #include "bacnet/timestamp.h"
 
-/** @file timestamp.c  Encode/Decode BACnet Timestamps  */
-
 /** Set the sequence number in a timestamp structure.
  *
  * @param dest  Pointer to the destination time stamp structure.
@@ -32,7 +30,7 @@ void bacapp_timestamp_sequence_set(BACNET_TIMESTAMP *dest, uint16_t sequenceNum)
  * from a time structure.
  *
  * @param dest  Pointer to the destination time stamp structure.
- * @param btime  Pointer to the BACNet time structure.
+ * @param btime  Pointer to the BACnet time structure.
  */
 void bacapp_timestamp_time_set(BACNET_TIMESTAMP *dest, const BACNET_TIME *btime)
 {
@@ -46,7 +44,7 @@ void bacapp_timestamp_time_set(BACNET_TIMESTAMP *dest, const BACNET_TIME *btime)
  * from a date/time structure.
  *
  * @param dest  Pointer to the destination time stamp structure.
- * @param bdateTime  Pointer to the BACNet date/time structure.
+ * @param bdateTime  Pointer to the BACnet date/time structure.
  */
 void bacapp_timestamp_datetime_set(
     BACNET_TIMESTAMP *dest, const BACNET_DATE_TIME *bdateTime)
@@ -305,7 +303,8 @@ int bacapp_decode_timestamp(const uint8_t *apdu, BACNET_TIMESTAMP *value)
  *                    hold the time stamp.
  * @param value  Pointer to the variable that shall
  *               take the time stamp values.
- * @return number of bytes decoded, or BACNET_STATUS_ERROR if an error occurs
+ * @return  number of bytes decoded, zero if tag mismatch,
+ * or #BACNET_STATUS_ERROR (-1) if malformed
  */
 int bacnet_timestamp_context_decode(
     const uint8_t *apdu,
@@ -316,9 +315,12 @@ int bacnet_timestamp_context_decode(
     int len = 0;
     int apdu_len = 0;
 
+    if (!apdu) {
+        return BACNET_STATUS_ERROR;
+    }
     if (!bacnet_is_opening_tag_number(
             &apdu[apdu_len], apdu_size - apdu_len, tag_number, &len)) {
-        return BACNET_STATUS_ERROR;
+        return 0;
     }
     apdu_len += len;
     len = bacnet_timestamp_decode(&apdu[apdu_len], apdu_size - apdu_len, value);
@@ -473,16 +475,28 @@ int bacapp_timestamp_to_ascii(
                 str, str_size, "%u", (unsigned)timestamp->value.sequenceNum);
             break;
         case TIME_STAMP_DATETIME:
-            /* 2021/12/31-23:59:59.99 */
-            str_len = snprintf(
-                str, str_size, "%04u/%02u/%02u-%02u:%02u:%02u.%02u",
-                (unsigned)timestamp->value.dateTime.date.year,
-                (unsigned)timestamp->value.dateTime.date.month,
-                (unsigned)timestamp->value.dateTime.date.day,
-                (unsigned)timestamp->value.dateTime.time.hour,
-                (unsigned)timestamp->value.dateTime.time.min,
-                (unsigned)timestamp->value.dateTime.time.sec,
-                (unsigned)timestamp->value.dateTime.time.hundredths);
+            if (datetime_wildcard_year(&timestamp->value.dateTime.date)) {
+                /* 255/12/31-23:59:59.99 */
+                str_len = snprintf(
+                    str, str_size, "255/%02u/%02u-%02u:%02u:%02u.%02u",
+                    (unsigned)timestamp->value.dateTime.date.month,
+                    (unsigned)timestamp->value.dateTime.date.day,
+                    (unsigned)timestamp->value.dateTime.time.hour,
+                    (unsigned)timestamp->value.dateTime.time.min,
+                    (unsigned)timestamp->value.dateTime.time.sec,
+                    (unsigned)timestamp->value.dateTime.time.hundredths);
+            } else {
+                /* 2021/12/31-23:59:59.99 */
+                str_len = snprintf(
+                    str, str_size, "%04u/%02u/%02u-%02u:%02u:%02u.%02u",
+                    (unsigned)timestamp->value.dateTime.date.year,
+                    (unsigned)timestamp->value.dateTime.date.month,
+                    (unsigned)timestamp->value.dateTime.date.day,
+                    (unsigned)timestamp->value.dateTime.time.hour,
+                    (unsigned)timestamp->value.dateTime.time.min,
+                    (unsigned)timestamp->value.dateTime.time.sec,
+                    (unsigned)timestamp->value.dateTime.time.hundredths);
+            }
             break;
         default:
             break;

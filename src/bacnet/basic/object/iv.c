@@ -20,19 +20,21 @@
 #include "bacnet/bacapp.h"
 #include "bacnet/bactext.h"
 #include "bacnet/proplist.h"
+/* basic objects and services */
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/debug.h"
+#include "bacnet/basic/sys/keylist.h"
 /* me! */
 #include "bacnet/basic/object/iv.h"
-#include "bacnet/basic/sys/keylist.h"
-#include "bacnet/basic/sys/debug.h"
-
-#define PRINTF debug_perror
 
 /* Key List for storing the object data sorted by instance number  */
 static OS_Keylist Object_List = NULL;
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_INTEGER_VALUE;
+/* callback for present value writes */
+static integer_value_write_present_value_callback
+    Integer_Value_Write_Present_Value_Callback;
 
 struct integer_object {
     bool Out_Of_Service : 1;
@@ -40,26 +42,29 @@ struct integer_object {
     int32_t Present_Value;
     int32_t Prior_Value;
     uint32_t COV_Increment;
-    uint16_t Units;
+    BACNET_ENGINEERING_UNITS Units;
     uint32_t Instance;
     const char *Object_Name;
     const char *Description;
+    void *Context;
 } INTERGER_VALUE_DESCR;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int Integer_Value_Properties_Required[] = { PROP_OBJECT_IDENTIFIER,
-                                                         PROP_OBJECT_NAME,
-                                                         PROP_OBJECT_TYPE,
-                                                         PROP_PRESENT_VALUE,
-                                                         PROP_STATUS_FLAGS,
-                                                         PROP_UNITS,
-                                                         -1 };
+static const int32_t Integer_Value_Properties_Required[] = {
+    PROP_OBJECT_IDENTIFIER,
+    PROP_OBJECT_NAME,
+    PROP_OBJECT_TYPE,
+    PROP_PRESENT_VALUE,
+    PROP_STATUS_FLAGS,
+    PROP_UNITS,
+    -1
+};
 
-static const int Integer_Value_Properties_Optional[] = {
+static const int32_t Integer_Value_Properties_Optional[] = {
     PROP_OUT_OF_SERVICE, PROP_DESCRIPTION, PROP_COV_INCREMENT, -1
 };
 
-static const int Integer_Value_Properties_Proprietary[] = { -1 };
+static const int32_t Integer_Value_Properties_Proprietary[] = { -1 };
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -73,7 +78,9 @@ static const int Integer_Value_Properties_Proprietary[] = { -1 };
  * BACnet proprietary properties for this object.
  */
 void Integer_Value_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Integer_Value_Properties_Required;
@@ -348,9 +355,9 @@ bool Integer_Value_Description_Set(
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-char *Integer_Value_Description_ANSI(uint32_t object_instance)
+const char *Integer_Value_Description_ANSI(uint32_t object_instance)
 {
-    char *name = NULL;
+    const char *name = NULL;
     struct integer_object *pObject;
 
     pObject = Integer_Value_Object(object_instance);
@@ -358,7 +365,7 @@ char *Integer_Value_Description_ANSI(uint32_t object_instance)
         if (pObject->Description == NULL) {
             name = "";
         } else {
-            name = (char *)pObject->Description;
+            name = pObject->Description;
         }
     }
 
@@ -372,9 +379,9 @@ char *Integer_Value_Description_ANSI(uint32_t object_instance)
  *
  * @return  units property value
  */
-uint16_t Integer_Value_Units(uint32_t object_instance)
+BACNET_ENGINEERING_UNITS Integer_Value_Units(uint32_t object_instance)
 {
-    uint16_t units = UNITS_NO_UNITS;
+    BACNET_ENGINEERING_UNITS units = UNITS_NO_UNITS;
     struct integer_object *pObject = Integer_Value_Object(object_instance);
 
     if (pObject) {
@@ -392,7 +399,8 @@ uint16_t Integer_Value_Units(uint32_t object_instance)
  *
  * @return true if the units property value was set
  */
-bool Integer_Value_Units_Set(uint32_t object_instance, uint16_t units)
+bool Integer_Value_Units_Set(
+    uint32_t object_instance, BACNET_ENGINEERING_UNITS units)
 {
     bool status = false;
     struct integer_object *pObject = Integer_Value_Object(object_instance);
@@ -458,7 +466,7 @@ int Integer_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     uint8_t *apdu = NULL;
-    uint32_t units = 0;
+    BACNET_ENGINEERING_UNITS units;
     int32_t integer_value = 0;
     bool state = false;
 
@@ -509,7 +517,7 @@ int Integer_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
         case PROP_UNITS:
             units = Integer_Value_Units(rpdata->object_instance);
-            apdu_len = encode_application_enumerated(&apdu[0], units);
+            apdu_len = encode_application_enumerated(&apdu[0], (uint32_t)units);
             break;
         case PROP_COV_INCREMENT:
             apdu_len = encode_application_unsigned(
@@ -520,14 +528,6 @@ int Integer_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
             apdu_len = BACNET_STATUS_ERROR;
             break;
-    }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->object_property != PROP_PRIORITY_ARRAY) &&
-        (rpdata->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
     }
 
     return apdu_len;
@@ -546,6 +546,7 @@ bool Integer_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 {
     bool status = false; /* return value */
     int len = 0;
+    int32_t old_value = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
     /* decode the some of the request */
@@ -558,22 +559,21 @@ bool Integer_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
         return false;
     }
-    if ((wp_data->object_property != PROP_PRIORITY_ARRAY) &&
-        (wp_data->object_property != PROP_EVENT_TIME_STAMPS) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        /*  only array properties can have array options */
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        return false;
-    }
     switch (wp_data->object_property) {
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_SIGNED_INT);
             if (status) {
+                old_value =
+                    Integer_Value_Present_Value(wp_data->object_instance);
                 Integer_Value_Present_Value_Set(
                     wp_data->object_instance, value.type.Signed_Int,
                     wp_data->priority);
+                if (Integer_Value_Write_Present_Value_Callback) {
+                    Integer_Value_Write_Present_Value_Callback(
+                        wp_data->object_instance, old_value,
+                        Integer_Value_Present_Value(wp_data->object_instance));
+                }
             }
             break;
         case PROP_COV_INCREMENT:
@@ -592,6 +592,20 @@ bool Integer_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data->object_instance, value.type.Boolean);
             }
             break;
+        case PROP_UNITS:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
+            if (status) {
+                if (value.type.Enumerated <= UINT16_MAX) {
+                    Integer_Value_Units_Set(
+                        wp_data->object_instance, value.type.Enumerated);
+                } else {
+                    status = false;
+                    wp_data->error_class = ERROR_CLASS_PROPERTY;
+                    wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+                }
+            }
+            break;
         default:
             if (property_lists_member(
                     Integer_Value_Properties_Required,
@@ -608,6 +622,16 @@ bool Integer_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     }
 
     return status;
+}
+
+/**
+ * @brief Sets a callback used when present-value is written from BACnet
+ * @param cb - callback used to provide indications
+ */
+void Integer_Value_Write_Present_Value_Callback_Set(
+    integer_value_write_present_value_callback cb)
+{
+    Integer_Value_Write_Present_Value_Callback = cb;
 }
 
 /**
@@ -702,6 +726,38 @@ void Integer_Value_COV_Increment_Set(uint32_t object_instance, uint32_t value)
 }
 
 /**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void *Integer_Value_Context_Get(uint32_t object_instance)
+{
+    struct integer_object *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        return pObject->Context;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Set the context used with a specific object instance
+ * @param object_instance [in] BACnet object instance number
+ * @param context [in] pointer to the context
+ */
+void Integer_Value_Context_Set(uint32_t object_instance, void *context)
+{
+    struct integer_object *pObject;
+
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject) {
+        pObject->Context = context;
+    }
+}
+
+/**
  * @brief Creates a Integer Value object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
@@ -710,6 +766,9 @@ uint32_t Integer_Value_Create(uint32_t object_instance)
 {
     struct integer_object *pObject = NULL;
 
+    if (!Object_List) {
+        Object_List = Keylist_Create();
+    }
     if (object_instance > BACNET_MAX_INSTANCE) {
         return BACNET_MAX_INSTANCE;
     } else if (object_instance == BACNET_MAX_INSTANCE) {

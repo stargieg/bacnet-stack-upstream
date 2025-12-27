@@ -18,7 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h> /* for time */
-#include <errno.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <libconfig.h> /* read config files */
@@ -235,13 +234,13 @@ bool read_config(const char *filepath)
 
             /* create new list node to store port information */
             if (head == NULL) {
-                head = (ROUTER_PORT *)calloc(sizeof(ROUTER_PORT), 1);
+                head = (ROUTER_PORT *)calloc(1, sizeof(ROUTER_PORT));
                 head->next = NULL;
                 current = head;
             } else {
                 ROUTER_PORT *tmp = current;
                 current = current->next;
-                current = (ROUTER_PORT *)calloc(sizeof(ROUTER_PORT), 1);
+                current = (ROUTER_PORT *)calloc(1, sizeof(ROUTER_PORT));
                 current->next = NULL;
                 tmp->next = current;
             }
@@ -255,16 +254,15 @@ bool read_config(const char *filepath)
                 result = config_setting_lookup_string(port, "device", &iface);
                 if (result) {
                     current->iface =
-                        (char *)calloc(sizeof(char), strlen(iface) + 1);
+                        (char *)calloc(strlen(iface) + 1, sizeof(char));
                     strcpy(current->iface, iface);
 
                     /* check if interface is valid */
                     fd = socket(AF_INET, SOCK_DGRAM, 0);
                     if (fd) {
                         struct ifreq ifr;
-                        strncpy(
-                            ifr.ifr_name, current->iface,
-                            sizeof(ifr.ifr_name) - 1);
+                        snprintf(
+                            ifr.ifr_name, sizeof(ifr.ifr_name), "%s", iface);
                         result = ioctl(fd, SIOCGIFADDR, &ifr);
                         if (result != -1) {
                             close(fd);
@@ -299,7 +297,7 @@ bool read_config(const char *filepath)
                 result = config_setting_lookup_string(port, "device", &iface);
                 if (result) {
                     current->iface =
-                        (char *)calloc(sizeof(char), strlen(iface) + 1);
+                        (char *)calloc(strlen(iface) + 1, sizeof(char));
                     strcpy(current->iface, iface);
 
                     /* check if interface is valid */
@@ -440,13 +438,13 @@ bool parse_cmd(int argc, char *argv[])
 
                 /* create new list node to store port information */
                 if (head == NULL) {
-                    head = (ROUTER_PORT *)calloc(sizeof(ROUTER_PORT), 1);
+                    head = (ROUTER_PORT *)calloc(1, sizeof(ROUTER_PORT));
                     head->next = NULL;
                     current = head;
                 } else {
                     ROUTER_PORT *tmp = current;
                     current = current->next;
-                    current = (ROUTER_PORT *)calloc(sizeof(ROUTER_PORT), 1);
+                    current = (ROUTER_PORT *)calloc(1, sizeof(ROUTER_PORT));
                     current->next = NULL;
                     tmp->next = current;
                 }
@@ -469,9 +467,9 @@ bool parse_cmd(int argc, char *argv[])
                     fd = socket(AF_INET, SOCK_DGRAM, 0);
                     if (fd) {
                         struct ifreq ifr;
-                        strncpy(
-                            ifr.ifr_name, current->iface,
-                            sizeof(ifr.ifr_name) - 1);
+                        snprintf(
+                            ifr.ifr_name, sizeof(ifr.ifr_name), "%s",
+                            current->iface);
                         result = ioctl(fd, SIOCGIFADDR, &ifr);
                         if (result != -1) {
                             close(fd);

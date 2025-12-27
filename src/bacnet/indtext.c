@@ -9,47 +9,25 @@
 #include <string.h>
 #include <ctype.h>
 #include "bacnet/bacdef.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/indtext.h"
-
-/**
- * @brief Compare two strings, case insensitive
- * @param a - first string
- * @param b - second string
- * @return 0 if the strings are equal, non-zero if not
- * @note The stricmp() function is not included C standard.
- */
-int indtext_stricmp(const char *a, const char *b)
-{
-    int twin_a, twin_b;
-
-    do {
-        twin_a = *(const unsigned char *)a;
-        twin_b = *(const unsigned char *)b;
-        twin_a = tolower(toupper(twin_a));
-        twin_b = tolower(toupper(twin_b));
-        a++;
-        b++;
-    } while ((twin_a == twin_b) && (twin_a != '\0'));
-
-    return twin_a - twin_b;
-}
 
 /**
  * @brief Search a list of strings to find a matching string
  * @param data_list - list of strings and indices
  * @param search_name - string to search for
  * @param found_index - index of the string found
- * @return true if the string is found
+ * @return true if the matching string is found
  */
 bool indtext_by_string(
-    INDTEXT_DATA *data_list, const char *search_name, unsigned *found_index)
+    INDTEXT_DATA *data_list, const char *search_name, uint32_t *found_index)
 {
     bool found = false;
-    unsigned index = 0;
+    uint32_t index = 0;
 
     if (data_list && search_name) {
         while (data_list->pString) {
-            if (strcmp(data_list->pString, search_name) == 0) {
+            if (bacnet_strcmp(data_list->pString, search_name) == 0) {
                 index = data_list->index;
                 found = true;
                 break;
@@ -70,17 +48,17 @@ bool indtext_by_string(
  * @param data_list - list of strings and indices
  * @param search_name - string to search for
  * @param found_index - index of the string found
- * @return true if the string is found
+ * @return true if the matching string is found
  */
 bool indtext_by_istring(
-    INDTEXT_DATA *data_list, const char *search_name, unsigned *found_index)
+    INDTEXT_DATA *data_list, const char *search_name, uint32_t *found_index)
 {
     bool found = false;
-    unsigned index = 0;
+    uint32_t index = 0;
 
     if (data_list && search_name) {
         while (data_list->pString) {
-            if (indtext_stricmp(data_list->pString, search_name) == 0) {
+            if (bacnet_stricmp(data_list->pString, search_name) == 0) {
                 index = data_list->index;
                 found = true;
                 break;
@@ -104,10 +82,10 @@ bool indtext_by_istring(
  * @param default_index - index to return if the string is not found
  * @return index of the string found, or the default index
  */
-unsigned indtext_by_string_default(
-    INDTEXT_DATA *data_list, const char *search_name, unsigned default_index)
+uint32_t indtext_by_string_default(
+    INDTEXT_DATA *data_list, const char *search_name, uint32_t default_index)
 {
-    unsigned index = 0;
+    uint32_t index = 0;
 
     if (!indtext_by_string(data_list, search_name, &index)) {
         index = default_index;
@@ -124,10 +102,10 @@ unsigned indtext_by_string_default(
  * @param default_index - index to return if the string is not found
  * @return index of the string found, or the default index
  */
-unsigned indtext_by_istring_default(
-    INDTEXT_DATA *data_list, const char *search_name, unsigned default_index)
+uint32_t indtext_by_istring_default(
+    INDTEXT_DATA *data_list, const char *search_name, uint32_t default_index)
 {
-    unsigned index = 0;
+    uint32_t index = 0;
 
     if (!indtext_by_istring(data_list, search_name, &index)) {
         index = default_index;
@@ -143,7 +121,7 @@ unsigned indtext_by_istring_default(
  * @return the string found, or NULL if not found
  */
 const char *indtext_by_index_default(
-    INDTEXT_DATA *data_list, unsigned index, const char *default_string)
+    INDTEXT_DATA *data_list, uint32_t index, const char *default_string)
 {
     const char *pString = NULL;
 
@@ -171,8 +149,8 @@ const char *indtext_by_index_default(
  */
 const char *indtext_by_index_split_default(
     INDTEXT_DATA *data_list,
-    unsigned index,
-    unsigned split_index,
+    uint32_t index,
+    uint32_t split_index,
     const char *before_split_default_name,
     const char *default_name)
 {
@@ -190,7 +168,7 @@ const char *indtext_by_index_split_default(
  * @param index - index to search for
  * @return the string found, or NULL if not found
  */
-const char *indtext_by_index(INDTEXT_DATA *data_list, unsigned index)
+const char *indtext_by_index(INDTEXT_DATA *data_list, uint32_t index)
 {
     return indtext_by_index_default(data_list, index, NULL);
 }
@@ -200,9 +178,9 @@ const char *indtext_by_index(INDTEXT_DATA *data_list, unsigned index)
  * @param data_list - list of strings and indices
  * @return the number of elements in the list
  */
-unsigned indtext_count(INDTEXT_DATA *data_list)
+uint32_t indtext_count(INDTEXT_DATA *data_list)
 {
-    unsigned count = 0; /* return value */
+    uint32_t count = 0; /* return value */
 
     if (data_list) {
         while (data_list->pString) {

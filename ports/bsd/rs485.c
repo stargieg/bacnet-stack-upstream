@@ -36,6 +36,7 @@
 #include "bacnet/datalink/mstp.h"
 #include "rs485.h"
 #include "bacnet/basic/sys/fifo.h"
+#include "bacnet/basic/sys/debug.h"
 
 #include <sys/select.h>
 #include <sys/time.h>
@@ -398,72 +399,45 @@ bool RS485_Set_Baud_Rate(uint32_t baud)
 void RS485_Send_Frame(
     struct mstp_port_struct_t *mstp_port, /* port specific data */
     const uint8_t *buffer, /* frame to send (up to 501 bytes of data) */
-    uint16_t nbytes)
-{ /* number of bytes of data (up to 501) */
+    uint16_t nbytes /* number of bytes of data (up to 501) */)
+{
     uint32_t turnaround_time_usec = Tturnaround * 1000000UL;
-    uint32_t baud;
+    uint32_t baud = RS485_Baud;
+    int handle = RS485_Handle;
     ssize_t written = 0;
     int greska;
-    SHARED_MSTP_DATA *poSharedData = NULL;
+    const SHARED_MSTP_DATA *poSharedData = NULL;
 
-    if (mstp_port) {
+    if (mstp_port && mstp_port->UserData) {
         poSharedData = (SHARED_MSTP_DATA *)mstp_port->UserData;
-    }
-    if (!poSharedData) {
-        baud = RS485_Get_Baud_Rate();
-        /* sleeping for turnaround time is necessary to give other devices
-           time to change from sending to receiving state. */
-        usleep(turnaround_time_usec / baud);
-        /*
-           On  success,  the  number of bytes written are returned (zero
-           indicates nothing was written).  On error, -1  is  returned,  and
-           errno  is  set appropriately.   If  count  is zero and the file
-           descriptor refers to a regular file, 0 will be returned without
-           causing any other effect.  For a special file, the results are not
-           portable.
-         */
-        written = write(RS485_Handle, buffer, nbytes);
-        greska = errno;
-        if (written <= 0) {
-            printf("write error: %s\n", strerror(greska));
-        } else {
-            /* wait until all output has been transmitted. */
-            tcdrain(RS485_Handle);
-        }
-        /*  tcdrain(RS485_Handle); */
-        /* per MSTP spec, sort of */
-        if (mstp_port) {
-            mstp_port->SilenceTimerReset((void *)mstp_port);
-        }
-    } else {
-        baud = RS485_Get_Port_Baud_Rate(mstp_port);
-        /* sleeping for turnaround time is necessary to give other devices
-           time to change from sending to receiving state. */
-        usleep(turnaround_time_usec / baud);
-        /*
-           On  success,  the  number of bytes written are returned (zero
-           indicates nothing was written).  On error, -1  is  returned,  and
-           errno  is  set appropriately.   If  count  is zero and the file
-           descriptor refers to a regular file, 0 will be returned without
-           causing any other effect.  For a special file, the results are not
-           portable.
-         */
-        written = write(poSharedData->RS485_Handle, buffer, nbytes);
-        greska = errno;
-        if (written <= 0) {
-            printf("write error: %s\n", strerror(greska));
-        } else {
-            /* wait until all output has been transmitted. */
-            tcdrain(poSharedData->RS485_Handle);
-        }
-        /*  tcdrain(RS485_Handle); */
-        /* per MSTP spec, sort of */
-        if (mstp_port) {
-            mstp_port->SilenceTimerReset((void *)mstp_port);
-        }
+        baud = poSharedData->RS485_Baud;
+        handle = poSharedData->RS485_Handle;
     }
 
-    return;
+    /* sleeping for turnaround time is necessary to give other devices
+       time to change from sending to receiving state. */
+    usleep(turnaround_time_usec / baud);
+    /*
+       On  success,  the  number of bytes written are returned (zero
+       indicates nothing was written).  On error, -1  is  returned,  and
+       errno  is  set appropriately.   If  count  is zero and the file
+       descriptor refers to a regular file, 0 will be returned without
+       causing any other effect.  For a special file, the results are not
+       portable.
+     */
+    written = write(handle, buffer, nbytes);
+    greska = errno;
+    if (written <= 0) {
+        printf("write error: %s\n", strerror(greska));
+    } else {
+        /* wait until all output has been transmitted. */
+        tcdrain(handle);
+    }
+    /*  tcdrain(RS485_Handle); */
+    /* per MSTP spec, sort of */
+    if (mstp_port) {
+        mstp_port->SilenceTimerReset((void *)mstp_port);
+    }
 }
 
 /****************************************************************************
@@ -477,72 +451,42 @@ void RS485_Check_UART_Data(struct mstp_port_struct_t *mstp_port)
     fd_set input;
     struct timeval waiter;
     uint8_t buf[2048];
-    int n;
+    ssize_t n;
+    int handle = RS485_Handle;
+    SHARED_MSTP_DATA *poSharedData;
+    FIFO_BUFFER *fifo = &Rx_FIFO;
 
-    SHARED_MSTP_DATA *poSharedData = (SHARED_MSTP_DATA *)mstp_port->UserData;
-    if (!poSharedData) {
-        if (mstp_port->ReceiveError == true) {
-            /* do nothing but wait for state machine to clear the error */
-            /* burning time, so wait a longer time */
+    waiter.tv_sec = 0;
+    waiter.tv_usec = 5000;
+    poSharedData = (SHARED_MSTP_DATA *)mstp_port->UserData;
+    if (poSharedData) {
+        handle = poSharedData->RS485_Handle;
+        fifo = &poSharedData->Rx_FIFO;
+    }
+    if (mstp_port->ReceiveError == true) {
+        /* do nothing but wait for state machine to clear the error */
+    } else if (mstp_port->DataAvailable == false) {
+        /* wait for state machine to read from the DataRegister */
+        if (FIFO_Count(fifo) > 0) {
+            /* data is available */
+            mstp_port->DataRegister = FIFO_Get(fifo);
+            mstp_port->DataAvailable = true;
+            /* FIFO is giving data - just poll */
             waiter.tv_sec = 0;
-            waiter.tv_usec = 5000;
-        } else if (mstp_port->DataAvailable == false) {
-            /* wait for state machine to read from the DataRegister */
-            if (FIFO_Count(&Rx_FIFO) > 0) {
-                /* data is available */
-                mstp_port->DataRegister = FIFO_Get(&Rx_FIFO);
-                mstp_port->DataAvailable = true;
-                /* FIFO is giving data - just poll */
-                waiter.tv_sec = 0;
-                waiter.tv_usec = 0;
-            } else {
-                /* FIFO is empty - wait a longer time */
-                waiter.tv_sec = 0;
-                waiter.tv_usec = 5000;
-            }
+            waiter.tv_usec = 0;
         }
-        /* grab bytes and stuff them into the FIFO every time */
-        FD_ZERO(&input);
-        FD_SET(RS485_Handle, &input);
-        n = select(RS485_Handle + 1, &input, NULL, NULL, &waiter);
-        if (n < 0) {
-            return;
-        }
-        if (FD_ISSET(RS485_Handle, &input)) {
-            n = read(RS485_Handle, buf, sizeof(buf));
-            FIFO_Add(&Rx_FIFO, &buf[0], n);
-        }
-    } else {
-        if (mstp_port->ReceiveError == true) {
-            /* do nothing but wait for state machine to clear the error */
-            /* burning time, so wait a longer time */
-            waiter.tv_sec = 0;
-            waiter.tv_usec = 5000;
-        } else if (mstp_port->DataAvailable == false) {
-            /* wait for state machine to read from the DataRegister */
-            if (FIFO_Count(&poSharedData->Rx_FIFO) > 0) {
-                /* data is available */
-                mstp_port->DataRegister = FIFO_Get(&poSharedData->Rx_FIFO);
-                mstp_port->DataAvailable = true;
-                /* FIFO is giving data - just poll */
-                waiter.tv_sec = 0;
-                waiter.tv_usec = 0;
-            } else {
-                /* FIFO is empty - wait a longer time */
-                waiter.tv_sec = 0;
-                waiter.tv_usec = 5000;
-            }
-        }
-        /* grab bytes and stuff them into the FIFO every time */
-        FD_ZERO(&input);
-        FD_SET(poSharedData->RS485_Handle, &input);
-        n = select(poSharedData->RS485_Handle + 1, &input, NULL, NULL, &waiter);
-        if (n < 0) {
-            return;
-        }
-        if (FD_ISSET(poSharedData->RS485_Handle, &input)) {
-            n = read(poSharedData->RS485_Handle, buf, sizeof(buf));
-            FIFO_Add(&poSharedData->Rx_FIFO, &buf[0], n);
+    }
+    /* grab bytes and stuff them into the FIFO every time */
+    FD_ZERO(&input);
+    FD_SET(handle, &input);
+    n = select(handle + 1, &input, NULL, NULL, &waiter);
+    if (n < 0) {
+        return;
+    }
+    if (FD_ISSET(handle, &input)) {
+        n = read(handle, buf, sizeof(buf));
+        if (n > 0) {
+            FIFO_Add(fifo, &buf[0], n);
         }
     }
 }
@@ -596,26 +540,30 @@ void RS485_Print_Ports(void)
                         valid_port = true;
                         if (valid_port) {
                             /* print full absolute file path */
-                            printf("interface {value=/dev/%s}"
-                                   "{display=MS/TP Capture on /dev/%s}\n",
+                            printf(
+                                "interface {value=/dev/%s}"
+                                "{display=MS/TP Capture on /dev/%s}\n",
                                 namelist[n]->d_name, namelist[n]->d_name);
                         }
                     }
                 } else {
-                    snprintf(device_dir, sizeof(device_dir), "%s%s/device",
-                        sysdir, namelist[n]->d_name);
+                    snprintf(
+                        device_dir, sizeof(device_dir), "%s%s/device", sysdir,
+                        namelist[n]->d_name);
                     /* Stat the devicedir and handle it if it is a symlink */
                     if (lstat(device_dir, &st) == 0 && S_ISLNK(st.st_mode)) {
                         memset(buffer, 0, sizeof(buffer));
-                        snprintf(device_dir, sizeof(device_dir),
+                        snprintf(
+                            device_dir, sizeof(device_dir),
                             "%s%s/device/driver", sysdir, namelist[n]->d_name);
                         if (readlink(device_dir, buffer, sizeof(buffer)) > 0) {
                             valid_port = false;
                             driver_name = basename(buffer);
                             if (strcmp(driver_name, "serial8250") == 0) {
                                 /* serial8250-devices must be probed */
-                                snprintf(device_dir, sizeof(device_dir),
-                                    "/dev/%s", namelist[n]->d_name);
+                                snprintf(
+                                    device_dir, sizeof(device_dir), "/dev/%s",
+                                    namelist[n]->d_name);
                                 fd = open(
                                     device_dir, O_RDWR | O_NONBLOCK | O_NOCTTY);
                                 if (fd >= 0) {
@@ -627,8 +575,9 @@ void RS485_Print_Ports(void)
                             }
                             if (valid_port) {
                                 /* print full absolute file path */
-                                printf("interface {value=/dev/%s}"
-                                       "{display=MS/TP Capture on /dev/%s}\n",
+                                printf(
+                                    "interface {value=/dev/%s}"
+                                    "{display=MS/TP Capture on /dev/%s}\n",
                                     namelist[n]->d_name, namelist[n]->d_name);
                             }
                         }
@@ -675,7 +624,8 @@ static int openSerialPort(const char *const bsdPath)
 
     fileDescriptor = open(bsdPath, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fileDescriptor == -1) {
-        printf("Error opening serial port %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error opening serial port %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -686,7 +636,8 @@ static int openSerialPort(const char *const bsdPath)
        <x-man-page//4/tty> and ioctl(2) <x-man-page//2/ioctl> for details.*/
 
     if (ioctl(fileDescriptor, TIOCEXCL) == -1) {
-        printf("Error setting TIOCEXCL on %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error setting TIOCEXCL on %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -695,7 +646,8 @@ static int openSerialPort(const char *const bsdPath)
      will block. See fcntl(2) <x-man-page//2/fcntl> for details.*/
 
     if (fcntl(fileDescriptor, F_SETFL, 0) == -1) {
-        printf("Error clearing O_NONBLOCK %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error clearing O_NONBLOCK %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -703,7 +655,8 @@ static int openSerialPort(const char *const bsdPath)
     /* Get the current options and save them so we can restore the default
      * settings later.*/
     if (tcgetattr(fileDescriptor, &RS485_oldtio) == -1) {
-        printf("Error getting tty attributes %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error getting tty attributes %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -747,7 +700,8 @@ static int openSerialPort(const char *const bsdPath)
      * the input and output speed. */
 
     if (ioctl(fileDescriptor, IOSSIOSPEED, &speed) == -1) {
-        printf("Error calling ioctl(..., IOSSIOSPEED, ...) %s - %s(%d).\n",
+        printf(
+            "Error calling ioctl(..., IOSSIOSPEED, ...) %s - %s(%d).\n",
             bsdPath, strerror(errno), errno);
     }
 #endif
@@ -763,7 +717,8 @@ static int openSerialPort(const char *const bsdPath)
 
     /* Cause the new options to take effect immediately.*/
     if (tcsetattr(fileDescriptor, TCSANOW, &options) == -1) {
-        printf("Error setting tty attributes %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error setting tty attributes %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -774,20 +729,23 @@ static int openSerialPort(const char *const bsdPath)
 
     /* Assert Data Terminal Ready (DTR) */
     if (ioctl(fileDescriptor, TIOCSDTR) == -1) {
-        printf("Error asserting DTR %s - %s(%d).\n", bsdPath, strerror(errno),
+        printf(
+            "Error asserting DTR %s - %s(%d).\n", bsdPath, strerror(errno),
             errno);
     }
 
     /* Clear Data Terminal Ready (DTR) */
     if (ioctl(fileDescriptor, TIOCCDTR) == -1) {
-        printf("Error clearing DTR %s - %s(%d).\n", bsdPath, strerror(errno),
+        printf(
+            "Error clearing DTR %s - %s(%d).\n", bsdPath, strerror(errno),
             errno);
     }
 
     /* Set the modem lines depending on the bits set in handshake */
     handshake = TIOCM_DTR | TIOCM_RTS | TIOCM_CTS | TIOCM_DSR;
     if (ioctl(fileDescriptor, TIOCMSET, &handshake) == -1) {
-        printf("Error setting handshake lines %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error setting handshake lines %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
     }
 
@@ -797,7 +755,8 @@ static int openSerialPort(const char *const bsdPath)
 
     /* Store the state of the modem lines in handshake */
     if (ioctl(fileDescriptor, TIOCMGET, &handshake) == -1) {
-        printf("Error getting handshake lines %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error getting handshake lines %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
     }
 
@@ -814,7 +773,8 @@ static int openSerialPort(const char *const bsdPath)
 
     if (ioctl(fileDescriptor, IOSSDATALAT, &mics) == -1) {
         /* set latency to 1 microsecond */
-        printf("Error setting read latency %s - %s(%d).\n", bsdPath,
+        printf(
+            "Error setting read latency %s - %s(%d).\n", bsdPath,
             strerror(errno), errno);
         goto error;
     }
@@ -846,7 +806,8 @@ static void closeSerialPort(int fileDescriptor)
        the state in which you found it. This is why the original termios struct
        was saved. */
     if (tcsetattr(fileDescriptor, TCSANOW, &RS485_oldtio) == -1) {
-        printf("Error resetting tty attributes - %s(%d).\n", strerror(errno),
+        printf(
+            "Error resetting tty attributes - %s(%d).\n", strerror(errno),
             errno);
     }
 

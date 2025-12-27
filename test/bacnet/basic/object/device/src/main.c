@@ -1,13 +1,10 @@
-/*
- * Copyright (c) 2020 Legrand North America, LLC.
- *
- * SPDX-License-Identifier: MIT
+/**
+ * @file
+ * @brief test BACnet Device object APIs
+ * @author Steve Karg <skarg@users.sourceforge.net>
+ * @date 2004
+ * @copyright SPDX-License-Identifier: MIT
  */
-
-/* @file
- * @brief test BACnet integer encode/decode APIs
- */
-
 #include <zephyr/ztest.h>
 #include <bacnet/basic/object/device.h>
 #include <bacnet/bactext.h>
@@ -29,9 +26,9 @@ static void test_Device_Data_Sharing(void)
     BACNET_WRITE_PROPERTY_DATA wpdata = { 0 };
     /* for decode value data */
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
-    const int *pRequired = NULL;
-    const int *pOptional = NULL;
-    const int *pProprietary = NULL;
+    const int32_t *pRequired = NULL;
+    const int32_t *pOptional = NULL;
+    const int32_t *pProprietary = NULL;
     unsigned count = 0;
     bool status = false;
 
@@ -52,16 +49,15 @@ static void test_Device_Data_Sharing(void)
             "property '%s': failed to ReadProperty!\n",
             bactext_property_name(rpdata.object_property));
         if (len > 0) {
-            test_len = bacapp_decode_application_data(
+            test_len = bacapp_decode_known_property(
                 rpdata.application_data, (uint8_t)rpdata.application_data_len,
-                &value);
-            if ((rpdata.object_property == PROP_PRIORITY_ARRAY) ||
-                (rpdata.object_property == PROP_OBJECT_LIST)) {
-                /* FIXME: known fail to decode */
+                &value, rpdata.object_type, rpdata.object_property);
+            if ((test_len < len) && (rpdata.array_index == BACNET_ARRAY_ALL)) {
+                /* this is one element of an array - assume it is accurate */
                 len = test_len;
             }
             zassert_equal(
-                test_len, len, "property '%s': failed to decode!\n",
+                test_len, len, "property '%s': ReadProperty decode failure!\n",
                 bactext_property_name(rpdata.object_property));
             /* check WriteProperty properties */
             wpdata.object_type = rpdata.object_type;
@@ -91,16 +87,11 @@ static void test_Device_Data_Sharing(void)
             "property '%s': failed to ReadProperty!\n",
             bactext_property_name(rpdata.object_property));
         if (len > 0) {
-            test_len = bacapp_decode_application_data(
+            test_len = bacapp_decode_known_property(
                 rpdata.application_data, (uint8_t)rpdata.application_data_len,
-                &value);
-            if (len != test_len) {
-                printf(
-                    "property '%s': failed to decode!\n",
-                    bactext_property_name(rpdata.object_property));
-            }
+                &value, rpdata.object_type, rpdata.object_property);
             zassert_equal(
-                test_len, len, "property '%s': failed to decode!\n",
+                test_len, len, "property '%s': ReadProperty decode failure!\n",
                 bactext_property_name(rpdata.object_property));
             /* check WriteProperty properties */
             wpdata.object_type = rpdata.object_type;

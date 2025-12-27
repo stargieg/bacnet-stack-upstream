@@ -35,7 +35,7 @@ static COMMAND_DESCR Command_Descr[MAX_COMMANDS];
 
 /* clang-format off */
 /* These arrays are used by the ReadPropertyMultiple handler */
-static const int Command_Properties_Required[] = {
+static const int32_t Command_Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,
@@ -45,9 +45,9 @@ static const int Command_Properties_Required[] = {
     PROP_ACTION,
     -1 };
 
-static const int Command_Properties_Optional[] = { -1 };
+static const int32_t Command_Properties_Optional[] = { -1 };
 
-static const int Command_Properties_Proprietary[] = { -1 };
+static const int32_t Command_Properties_Proprietary[] = { -1 };
 /* clang-format on */
 
 /**
@@ -62,7 +62,9 @@ static const int Command_Properties_Proprietary[] = { -1 };
  * BACnet proprietary properties for this object.
  */
 void Command_Property_Lists(
-    const int **pRequired, const int **pOptional, const int **pProprietary)
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary)
 {
     if (pRequired) {
         *pRequired = Command_Properties_Required;
@@ -442,13 +444,6 @@ int Command_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = BACNET_STATUS_ERROR;
             break;
     }
-    /*  only array properties can have array options */
-    if ((apdu_len >= 0) && (rpdata->object_property != PROP_ACTION) &&
-        (rpdata->array_index != BACNET_ARRAY_ALL)) {
-        rpdata->error_class = ERROR_CLASS_PROPERTY;
-        rpdata->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        apdu_len = BACNET_STATUS_ERROR;
-    }
 
     return apdu_len;
 }
@@ -476,13 +471,6 @@ bool Command_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
-        return false;
-    }
-    /*  only array properties can have array options */
-    if ((wp_data->object_property != PROP_ACTION) &&
-        (wp_data->array_index != BACNET_ARRAY_ALL)) {
-        wp_data->error_class = ERROR_CLASS_PROPERTY;
-        wp_data->error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         return false;
     }
     object_index = Command_Instance_To_Index(wp_data->object_instance);

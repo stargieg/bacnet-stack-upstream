@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <errno.h>
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
@@ -187,7 +186,10 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[argi], "--dnet") == 0) {
             if (++argi < argc) {
-                dnet = strtol(argv[argi], NULL, 0);
+                if (!bacnet_strtol(argv[argi], &dnet)) {
+                    fprintf(stderr, "dnet=%s invalid\n", argv[argi]);
+                    return 1;
+                }
                 if ((dnet >= 0) && (dnet <= BACNET_BROADCAST_NETWORK)) {
                     global_broadcast = false;
                 }

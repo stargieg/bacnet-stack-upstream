@@ -29,6 +29,7 @@ BACNET_OBJECT_SRC := \
 	$(BACNET_OBJECT_DIR)/iv.c \
 	$(BACNET_OBJECT_DIR)/lc.c \
 	$(BACNET_OBJECT_DIR)/lo.c \
+	$(BACNET_OBJECT_DIR)/loop.c \
 	$(BACNET_OBJECT_DIR)/lsp.c \
 	$(BACNET_OBJECT_DIR)/lsz.c \
 	$(BACNET_OBJECT_DIR)/ms-input.c \
@@ -36,9 +37,11 @@ BACNET_OBJECT_SRC := \
 	$(BACNET_OBJECT_DIR)/msv.c \
 	$(BACNET_OBJECT_DIR)/osv.c \
 	$(BACNET_OBJECT_DIR)/piv.c \
+	$(BACNET_OBJECT_DIR)/program.c \
 	$(BACNET_OBJECT_DIR)/nc.c  \
 	$(BACNET_OBJECT_DIR)/netport.c  \
 	$(BACNET_OBJECT_DIR)/time_value.c \
+	$(BACNET_OBJECT_DIR)/timer.c \
 	$(BACNET_OBJECT_DIR)/trendlog.c \
 	$(BACNET_OBJECT_DIR)/schedule.c \
 	$(BACNET_OBJECT_DIR)/structured_view.c \
