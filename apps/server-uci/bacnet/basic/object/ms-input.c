@@ -2407,7 +2407,7 @@ void Multistate_Input_Init(void)
         for (k = 0 ; k < stats_n; k++) {
             l = atoi(stats[k]);
             l--;
-            if (l>=0 && l<tObject.State_Count) {
+            if (l < tObject.State_Count) {
                 tObject.Alarm_State[l] = true;
             }
         }
