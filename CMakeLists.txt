@@ -109,6 +109,11 @@ option(
   "build with uci"
   OFF)
 
+option(
+UCI_CONFDIR
+  "uci config directory"
+  "/etc/config")
+
 set(BACNET_PROTOCOL_REVISION 24)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -249,6 +254,10 @@ if(UCI)
     include_directories(${uci_include_dir})
     link_libraries(${uci_lib})
     add_compile_definitions(BAC_UCI)
+    if(UCI_CONFDIR)
+      add_compile_definitions(BAC_UCI_CONFDIR="${UCI_CONFDIR}")
+      message(STATUS "BACNET: BAC_UCI Config:.................\"${UCI_CONFDIR}\"")
+    endif()
     add_compile_options(-Wno-language-extension-token)
   else()
     message(WARNING "BACNET: BAC_UCI Lib:....................\"not found\"")
@@ -1757,6 +1766,15 @@ install(
   COMPONENT dev
   FILES_MATCHING
   PATTERN "*.h")
+
+if(SERVER_UCI)
+install(
+  DIRECTORY apps/server-uci/config/
+  DESTINATION ${UCI_CONFDIR}
+  COMPONENT config
+  FILES_MATCHING
+  PATTERN "*")
+endif()
 
 message(STATUS "BACNET: using cmake:....................\"${CMAKE_VERSION}\"")
 message(STATUS "BACNET: CMAKE_C_COMPILER_ID:............\"${CMAKE_C_COMPILER_ID}\"")

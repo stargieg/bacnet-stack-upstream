@@ -32,12 +32,23 @@ static __inline__ int ucix_get_ptr(
 
 struct uci_context *ucix_init(const char *config_file)
 {
-    struct uci_context *ctx = uci_alloc_context();
+    struct uci_context *ctx = NULL;
+    ctx = uci_alloc_context();
+	if (!ctx) {
+		fprintf(stderr, "Out of memory\n");
+		return NULL;
+	}
+#ifdef BAC_UCI_CONFDIR
+    fprintf(
+        stderr, "uci config dir %s\n", BAC_UCI_CONFDIR);
+    uci_set_confdir(ctx, BAC_UCI_CONFDIR);
+#endif
     /*      uci_add_history_path(ctx, "/var/state"); */
     uci_add_delta_path(ctx, "/var/state");
     if (uci_load(ctx, config_file, NULL) != UCI_OK) {
         fprintf(
-            stderr, "%s/%s is missing or corrupt\n", ctx->savedir, config_file);
+            stderr, "%s/%s is missing or corrupt\n", ctx->confdir, config_file);
+        uci_free_context(ctx);
         return NULL;
     }
     return ctx;
@@ -59,7 +70,9 @@ struct uci_context *ucix_init_path(const char *path, const char *config_file)
 
 void ucix_cleanup(struct uci_context *ctx)
 {
-    uci_free_context(ctx);
+    if (ctx) {
+        uci_free_context(ctx);
+    }
 }
 
 void ucix_save(struct uci_context *ctx)
