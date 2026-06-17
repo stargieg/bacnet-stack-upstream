@@ -34,7 +34,13 @@
 #endif
 
 #if defined(INTRINSIC_REPORTING)
-static NOTIFICATION_CLASS_INFO NC_Info[MAX_NOTIFICATION_CLASSES];
+static NOTIFICATION_CLASS_INFO NC_Infos[MAX_NUM_DEVICES]
+                                       [MAX_NOTIFICATION_CLASSES];
+#ifdef BAC_ROUTING
+#define NC_Info (NC_Infos[Routed_Device_Object_Index()])
+#else
+#define NC_Info (NC_Infos[0])
+#endif
 /* buffer for sending event messages */
 static uint8_t Event_Buffer[MAX_APDU];
 
@@ -49,6 +55,15 @@ static const int32_t Properties_Required[] = {
 static const int32_t Properties_Optional[] = { PROP_DESCRIPTION, -1 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_PRIORITY, PROP_ACK_REQUIRED, PROP_RECIPIENT_LIST, -1
+};
 
 void Notification_Class_Property_Lists(
     const int32_t **pRequired,
@@ -67,27 +82,83 @@ void Notification_Class_Property_Lists(
     return;
 }
 
-void Notification_Class_Init(void)
+/**
+ * @brief Get the list of writable properties for a Notification Class object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Notification_Class_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
 {
-    uint8_t NotifyIdx = 0;
-    unsigned i;
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
 
-    for (NotifyIdx = 0; NotifyIdx < MAX_NOTIFICATION_CLASSES; NotifyIdx++) {
-        /* init with zeros */
-        memset(&NC_Info[NotifyIdx], 0x00, sizeof(NOTIFICATION_CLASS_INFO));
-        /* set the basic parameters */
-        NC_Info[NotifyIdx].Ack_Required = 0;
-        /* The lowest priority for Normal message = 255 */
-        NC_Info[NotifyIdx].Priority[TRANSITION_TO_OFFNORMAL] = 255;
-        NC_Info[NotifyIdx].Priority[TRANSITION_TO_FAULT] = 255;
-        NC_Info[NotifyIdx].Priority[TRANSITION_TO_NORMAL] = 255;
-        /* note: default uses wildcard device destination */
-        for (i = 0; i < NC_MAX_RECIPIENTS; i++) {
-            BACNET_DESTINATION *destination;
-            destination = &NC_Info[NotifyIdx].Recipient_List[i];
-            bacnet_destination_default_init(destination);
+/**
+ * @brief Handle I-Am router to network for out of network recipients
+ * @param src - source address of the router
+ * @param network - network number of the router
+ */
+static void Notification_Class_I_Am_Router_To_Network_Handler(
+    BACNET_ADDRESS *src, uint16_t network)
+{
+    NOTIFICATION_CLASS_INFO *notification;
+    BACNET_DESTINATION *destination;
+    BACNET_RECIPIENT *recipient;
+    unsigned i, j;
+
+    for (i = 0; i < MAX_NOTIFICATION_CLASSES; i++) {
+        notification = &NC_Info[i];
+        for (j = 0; j < NC_MAX_RECIPIENTS; j++) {
+            destination = &notification->Recipient_List[j];
+            recipient = &destination->Recipient;
+            /* update recipient addresses for this network */
+            if ((recipient->tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+                (recipient->type.address.net == network)) {
+                bacnet_address_router_set(&recipient->type.address, src);
+            }
         }
     }
+}
+
+void Notification_Class_Init(void)
+{
+    uint16_t dev_id;
+    uint8_t NotifyIdx = 0;
+    unsigned i;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        for (NotifyIdx = 0; NotifyIdx < MAX_NOTIFICATION_CLASSES; NotifyIdx++) {
+            /* init with zeros */
+            memset(&NC_Info[NotifyIdx], 0x00, sizeof(NOTIFICATION_CLASS_INFO));
+            /* set the basic parameters */
+            NC_Info[NotifyIdx].Ack_Required = 0;
+            /* The lowest priority for Normal message = 255 */
+            NC_Info[NotifyIdx].Priority[TRANSITION_TO_OFFNORMAL] = 255;
+            NC_Info[NotifyIdx].Priority[TRANSITION_TO_FAULT] = 255;
+            NC_Info[NotifyIdx].Priority[TRANSITION_TO_NORMAL] = 255;
+            /* note: default uses wildcard device destination */
+            for (i = 0; i < NC_MAX_RECIPIENTS; i++) {
+                BACNET_DESTINATION *destination;
+                destination = &NC_Info[NotifyIdx].Recipient_List[i];
+                bacnet_destination_default_init(destination);
+            }
+        }
+    }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
+    npdu_set_i_am_router_to_network_handler(
+        Notification_Class_I_Am_Router_To_Network_Handler);
 
     return;
 }
@@ -299,6 +370,10 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     uint8_t idx;
     int len = 0;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     CurrentNotify = &NC_Info[Notification_Class_Instance_To_Index(
         wp_data->object_instance)];
 
@@ -668,8 +743,8 @@ void Notification_Class_common_reporting_function(
     }
 
     /* send notifications for active recipients */
-    debug_printf_stderr(
-        "Notification Class[%u]: send notifications\n",
+    debug_log_fprintf(
+        DEBUG_LOG_DEBUG, stderr, "Notification Class[%u]: send notifications\n",
         event_data->notificationClass);
     /* pointer to first recipient */
     pBacDest = &CurrentNotify->Recipient_List[0];
@@ -690,7 +765,8 @@ void Notification_Class_common_reporting_function(
             if (pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_DEVICE) {
                 /* send notification to the specified device */
                 device_id = pBacDest->Recipient.type.device.instance;
-                debug_printf_stderr(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Notification Class[%u]: send notification to %u\n",
                     event_data->notificationClass, (unsigned)device_id);
                 if (pBacDest->ConfirmedNotify == true) {
@@ -700,16 +776,16 @@ void Notification_Class_common_reporting_function(
                 }
             } else if (
                 pBacDest->Recipient.tag == BACNET_RECIPIENT_TAG_ADDRESS) {
-                debug_printf_stderr(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Notification Class[%u]: send notification to ADDR\n",
                     event_data->notificationClass);
                 /* send notification to the address indicated */
+                bacnet_address_copy(&dest, &pBacDest->Recipient.type.address);
                 if (pBacDest->ConfirmedNotify == true) {
-                    if (address_get_device_id(&dest, &device_id)) {
-                        Send_CEvent_Notify(device_id, event_data);
-                    }
+                    Send_CEvent_Notify_Address(
+                        Event_Buffer, sizeof(Event_Buffer), event_data, &dest);
                 } else {
-                    dest = pBacDest->Recipient.type.address;
                     Send_UEvent_Notify(Event_Buffer, event_data, &dest);
                 }
             }
@@ -741,6 +817,9 @@ void Notification_Class_find_recipient(void)
                         address of device is unknown. */
                     Send_WhoIs(device_id, device_id);
                 }
+            } else if (bacnet_recipient_address_router_unknown(recipient)) {
+                Send_Who_Is_Router_To_Network(
+                    NULL, recipient->type.address.net);
             }
         }
     }
@@ -849,6 +928,13 @@ int Notification_Class_Add_List_Element(BACNET_LIST_ELEMENT_DATA *list_element)
         if (len > 0) {
             new_element_count++;
             application_data_len -= len;
+            if (new_element_count >= NC_MAX_RECIPIENTS) {
+                list_element->first_failed_element_number = new_element_count;
+                list_element->error_class = ERROR_CLASS_RESOURCES;
+                list_element->error_code =
+                    ERROR_CODE_NO_SPACE_TO_ADD_LIST_ELEMENT;
+                return BACNET_STATUS_ERROR;
+            }
         } else {
             list_element->first_failed_element_number = new_element_count;
             list_element->error_class = ERROR_CLASS_PROPERTY;
@@ -1012,10 +1098,17 @@ int Notification_Class_Remove_List_Element(
         if (len > 0) {
             remove_element_count++;
             application_data_len -= len;
+            if (remove_element_count >= NC_MAX_RECIPIENTS) {
+                list_element->first_failed_element_number =
+                    remove_element_count;
+                list_element->error_class = ERROR_CLASS_SERVICES;
+                list_element->error_code = ERROR_CODE_LIST_ELEMENT_NOT_FOUND;
+                return BACNET_STATUS_ERROR;
+            }
         } else {
             list_element->first_failed_element_number = remove_element_count;
             list_element->error_class = ERROR_CLASS_PROPERTY;
-            list_element->error_code = ERROR_CODE_INVALID_DATA_ENCODING;
+            list_element->error_code = ERROR_CODE_INVALID_DATA_TYPE;
             return BACNET_STATUS_ERROR;
         }
     }

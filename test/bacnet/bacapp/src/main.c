@@ -1235,6 +1235,210 @@ static void testBACnetApplicationData(void)
     verifyBACnetComplexDataValue(
         &value, OBJECT_NETWORK_PORT, PROP_BBMD_BROADCAST_DISTRIBUTION_TABLE);
 
+    char special_event_calendar[] =
+        "calendar:5,{12:30:15.05,15,16:01:02.03,0},5";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_calendar, &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.periodTag,
+        BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_REFERENCE, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarReference.type, OBJECT_CALENDAR,
+        NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarReference.instance, 5, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 2, NULL);
+    zassert_equal(value.type.Special_Event.priority, 5, NULL);
+    verifyBACnetComplexDataValue(
+        &value, OBJECT_SCHEDULE, PROP_EXCEPTION_SCHEDULE);
+
+    char special_event_date[] = "2023/10/24,{08:00:00.00,active},3";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_date, &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.periodTag,
+        BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.tag, BACNET_CALENDAR_DATE,
+        NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 1, NULL);
+    zassert_equal(value.type.Special_Event.priority, 3, NULL);
+    verifyBACnetComplexDataValue(
+        &value, OBJECT_SCHEDULE, PROP_EXCEPTION_SCHEDULE);
+
+    char special_event_empty[] = "2023/10/24,{},255";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_empty, &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.type.Special_Event.priority, 255, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 0, NULL);
+    {
+        uint8_t apdu_special[480] = { 0 };
+        int special_len = bacapp_encode_application_data(NULL, &value);
+        zassert_true(special_len > 0, NULL);
+        zassert_equal(
+            bacapp_encode_application_data(apdu_special, &value), special_len,
+            NULL);
+    }
+    /* Test: date entry with two numeric time-value pairs (from header comment
+     * example). Verifies that sched_str is "{12:30:00.00,100,14:00:00.00,50}"
+     * and not just the first token "12:30:00.00". */
+    char special_event_date_multi[] =
+        "2023/10/24,{12:30:00.00,100,14:00:00.00,50},5";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_date_multi, &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.periodTag,
+        BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.tag, BACNET_CALENDAR_DATE,
+        NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 2, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Time.hour, 12, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Time.min, 30, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.tag,
+        BACNET_APPLICATION_TAG_UNSIGNED_INT, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0]
+            .Value.type.Unsigned_Int,
+        100, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[1].Time.hour, 14, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[1].Value.tag,
+        BACNET_APPLICATION_TAG_UNSIGNED_INT, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[1]
+            .Value.type.Unsigned_Int,
+        50, NULL);
+    zassert_equal(value.type.Special_Event.priority, 5, NULL);
+    verifyBACnetComplexDataValue(
+        &value, OBJECT_SCHEDULE, PROP_EXCEPTION_SCHEDULE);
+
+    /* Test weekNDay: numeric fields */
+    char special_event_weeknday_num[] = "{10,1,2},{},3";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_weeknday_num,
+        &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.periodTag,
+        BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.tag,
+        BACNET_CALENDAR_WEEK_N_DAY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.month, 10,
+        NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.weekofmonth,
+        1, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.dayofweek,
+        2, NULL);
+    zassert_equal(value.type.Special_Event.priority, 3, NULL);
+
+    /* Test weekNDay: wildcard '*' fields map to 255 */
+    char special_event_weeknday_wild[] = "{*,*,*},{},1";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_weeknday_wild,
+        &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.tag,
+        BACNET_CALENDAR_WEEK_N_DAY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.month, 255,
+        NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.weekofmonth,
+        255, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.dayofweek,
+        255, NULL);
+
+    /* Test weekNDay: named fields (odd month, last week, Monday) */
+    char special_event_weeknday_named[] = "{odd,last,Monday},{},5";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_weeknday_named,
+        &value);
+    zassert_true(status, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.tag,
+        BACNET_CALENDAR_WEEK_N_DAY, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.month, 13,
+        NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.weekofmonth,
+        6, NULL);
+    zassert_equal(
+        value.type.Special_Event.period.calendarEntry.type.WeekNDay.dayofweek,
+        1, NULL);
+    zassert_equal(value.type.Special_Event.priority, 5, NULL);
+
+    /* Test daily schedule: null value */
+    char special_event_sched_null[] = "2023/01/01,{08:00:00.00,null},1";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_sched_null, &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 1, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.tag,
+        BACNET_APPLICATION_TAG_NULL, NULL);
+    zassert_equal(value.type.Special_Event.priority, 1, NULL);
+
+    /* Test daily schedule: boolean active/inactive values */
+    char special_event_sched_bool[] =
+        "2023/01/01,{08:00:00.00,active,16:00:00.00,inactive},2";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_sched_bool, &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 2, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.tag,
+        BACNET_APPLICATION_TAG_BOOLEAN, NULL);
+    zassert_true(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.type.Boolean,
+        NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[1].Value.tag,
+        BACNET_APPLICATION_TAG_BOOLEAN, NULL);
+    zassert_false(
+        value.type.Special_Event.timeValues.Time_Values[1].Value.type.Boolean,
+        NULL);
+
+    /* Test daily schedule: real value */
+    char special_event_sched_real[] = "2023/01/01,{12:00:00.00,3.14},3";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_sched_real, &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 1, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.tag,
+        BACNET_APPLICATION_TAG_REAL, NULL);
+
+    /* Test daily schedule: signed integer value */
+    char special_event_sched_signed[] = "2023/01/01,{06:00:00.00,-1},4";
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_SPECIAL_EVENT, special_event_sched_signed,
+        &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.type.Special_Event.timeValues.TV_Count, 1, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0].Value.tag,
+        BACNET_APPLICATION_TAG_SIGNED_INT, NULL);
+    zassert_equal(
+        value.type.Special_Event.timeValues.Time_Values[0]
+            .Value.type.Signed_Int,
+        -1, NULL);
+
     return;
 }
 
@@ -1311,7 +1515,7 @@ static void test_bacapp_data(void)
  * @param expected [in] The expected string output from bacapp_snprintf_value()
  */
 void test_bacapp_snprintf(
-    BACNET_APPLICATION_TAG tag_number, char *argv, const char *expected)
+    BACNET_APPLICATION_TAG tag_number, const char *argv, const char *expected)
 {
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     BACNET_OBJECT_PROPERTY_VALUE object_value = { 0 };
@@ -1438,6 +1642,142 @@ static void test_bacapp_sprintf_epics(void)
 }
 
 /**
+ * @brief Test parse_weeklyschedule() via bacapp_parse_application_data()
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(bacapp_tests, test_parse_weeklyschedule)
+#else
+static void test_parse_weeklyschedule(void)
+#endif
+{
+#if defined(BACAPP_WEEKLY_SCHEDULE)
+    BACNET_APPLICATION_DATA_VALUE value = { 0 };
+    bool status = false;
+
+    /* round-trip: all 7 days empty, inner type reported as Null */
+    test_bacapp_snprintf(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(Null; Mon: []; Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: [])",
+        "(Null; Mon: []; Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: "
+        "[])");
+
+    /* round-trip: Boolean type, Monday has two entries, rest empty */
+    test_bacapp_snprintf(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(Boolean; Mon: [07:30:00.00 TRUE, 17:00:00.00 FALSE];"
+        " Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: [])",
+        "(Boolean; Mon: [07:30:00.00 TRUE, 17:00:00.00 FALSE];"
+        " Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: [])");
+
+    /* round-trip: numeric inner tag (1 = Boolean) */
+    test_bacapp_snprintf(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(1; Mon: []; Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: [])",
+        "(Null; Mon: []; Tue: []; Wed: []; Thu: []; Fri: []; Sat: []; Sun: "
+        "[])");
+
+    /* single-day format: singleDay flag must be set */
+    memset(&value, 0, sizeof(value));
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(Boolean; Mon: [07:30:00.00 TRUE])", &value);
+    zassert_true(status, NULL);
+    zassert_equal(value.tag, BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE, NULL);
+    zassert_true(value.type.Weekly_Schedule.singleDay, NULL);
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[0].TV_Count, 1, NULL);
+
+    /* full 7-day parse: Monday has one entry, verify fields */
+    memset(&value, 0, sizeof(value));
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(Boolean; Mon: [07:30:00.00 TRUE]; Tue: []; Wed: [];"
+        " Thu: []; Fri: []; Sat: []; Sun: [])",
+        &value);
+    zassert_true(status, NULL);
+    zassert_false(value.type.Weekly_Schedule.singleDay, NULL);
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[0].TV_Count, 1, NULL);
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[0].Time_Values[0].Time.hour,
+        7, NULL);
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[0].Time_Values[0].Time.min,
+        30, NULL);
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[0].Time_Values[0].Time.sec, 0,
+        NULL);
+    /* remaining days must be empty */
+    zassert_equal(
+        value.type.Weekly_Schedule.weeklySchedule[1].TV_Count, 0, NULL);
+
+    /* invalid: missing space between time and value → must return false */
+    memset(&value, 0, sizeof(value));
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE,
+        "(Boolean; Mon: [07:30:00.00TRUE]; Tue: []; Wed: [];"
+        " Thu: []; Fri: []; Sat: []; Sun: [])",
+        &value);
+    zassert_false(status, NULL);
+
+    /* invalid: unknown tag name */
+    memset(&value, 0, sizeof(value));
+    status = bacapp_parse_application_data(
+        BACNET_APPLICATION_TAG_WEEKLY_SCHEDULE, "(NoSuchTag; Mon: [])", &value);
+    zassert_false(status, NULL);
+#endif
+}
+
+/**
+ * @brief Test bacapp_encode_data_list() produces the same bytes as calling
+ *   bacapp_encode_data() sequentially on each element.
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(bacapp_tests, test_bacapp_encode_data_list)
+#else
+static void test_bacapp_encode_data_list(void)
+#endif
+{
+    uint8_t apdu_list[64] = { 0 };
+    uint8_t apdu_seq[64] = { 0 };
+    BACNET_APPLICATION_DATA_VALUE v0 = { 0 };
+    BACNET_APPLICATION_DATA_VALUE v1 = { 0 };
+    BACNET_APPLICATION_DATA_VALUE v2 = { 0 };
+    int list_len = 0, seq_len = 0, len = 0;
+
+    /* build a 3-element linked list: NULL, BOOLEAN true, REAL 3.14 */
+    v0.tag = BACNET_APPLICATION_TAG_NULL;
+    v0.next = &v1;
+
+    v1.tag = BACNET_APPLICATION_TAG_BOOLEAN;
+    v1.type.Boolean = true;
+    v1.next = &v2;
+
+    v2.tag = BACNET_APPLICATION_TAG_REAL;
+    v2.type.Real = 3.14f;
+    v2.next = NULL;
+
+    /* encode via bacapp_encode_data_list() */
+    list_len = bacapp_encode_data_list(apdu_list, &v0);
+
+    /* encode by calling bacapp_encode_data() for each element individually */
+    len = bacapp_encode_data(&apdu_seq[seq_len], &v0);
+    seq_len += len;
+    len = bacapp_encode_data(&apdu_seq[seq_len], &v1);
+    seq_len += len;
+    len = bacapp_encode_data(&apdu_seq[seq_len], &v2);
+    seq_len += len;
+
+    zassert_equal(list_len, seq_len, NULL);
+    zassert_mem_equal(apdu_list, apdu_seq, seq_len, NULL);
+
+    /* NULL list should encode 0 bytes */
+    zassert_equal(bacapp_encode_data_list(apdu_list, NULL), 0, NULL);
+    /* NULL APDU (length-only mode) should return same length */
+    zassert_equal(bacapp_encode_data_list(NULL, &v0), list_len, NULL);
+}
+
+/**
  * @}
  */
 
@@ -1453,11 +1793,13 @@ void test_main(void)
         ztest_unit_test(test_bacapp_value_list_init),
         ztest_unit_test(test_bacapp_property_value_list),
         ztest_unit_test(test_bacapp_same_value),
+        ztest_unit_test(test_bacapp_data),
+        ztest_unit_test(test_bacapp_encode_data_list),
+        ztest_unit_test(test_bacapp_sprintf_epics),
+        ztest_unit_test(test_parse_weeklyschedule),
         ztest_unit_test(testBACnetApplicationData),
         ztest_unit_test(testBACnetApplicationDataLength),
-        ztest_unit_test(testBACnetApplicationData_Safe),
-        ztest_unit_test(test_bacapp_data),
-        ztest_unit_test(test_bacapp_sprintf_epics));
+        ztest_unit_test(testBACnetApplicationData_Safe));
 
     ztest_run_test_suite(bacapp_tests);
 }

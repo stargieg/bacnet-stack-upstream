@@ -42,6 +42,9 @@ void Audit_Log_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void Audit_Log_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 
 BACNET_STACK_EXPORT
 bool Audit_Log_Valid_Instance(uint32_t object_instance);
@@ -91,6 +94,12 @@ BACNET_STACK_EXPORT
 uint32_t Audit_Log_Buffer_Size(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Audit_Log_Buffer_Size_Set(uint32_t object_instance, uint32_t buffer_size);
+BACNET_STACK_EXPORT
+bool Audit_Log_Buffer_Size_Write(
+    uint32_t object_instance,
+    uint32_t buffer_size,
+    BACNET_ERROR_CLASS *error_class,
+    BACNET_ERROR_CODE *error_code);
 
 BACNET_STACK_EXPORT
 uint32_t Audit_Log_Record_Count(uint32_t object_instance);

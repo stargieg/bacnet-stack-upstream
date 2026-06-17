@@ -195,6 +195,7 @@ set(BACNET_PROJECT_SOURCE
     ${LIBRARY_BACNET_BASIC}/sys/fifo.c
     ${LIBRARY_BACNET_BASIC}/sys/keylist.c
     ${LIBRARY_BACNET_BASIC}/sys/mstimer.c
+    ${LIBRARY_BACNET_BASIC}/sys/state_name.c
 
     ${LIBRARY_BACNET_CORE}/abort.c
     ${LIBRARY_BACNET_CORE}/arf.c
@@ -258,7 +259,6 @@ target_compile_definitions(${EXECUTABLE} PRIVATE
     -DMAX_APDU=480
     -DBIG_ENDIAN=0
     -DMAX_TSM_TRANSACTIONS=1
-    -DBACFILE
     -DBACAPP_MINIMAL
 )
 
@@ -276,14 +276,16 @@ target_compile_options(${EXECUTABLE} PRIVATE
     -Wno-attributes
     # don't warn about implicit fallthrough since it is common in network protocols
     -Wno-implicit-fallthrough
+    # don't warn about discarded qualifiers often used for initializing C strings.
+    -Wno-discarded-qualifiers
     # the SDK does not meet coding guidelines
     -Wno-comment
     -Wno-missing-braces
     -Wno-unused-variable
-    # reference the linker file for CSTACK size
-    -Wstack-usage=16384
     -Wno-unused-parameter
     -Wno-char-subscripts
+    # reference the linker file for CSTACK size
+    -Wstack-usage=16384
 )
 
 target_include_directories(${EXECUTABLE} PRIVATE

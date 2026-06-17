@@ -53,6 +53,10 @@ void Access_Point_Property_Lists(
     const int32_t **pOptional,
     const int32_t **pProprietary);
 BACNET_STACK_EXPORT
+void Access_Point_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
+
+BACNET_STACK_EXPORT
 bool Access_Point_Valid_Instance(uint32_t object_instance);
 unsigned Access_Point_Count(void);
 BACNET_STACK_EXPORT
@@ -72,6 +76,15 @@ BACNET_STACK_EXPORT
 bool Access_Point_Out_Of_Service(uint32_t instance);
 BACNET_STACK_EXPORT
 void Access_Point_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
+
+BACNET_STACK_EXPORT
+unsigned Access_Point_Access_Doors_Count(uint32_t object_instance);
+BACNET_STACK_EXPORT
+BACNET_DEVICE_OBJECT_REFERENCE *Access_Point_Access_Doors_Member(
+    uint32_t instance, BACNET_ARRAY_INDEX array_index);
+BACNET_STACK_EXPORT
+int Access_Point_Access_Doors_Member_Encode(
+    uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu);
 
 BACNET_STACK_EXPORT
 int Access_Point_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);

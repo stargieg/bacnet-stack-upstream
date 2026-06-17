@@ -21,6 +21,15 @@ extern "C" {
 #endif /* __cplusplus */
 
 BACNET_STACK_EXPORT
+uint8_t dlenv_get_port_type(void);
+
+BACNET_STACK_EXPORT
+void dlenv_init_no_device_registration(uint8_t port_type);
+
+BACNET_STACK_EXPORT
+bool dlenv_register_device(uint8_t port_type, bool wait_until_connected);
+
+BACNET_STACK_EXPORT
 void dlenv_init(void);
 
 BACNET_STACK_EXPORT
@@ -36,6 +45,15 @@ BACNET_STACK_EXPORT
 void dlenv_network_port_init(void);
 
 BACNET_STACK_EXPORT
+void dlenv_network_port_mstp_init(uint32_t instance);
+BACNET_STACK_EXPORT
+void dlenv_network_port_bip6_init(uint32_t instance);
+BACNET_STACK_EXPORT
+void dlenv_network_port_zigbee_init(uint32_t instance);
+BACNET_STACK_EXPORT
+void dlenv_network_port_bsc_init(uint32_t instance);
+
+BACNET_STACK_EXPORT
 void dlenv_maintenance_timer(uint16_t elapsed_seconds);
 
 BACNET_STACK_EXPORT
@@ -46,6 +64,9 @@ void dlenv_bbmd_ttl_set(uint16_t ttl_secs);
 
 BACNET_STACK_EXPORT
 int dlenv_bbmd_result(void);
+
+BACNET_STACK_EXPORT
+bool dlenv_is_bsc_hub_connected(void);
 
 #ifdef __cplusplus
 }

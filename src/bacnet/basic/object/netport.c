@@ -25,6 +25,7 @@
 #include "bacnet/datalink/bvlc6.h"
 #include "bacnet/datalink/datalink.h"
 #include "bacnet/basic/binding/address.h"
+/* BACnet Stack Objects */
 #include "bacnet/basic/object/device.h"
 /* me */
 #include "bacnet/basic/object/netport.h"
@@ -129,7 +130,13 @@ struct object_data {
 #define BACNET_NETWORK_PORTS_MAX 1
 #endif
 
-static struct object_data Object_List[BACNET_NETWORK_PORTS_MAX];
+static struct object_data Object_Lists[MAX_NUM_DEVICES]
+                                      [BACNET_NETWORK_PORTS_MAX];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 
 /* BACnetARRAY of REAL, is an array of the link speeds
    supported by this network port */
@@ -168,6 +175,10 @@ static const int32_t Ethernet_Port_Properties_Optional[] = {
 #endif
     -1
 };
+static const int32_t Ethernet_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS, PROP_LINK_SPEED, -1
+};
 
 static const int32_t Zigbee_Port_Properties_Optional[] = {
     /* unordered list of optional properties */
@@ -181,6 +192,10 @@ static const int32_t Zigbee_Port_Properties_Optional[] = {
     PROP_LINK_SPEED,
 #endif
     -1
+};
+static const int32_t Zigbee_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS, PROP_LINK_SPEED, -1
 };
 
 static const int32_t MSTP_Port_Properties_Optional[] = {
@@ -197,6 +212,10 @@ static const int32_t MSTP_Port_Properties_Optional[] = {
     PROP_LINK_SPEEDS,
 #endif
     -1
+};
+static const int32_t MSTP_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS, PROP_MAX_MASTER, PROP_MAX_INFO_FRAMES, PROP_LINK_SPEED, -1
 };
 
 static const int32_t BIP_Port_Properties_Optional[] = {
@@ -230,6 +249,17 @@ static const int32_t BIP_Port_Properties_Optional[] = {
     PROP_NETWORK_NUMBER_QUALITY,
     PROP_LINK_SPEED,
 #endif
+    -1
+};
+static const int32_t BIP_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS,
+    PROP_LINK_SPEED,
+    PROP_FD_BBMD_ADDRESS,
+    PROP_FD_SUBSCRIPTION_LIFETIME,
+    PROP_BBMD_ACCEPT_FD_REGISTRATIONS,
+    PROP_BBMD_BROADCAST_DISTRIBUTION_TABLE,
+    PROP_BBMD_FOREIGN_DEVICE_TABLE,
     -1
 };
 
@@ -267,6 +297,17 @@ static const int32_t BIP6_Port_Properties_Optional[] = {
     PROP_NETWORK_NUMBER_QUALITY,
     PROP_LINK_SPEED,
 #endif
+    -1
+};
+static const int32_t BIP6_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS,
+    PROP_LINK_SPEED,
+    PROP_FD_BBMD_ADDRESS,
+    PROP_FD_SUBSCRIPTION_LIFETIME,
+    PROP_BBMD_ACCEPT_FD_REGISTRATIONS,
+    PROP_BBMD_BROADCAST_DISTRIBUTION_TABLE,
+    PROP_BBMD_FOREIGN_DEVICE_TABLE,
     -1
 };
 
@@ -314,6 +355,17 @@ static const int32_t BSC_Port_Properties_Optional[] = {
     PROP_SC_DIRECT_CONNECT_CONNECTION_STATUS,
 #endif /* BSC_CONF_HUB_CONNECTORS_NUM!=0 */
     PROP_SC_FAILED_CONNECTION_REQUESTS,
+    -1
+};
+static const int32_t BSC_Port_Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_MAC_ADDRESS,
+    PROP_LINK_SPEED,
+    PROP_FD_BBMD_ADDRESS,
+    PROP_FD_SUBSCRIPTION_LIFETIME,
+    PROP_BBMD_ACCEPT_FD_REGISTRATIONS,
+    PROP_BBMD_BROADCAST_DISTRIBUTION_TABLE,
+    PROP_BBMD_FOREIGN_DEVICE_TABLE,
     -1
 };
 
@@ -373,6 +425,44 @@ void Network_Port_Property_List(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Network Port object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Network_Port_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    unsigned index;
+
+    index = Network_Port_Instance_To_Index(object_instance);
+    if (index < BACNET_NETWORK_PORTS_MAX) {
+        if (index < BACNET_NETWORK_PORTS_MAX) {
+            switch (Object_List[index].Network_Type) {
+                case PORT_TYPE_MSTP:
+                    *properties = MSTP_Port_Writable_Properties;
+                    break;
+                case PORT_TYPE_BIP:
+                    *properties = BIP_Port_Writable_Properties;
+                    break;
+                case PORT_TYPE_BSC:
+                    *properties = BSC_Port_Writable_Properties;
+                    break;
+                case PORT_TYPE_BIP6:
+                    *properties = BIP6_Port_Writable_Properties;
+                    break;
+                case PORT_TYPE_ZIGBEE:
+                    *properties = Zigbee_Port_Writable_Properties;
+                    break;
+                case PORT_TYPE_ETHERNET:
+                default:
+                    *properties = Ethernet_Port_Writable_Properties;
+                    break;
+            }
+        }
+    }
 }
 
 /**
@@ -2024,6 +2114,8 @@ static int BBMD_Broadcast_Distribution_Table_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ *  if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -2031,13 +2123,13 @@ static int BBMD_Broadcast_Distribution_Table_Element_Length(
 static BACNET_ERROR_CODE BBMD_Broadcast_Distribution_Table_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
     BACNET_ERROR_CODE error_code = ERROR_CODE_UNKNOWN_OBJECT;
     BACNET_IP_BROADCAST_DISTRIBUTION_TABLE_ENTRY bdt_entry = { 0 };
     BACNET_IP_BROADCAST_DISTRIBUTION_TABLE_ENTRY *bdt_list;
-    uint16_t capacity = 0;
     int len;
     bool status = false;
     unsigned index = 0;
@@ -2045,14 +2137,16 @@ static BACNET_ERROR_CODE BBMD_Broadcast_Distribution_Table_Element_Write(
     index = Network_Port_Instance_To_Index(object_instance);
     if (index < BACNET_NETWORK_PORTS_MAX) {
         if (Object_List[index].Network_Type == PORT_TYPE_BIP) {
-            bdt_list = Object_List[index].Network.IPv4.BBMD_BD_Table;
-            capacity = bvlc_broadcast_distribution_table_count(bdt_list);
             if (array_index == 0) {
-                error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-            } else if (array_index <= capacity) {
+                /* This array is not required to be resizable
+                   through BACnet write services */
+                (void)array_size;
+                error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            } else {
                 len = bvlc_decode_broadcast_distribution_table_entry(
                     application_data, application_data_len, &bdt_entry);
                 if (len > 0) {
+                    bdt_list = Object_List[index].Network.IPv4.BBMD_BD_Table;
                     status = bvlc_broadcast_distribution_table_entry_insert(
                         bdt_list, &bdt_entry, array_index);
                     if (status) {
@@ -2063,8 +2157,6 @@ static BACNET_ERROR_CODE BBMD_Broadcast_Distribution_Table_Element_Write(
                 } else {
                     error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 }
-            } else {
-                error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
         } else {
             error_code = ERROR_CODE_ABORT_OTHER;
@@ -2237,6 +2329,8 @@ static int BBMD_Foreign_Device_Table_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ *  if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -2244,13 +2338,13 @@ static int BBMD_Foreign_Device_Table_Element_Length(
 static BACNET_ERROR_CODE BBMD_Foreign_Device_Table_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
     BACNET_ERROR_CODE error_code = ERROR_CODE_UNKNOWN_OBJECT;
     BACNET_IP_FOREIGN_DEVICE_TABLE_ENTRY fdt_entry = { 0 };
     BACNET_IP_FOREIGN_DEVICE_TABLE_ENTRY *fdt_list;
-    uint16_t capacity = 0;
     int len;
     bool status = false;
     unsigned index = 0;
@@ -2258,14 +2352,16 @@ static BACNET_ERROR_CODE BBMD_Foreign_Device_Table_Element_Write(
     index = Network_Port_Instance_To_Index(object_instance);
     if (index < BACNET_NETWORK_PORTS_MAX) {
         if (Object_List[index].Network_Type == PORT_TYPE_BIP) {
-            fdt_list = Object_List[index].Network.IPv4.BBMD_FD_Table;
-            capacity = bvlc_foreign_device_table_count(fdt_list);
             if (array_index == 0) {
-                error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-            } else if (array_index <= capacity) {
+                /* This array is not required to be resizable
+                   through BACnet write services */
+                (void)array_size;
+                error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            } else {
                 len = bvlc_decode_foreign_device_table_entry(
                     application_data, application_data_len, &fdt_entry);
                 if (len > 0) {
+                    fdt_list = Object_List[index].Network.IPv4.BBMD_FD_Table;
                     status = bvlc_foreign_device_table_entry_insert(
                         fdt_list, &fdt_entry, array_index - 1);
                     if (status) {
@@ -2276,8 +2372,6 @@ static BACNET_ERROR_CODE BBMD_Foreign_Device_Table_Element_Write(
                 } else {
                     error_code = ERROR_CODE_INVALID_DATA_TYPE;
                 }
-            } else {
-                error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
         } else {
             error_code = ERROR_CODE_ABORT_OTHER;
@@ -4458,6 +4552,10 @@ bool Network_Port_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     uint32_t capacity;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     if (!Network_Port_Valid_Instance(wp_data->object_instance)) {
         wp_data->error_class = ERROR_CLASS_OBJECT;
         wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
@@ -4746,13 +4844,27 @@ void Network_Port_Cleanup(void)
 {
 #if defined(BACDL_BSC) && defined(BACNET_SECURE_CONNECT_ROUTING_TABLE)
     unsigned index = 0;
-    for (index = 0; index < BACNET_NETWORK_PORTS_MAX; index++) {
-        BACNET_SC_PARAMS *sc = &Object_List[index].Network.BSC.Parameters;
-        if (sc->Routing_Table) {
-            Keylist_Delete(sc->Routing_Table);
-            sc->Routing_Table = NULL;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        for (index = 0; index < BACNET_NETWORK_PORTS_MAX; index++) {
+            BACNET_SC_PARAMS *sc = &Object_List[index].Network.BSC.Parameters;
+            if (sc->Routing_Table) {
+                Keylist_Delete(sc->Routing_Table);
+                sc->Routing_Table = NULL;
+            }
         }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 #endif
 }
 
@@ -4794,35 +4906,46 @@ void Network_Port_Context_Set(uint32_t object_instance, void *context)
 void Network_Port_Init(void)
 {
     unsigned index = 0;
+    uint16_t dev_id = 0;
+#ifdef BAC_ROUTING
+    const uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
 #ifdef BACDL_BSC
     BACNET_SC_PARAMS *sc;
 #endif /* BACDL_BSC */
 
     /* do something interesting */
-
-    for (index = 0; index < BACNET_NETWORK_PORTS_MAX; index++) {
-        memset(&Object_List[index], 0, sizeof(Object_List[index]));
-#ifdef BACDL_BSC
-        Object_List[index].Network_Type = PORT_TYPE_BSC;
-        sc = &Object_List[index].Network.BSC.Parameters;
-        Object_List[index].Activate_Changes =
-            Network_Port_SC_Pending_Params_Apply;
-        Object_List[index].Discard_Changes =
-            Network_Port_SC_Pending_Params_Discard;
-#ifdef BACNET_SECURE_CONNECT_ROUTING_TABLE
-        sc->Routing_Table = Keylist_Create();
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
 #endif
-        sc->SC_Failed_Connection_Requests_Count = 0;
+        for (index = 0; index < BACNET_NETWORK_PORTS_MAX; index++) {
+            memset(&Object_List[index], 0, sizeof(Object_List[index]));
+#ifdef BACDL_BSC
+            Object_List[index].Network_Type = PORT_TYPE_BSC;
+            sc = &Object_List[index].Network.BSC.Parameters;
+            Object_List[index].Activate_Changes =
+                Network_Port_SC_Pending_Params_Apply;
+            Object_List[index].Discard_Changes =
+                Network_Port_SC_Pending_Params_Discard;
+#ifdef BACNET_SECURE_CONNECT_ROUTING_TABLE
+            sc->Routing_Table = Keylist_Create();
+#endif
+            sc->SC_Failed_Connection_Requests_Count = 0;
 #if BSC_CONF_HUB_FUNCTIONS_NUM != 0
-        sc->SC_Hub_Function_Connection_Status_Count = 0;
+            sc->SC_Hub_Function_Connection_Status_Count = 0;
 #endif
 #if BSC_CONF_HUB_CONNECTORS_NUM != 0
-        sc->SC_Direct_Connect_Connection_Status_Count = 0;
+            sc->SC_Direct_Connect_Connection_Status_Count = 0;
 #endif
-        (void)sc;
+            (void)sc;
 #endif /* BACDL_BSC */
+        }
     }
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 #ifdef BACDL_BSC

@@ -36,6 +36,24 @@ typedef struct BACnet_Recipient {
     } type;
 } BACNET_RECIPIENT;
 
+/**
+ * BACnetRecipientProcess ::= SEQUENCE {
+ *      recipient[0] BACnetRecipient,
+ *      process-identifier[1] Unsigned32
+ * }
+ */
+typedef struct BACnetRecipientProcess {
+    uint32_t process_identifier;
+    BACNET_RECIPIENT recipient;
+} BACNET_RECIPIENT_PROCESS;
+
+struct BACnet_Recipient_List;
+typedef struct BACnet_Recipient_List {
+    BACNET_RECIPIENT recipient;
+    /* simple linked list */
+    struct BACnet_Recipient_List *next;
+} BACNET_RECIPIENT_LIST;
+
 typedef struct BACnet_Destination {
     /**
      *  BACnetDestination ::= SEQUENCE {
@@ -98,6 +116,8 @@ void bacnet_recipient_copy(BACNET_RECIPIENT *dest, const BACNET_RECIPIENT *src);
 BACNET_STACK_EXPORT
 bool bacnet_recipient_same(
     const BACNET_RECIPIENT *r1, const BACNET_RECIPIENT *r2);
+BACNET_STACK_EXPORT
+bool bacnet_recipient_address_router_unknown(const BACNET_RECIPIENT *recipient);
 
 BACNET_STACK_EXPORT
 void bacnet_recipient_device_wildcard_set(BACNET_RECIPIENT *recipient);
@@ -108,6 +128,12 @@ bool bacnet_recipient_device_valid(const BACNET_RECIPIENT *recipient);
 
 BACNET_STACK_EXPORT
 int bacnet_recipient_encode(uint8_t *apdu, const BACNET_RECIPIENT *recipient);
+BACNET_STACK_EXPORT
+int bacnet_recipient_list_encode(
+    uint8_t *apdu, BACNET_RECIPIENT_LIST *list_head);
+BACNET_STACK_EXPORT
+void bacnet_recipient_list_link_array(
+    BACNET_RECIPIENT_LIST *array, size_t size);
 BACNET_STACK_EXPORT
 int bacnet_recipient_context_encode(
     uint8_t *apdu, uint8_t tag_number, const BACNET_RECIPIENT *recipient);
@@ -120,6 +146,29 @@ int bacnet_recipient_context_decode(
     uint32_t apdu_size,
     uint8_t tag_number,
     BACNET_RECIPIENT *value);
+
+BACNET_STACK_EXPORT
+int bacnet_recipient_process_encode(
+    uint8_t *apdu, const BACNET_RECIPIENT_PROCESS *recipient_process);
+BACNET_STACK_EXPORT
+int bacnet_recipient_process_context_encode(
+    uint8_t *apdu,
+    uint8_t tag_number,
+    const BACNET_RECIPIENT_PROCESS *recipient_process);
+BACNET_STACK_EXPORT
+int bacnet_recipient_process_decode(
+    const uint8_t *apdu,
+    int apdu_size,
+    BACNET_RECIPIENT_PROCESS *recipient_process);
+BACNET_STACK_EXPORT
+int bacnet_recipient_process_context_decode(
+    const uint8_t *apdu,
+    uint32_t apdu_size,
+    uint8_t tag_number,
+    BACNET_RECIPIENT_PROCESS *value);
+BACNET_STACK_EXPORT
+void bacnet_recipient_process_copy(
+    BACNET_RECIPIENT_PROCESS *dest, const BACNET_RECIPIENT_PROCESS *src);
 
 BACNET_STACK_EXPORT
 bool bacnet_recipient_address_from_ascii(BACNET_ADDRESS *src, const char *arg);

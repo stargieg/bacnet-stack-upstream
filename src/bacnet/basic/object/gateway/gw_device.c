@@ -37,11 +37,10 @@
 #include "bacnet/basic/object/mso.h"
 #include "bacnet/basic/object/ms-input.h"
 #include "bacnet/basic/object/trendlog.h"
-#if defined(BACFILE)
-#include "bacnet/basic/object/bacfile.h" /* object list dependency */
-#endif
+#include "bacnet/basic/object/bacfile.h"
 /* os specific includes */
 #include "bacnet/basic/sys/mstimer.h"
+#include "bacnet/basic/sys/debug.h"
 
 /* forward prototypes */
 int Routed_Device_Read_Property_Local(BACNET_READ_PROPERTY_DATA *rpdata);
@@ -75,6 +74,51 @@ uint16_t Num_Managed_Devices = 0;
  * request is addressing.  Should default to 0, the main gateway Device.
  */
 uint16_t iCurrent_Device_Idx = 0;
+
+/** Reset the routed Device table before rebuilding the gateway/virtual list. */
+void Routed_Device_Table_Reset(void)
+{
+    memset(&Devices[0], 0, sizeof(Devices));
+    Num_Managed_Devices = 0;
+    iCurrent_Device_Idx = 0;
+}
+
+/** Get the current routed device object index.
+ * @return Index of the currently active routed device in Devices[] array
+ */
+uint16_t Routed_Device_Object_Index(void)
+{
+    return iCurrent_Device_Idx;
+}
+
+/** Get the number of managed devices.
+ * @return Number of devices currently managed (including gateway)
+ */
+uint16_t Get_Num_Managed_Devices(void)
+{
+    return Num_Managed_Devices;
+}
+
+/** Set the current routed device object index.
+ * @param idx [in] Index of the routed device to set as current
+ * @return true if index is valid and set, false if index exceeds
+ * MAX_NUM_DEVICES
+ */
+bool Set_Routed_Device_Object_Index(uint16_t idx)
+{
+    if (idx >= MAX_NUM_DEVICES) {
+        debug_fprintf(
+            stderr,
+            "Set_Routed_Device_Object_Index: idx(%u) >= MAX_NUM_DEVICES(%u)\n",
+            (unsigned)idx, (unsigned)MAX_NUM_DEVICES);
+
+        return false;
+    }
+
+    iCurrent_Device_Idx = idx;
+
+    return true;
+}
 
 /* void Routing_Device_Init(uint32_t first_object_instance) is
  * found in device.c
@@ -114,6 +158,15 @@ uint16_t Add_Routed_Device(
             Routed_Device_Set_Description("No Descr", strlen("No Descr"));
         }
         pDev->Database_Revision = 0; /* Reset/Initialize now */
+#if defined(BAC_ROUTING)
+        pDev->Reinitialize.State = BACNET_REINIT_IDLE;
+        pDev->Reinitialize.Password = "filister";
+#if defined(BACNET_BACKUP_RESTORE)
+        memset(&pDev->Backup, 0, sizeof(pDev->Backup));
+        pDev->Backup.Backup_State = BACKUP_STATE_IDLE;
+        pDev->Backup.Backup_Failure_Timeout = 60 * 60;
+#endif
+#endif
         return i;
     } else {
         return UINT16_MAX;
@@ -171,7 +224,7 @@ BACNET_ADDRESS *Get_Routed_Device_Address(int idx)
  * @param my_address [out] Points to the currently active Device Object's
  *                         BACnet address.
  */
-void routed_get_my_address(BACNET_ADDRESS *my_address)
+void Routed_Device_Get_My_Address(BACNET_ADDRESS *my_address)
 {
     if (my_address) {
         memcpy(
@@ -570,8 +623,8 @@ void Routed_Device_Inc_Database_Revision(void)
 }
 
 /** Check to see if the current Device supports this service.
- * Presently checks for RD and DCC and only allows them if the current
- * device is the gateway device.
+ * Presently allows ReinitializeDevice for routed virtual devices and keeps
+ * DeviceCommunicationControl restricted to the gateway device.
  *
  * @param service [in] The service being requested.
  * @param service_argument [in] An optional argument (eg, service type).
@@ -593,16 +646,9 @@ int Routed_Device_Service_Approval(
     (void)service_argument;
     switch (service) {
         case SERVICE_SUPPORTED_REINITIALIZE_DEVICE:
-            /* If not the gateway device, we don't support RD */
-            if (iCurrent_Device_Idx > 0) {
-                if (apdu_buff != NULL) {
-                    len = reject_encode_apdu(
-                        apdu_buff, invoke_id,
-                        REJECT_REASON_UNRECOGNIZED_SERVICE);
-                } else {
-                    len = 1; /* Non-zero return */
-                }
-            }
+            /* RD is accepted for virtual devices. Device_Reinitialize()
+               handles state-specific support and returns service errors for
+               virtual-device states that have gateway/system side effects. */
             break;
         case SERVICE_SUPPORTED_DEVICE_COMMUNICATION_CONTROL:
             /* If not the gateway device, we don't support DCC */

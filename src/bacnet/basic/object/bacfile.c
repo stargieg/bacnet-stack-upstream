@@ -28,10 +28,9 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/tsm/tsm.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 
-#ifndef FILE_RECORD_SIZE
-#define FILE_RECORD_SIZE MAX_OCTET_STRING_BYTES
-#endif
 struct object_data {
     char *Object_Name;
     char *Pathname;
@@ -43,7 +42,12 @@ struct object_data {
     bool Archive : 1;
 };
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_FILE;
 /* These three arrays are used by the ReadPropertyMultiple handler */
@@ -67,6 +71,15 @@ static const int32_t Properties_Optional[] = {
 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of writable properties */
+    PROP_ARCHIVE, PROP_FILE_SIZE, -1
+};
 
 /**
  * @brief Returns the list of required, optional, and proprietary properties.
@@ -97,18 +110,17 @@ void BACfile_Property_Lists(
 }
 
 /**
- * @brief duplicate a string (replacement for POSIX strdup)
- * @param  s - string to duplicate
- * @return a pointer to a new string on success, or a null pointer
+ * @brief Get the list of writable properties for an Analog Input object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
  */
-static char *bacfile_strdup(const char *s)
+void BACfile_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
 {
-    size_t size = strlen(s) + 1;
-    char *p = malloc(size);
-    if (p != NULL) {
-        memcpy(p, s, size);
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
     }
-    return p;
 }
 
 /**
@@ -141,7 +153,7 @@ void bacfile_pathname_set(uint32_t object_instance, const char *pathname)
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         free(pObject->Pathname);
-        pObject->Pathname = bacfile_strdup(pathname);
+        pObject->Pathname = bacnet_strdup(pathname);
     }
 }
 
@@ -225,7 +237,7 @@ bool bacfile_object_name_set(uint32_t object_instance, const char *new_name)
     if (pObject) {
         status = true;
         free(pObject->Object_Name);
-        pObject->Object_Name = bacfile_strdup(new_name);
+        pObject->Object_Name = bacnet_strdup(new_name);
     }
 
     return status;
@@ -513,7 +525,7 @@ void bacfile_file_size_set_callback_set(bool (*callback)(const char *, size_t))
  * @param  object_instance - object-instance number of the object
  * @param  buffer - data store from the file
  * @param  buffer_size - in bytes
- * @return  file size in bytes
+ * @return  number of bytes read, or 0 if not successful
  */
 uint32_t
 bacfile_read(uint32_t object_instance, uint8_t *buffer, uint32_t buffer_size)
@@ -531,11 +543,37 @@ bacfile_read(uint32_t object_instance, uint8_t *buffer, uint32_t buffer_size)
 }
 
 /**
+ * @brief Read the entire file into a buffer
+ * @param  object_instance - object-instance number of the object
+ * @param  offset - offset in bytes from the beginning of the file
+ * @param  buffer - data store from the file
+ * @param  buffer_size - in bytes
+ * @return  number of bytes read, or 0 if not successful
+ */
+uint32_t bacfile_read_offset(
+    uint32_t object_instance,
+    int32_t offset,
+    uint8_t *buffer,
+    uint32_t buffer_size)
+{
+    const char *pathname = NULL;
+    long file_size = 0;
+
+    pathname = bacfile_pathname(object_instance);
+    if (pathname) {
+        file_size = bacfile_read_stream_data_callback(
+            pathname, offset, buffer, buffer_size);
+    }
+
+    return (uint32_t)file_size;
+}
+
+/**
  * @brief Write the entire file from a buffer
  * @param  object_instance - object-instance number of the object
  * @param  buffer - data store for the file
  * @param  buffer_size - in bytes
- * @return  file size in bytes
+ * @return  number of bytes written, or 0 if not successful
  */
 uint32_t bacfile_write(
     uint32_t object_instance, const uint8_t *buffer, uint32_t buffer_size)
@@ -547,6 +585,32 @@ uint32_t bacfile_write(
     if (pathname) {
         file_size = bacfile_write_stream_data_callback(
             pathname, 0, buffer, buffer_size);
+    }
+
+    return (uint32_t)file_size;
+}
+
+/**
+ * @brief Write to the file from a buffer at a given offset
+ * @param  object_instance - object-instance number of the object
+ * @param  offset - offset in bytes from the beginning of the file
+ * @param  buffer - data store for the file
+ * @param  buffer_size - in bytes
+ * @return number of bytes written, or 0 if not successful
+ */
+uint32_t bacfile_write_offset(
+    uint32_t object_instance,
+    int32_t offset,
+    const uint8_t *buffer,
+    uint32_t buffer_size)
+{
+    const char *pathname = NULL;
+    long file_size = 0;
+
+    pathname = bacfile_pathname(object_instance);
+    if (pathname) {
+        file_size = bacfile_write_stream_data_callback(
+            pathname, offset, buffer, buffer_size);
     }
 
     return (uint32_t)file_size;
@@ -626,7 +690,7 @@ void bacfile_file_type_set(uint32_t object_instance, const char *mime_type)
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         free(pObject->File_Type);
-        pObject->File_Type = bacfile_strdup(mime_type);
+        pObject->File_Type = bacnet_strdup(mime_type);
     }
 }
 
@@ -966,27 +1030,43 @@ uint32_t bacfile_instance_from_tsm(uint8_t invokeID)
 }
 #endif
 
+/**
+ * @brief Read stream data from a file
+ * @param data - pointer to the data structure to fill
+ * @return true - if successful
+ * @return false - if failed or file not found
+ */
 bool bacfile_read_stream_data(BACNET_ATOMIC_READ_FILE_DATA *data)
 {
     const char *pathname = NULL;
     bool found = false;
-    size_t len = 0;
+    size_t len = 0, file_size = 0;
     size_t requestedOctetCount = 0;
 
+    if (!data) {
+        return false;
+    }
     pathname = bacfile_pathname(data->object_instance);
     if (pathname) {
         found = true;
-        requestedOctetCount = data->type.stream.requestedOctetCount;
-        if (requestedOctetCount > octetstring_capacity(&data->fileData[0])) {
-            requestedOctetCount = octetstring_capacity(&data->fileData[0]);
-        }
-        len = bacfile_read_stream_data_callback(
-            pathname, data->type.stream.fileStartPosition,
-            octetstring_value(&data->fileData[0]), requestedOctetCount);
-        if (len < requestedOctetCount) {
-            data->endOfFile = true;
+        file_size = bacfile_file_size_callback(pathname);
+        if ((data->type.stream.fileStartPosition >= 0) &&
+            (data->type.stream.fileStartPosition < file_size)) {
+            requestedOctetCount = data->type.stream.requestedOctetCount;
+            if (requestedOctetCount >
+                octetstring_capacity(&data->fileData[0])) {
+                requestedOctetCount = octetstring_capacity(&data->fileData[0]);
+            }
+            len = bacfile_read_stream_data_callback(
+                pathname, data->type.stream.fileStartPosition,
+                octetstring_value(&data->fileData[0]), requestedOctetCount);
+            if (len < requestedOctetCount) {
+                data->endOfFile = true;
+            } else {
+                data->endOfFile = false;
+            }
         } else {
-            data->endOfFile = false;
+            data->endOfFile = true;
         }
         octetstring_truncate(&data->fileData[0], len);
     } else {
@@ -997,28 +1077,55 @@ bool bacfile_read_stream_data(BACNET_ATOMIC_READ_FILE_DATA *data)
     return found;
 }
 
+/**
+ * @brief Read record data from a file
+ * @param data - pointer to the data structure to fill
+ * @return true - if successful
+ * @return false - if failed or file not found
+ */
 bool bacfile_read_record_data(BACNET_ATOMIC_READ_FILE_DATA *data)
 {
     const char *pathname = NULL;
     bool found = false;
     bool status = false;
+    size_t len = 0;
     uint32_t i = 0;
+    size_t max_records = 0;
 
+    if (!data) {
+        return false;
+    }
+    max_records =
+        min(data->type.record.RecordCount, ARRAY_SIZE(data->fileData));
     pathname = bacfile_pathname(data->object_instance);
     if (pathname) {
         found = true;
+    }
+    if (found && (data->type.record.fileStartRecord >= 0) &&
+        (data->type.record.fileStartRecord < ARRAY_SIZE(data->fileData)) &&
+        (max_records > 0)) {
         data->endOfFile = false;
-        for (i = 0; i < data->type.record.RecordCount; i++) {
+        for (i = 0; i < max_records; i++) {
             status = bacfile_read_record_data_callback(
                 pathname, data->type.record.fileStartRecord, i,
                 octetstring_value(&data->fileData[i]),
                 octetstring_capacity(&data->fileData[i]));
-            if (!status) {
+            if (status) {
+                /* our records are NULL terminated C strings
+                    read with fgets() */
+                len = bacnet_strnlen(
+                    (const char *)octetstring_value(&data->fileData[i]),
+                    octetstring_capacity(&data->fileData[i]));
+                octetstring_truncate(&data->fileData[i], len);
+            } else {
                 data->endOfFile = true;
                 data->type.record.RecordCount = i;
                 break;
             }
         }
+    } else {
+        data->endOfFile = true;
+        data->type.record.RecordCount = 0;
     }
 
     return found;
@@ -1036,6 +1143,9 @@ bool bacfile_write_stream_data(BACNET_ATOMIC_WRITE_FILE_DATA *data)
     bool status = false;
     size_t bytes_written = 0;
 
+    if (!data) {
+        return false;
+    }
     if (bacfile_read_only(data->object_instance)) {
         /* if the file is read-only, then we cannot write to it */
         return false;
@@ -1071,11 +1181,17 @@ bool bacfile_write_record_data(const BACNET_ATOMIC_WRITE_FILE_DATA *data)
     const char *pathname = NULL;
     bool found = false;
     size_t i = 0;
+    size_t max_records = 0;
 
+    if (!data) {
+        return false;
+    }
     if (bacfile_read_only(data->object_instance)) {
         /* if the file is read-only, then we cannot write to it */
         return false;
     }
+    max_records =
+        min(data->type.record.returnedRecordCount, ARRAY_SIZE(data->fileData));
     pathname = bacfile_pathname(data->object_instance);
     if (pathname) {
         found = true;
@@ -1084,10 +1200,10 @@ bool bacfile_write_record_data(const BACNET_ATOMIC_WRITE_FILE_DATA *data)
             as an append to the current end of file.
             If the 'File Start Record' parameter is 0,
             open the file as a clean slate. */
-        for (i = 0; i < data->type.record.returnedRecordCount; i++) {
+        for (i = 0; i < max_records; i++) {
             bacfile_write_record_data_callback(
                 pathname, data->type.record.fileStartRecord, i,
-                octetstring_value((BACNET_OCTET_STRING *)&data->fileData[i]),
+                octetstring_value_const(&data->fileData[i]),
                 octetstring_length(&data->fileData[i]));
         }
     }
@@ -1108,12 +1224,15 @@ bool bacfile_read_ack_stream_data(
     bool found = false;
     const char *pathname = NULL;
 
+    if (!data) {
+        return false;
+    }
     pathname = bacfile_pathname(instance);
     if (pathname) {
         found = true;
         bacfile_write_stream_data_callback(
             pathname, data->type.stream.fileStartPosition,
-            octetstring_value((BACNET_OCTET_STRING *)&data->fileData[0]),
+            octetstring_value_const(&data->fileData[0]),
             octetstring_length(&data->fileData[0]));
     }
 
@@ -1134,13 +1253,19 @@ bool bacfile_read_ack_record_data(
     const char *pathname = NULL;
     uint32_t i = 0;
 
+    if (!data) {
+        return false;
+    }
+    if (data->type.record.RecordCount > ARRAY_SIZE(data->fileData)) {
+        return false;
+    }
     pathname = bacfile_pathname(instance);
     if (pathname) {
         found = true;
         for (i = 0; i < data->type.record.RecordCount; i++) {
             bacfile_write_record_data_callback(
                 pathname, data->type.record.fileStartRecord, i,
-                octetstring_value((BACNET_OCTET_STRING *)&data->fileData[i]),
+                octetstring_value_const(&data->fileData[i]),
                 octetstring_length(&data->fileData[i]));
         }
     }
@@ -1242,6 +1367,9 @@ bool bacfile_delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
+        free(pObject->Pathname);
+        free(pObject->File_Type);
+        free(pObject->Object_Name);
         free(pObject);
         status = true;
     }
@@ -1255,20 +1383,33 @@ bool bacfile_delete(uint32_t object_instance)
 void bacfile_cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject->Pathname);
-                free(pObject->File_Type);
-                free(pObject->Object_Name);
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject->Pathname);
+                    free(pObject->File_Type);
+                    free(pObject->Object_Name);
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -1276,7 +1417,21 @@ void bacfile_cleanup(void)
  */
 void bacfile_init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }

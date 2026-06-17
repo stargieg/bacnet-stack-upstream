@@ -34,7 +34,7 @@
  * - an Abort if
  *   - the message is segmented
  *   - if decoding fails
- * - a SimpleACK if Device_Create_Object() succeeds
+ * - a ComplexACK if Device_Create_Object() succeeds
  * - an Error if Device_Create_Object() fails
  *
  * @param service_request [in] The contents of the service request.
@@ -82,7 +82,8 @@ void handler_create_object(
         len = create_object_decode_service_request(
             service_request, service_len, &data);
         if (len > 0) {
-            debug_printf_stderr(
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr,
                 "CreateObject: type=%lu instance=%lu\n",
                 (unsigned long)data.object_type,
                 (unsigned long)data.object_instance);

@@ -949,7 +949,7 @@ static int channel_value_coerce_data_encode(
                     apdu_len = BACNET_STATUS_ERROR;
                 }
             } else if (tag == BACNET_APPLICATION_TAG_DOUBLE) {
-                double_value = value->type.Real;
+                double_value = (double)value->type.Real;
                 apdu_len = encode_application_double(apdu, double_value);
             } else if (tag == BACNET_APPLICATION_TAG_ENUMERATED) {
                 if ((value->type.Real >= 0.0F) &&
@@ -1290,18 +1290,21 @@ int bacnet_channel_value_no_coerce_decode(
 #endif
 #if defined(CHANNEL_OCTET_STRING)
         case BACNET_APPLICATION_TAG_OCTET_STRING:
+            octetstring_init(&value->type.Octet_String, NULL, 0);
             len = bacnet_octet_string_application_decode(
                 apdu, apdu_size, &value->type.Octet_String);
             break;
 #endif
 #if defined(CHANNEL_CHARACTER_STRING)
         case BACNET_APPLICATION_TAG_CHARACTER_STRING:
+            characterstring_init_ansi(&value->type.Character_String, "");
             len = bacnet_character_string_application_decode(
                 apdu, apdu_size, &value->type.Character_String);
             break;
 #endif
 #if defined(CHANNEL_BIT_STRING)
         case BACNET_APPLICATION_TAG_BIT_STRING:
+            bitstring_init(&value->type.Bit_String);
             len = bacnet_bitstring_application_decode(
                 apdu, apdu_size, &value->type.Bit_String);
             break;

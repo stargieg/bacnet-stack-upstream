@@ -21,7 +21,7 @@ string(REGEX REPLACE
 set(ZTST_DIR "${TST_DIR}/ztest/src")
 
 add_compile_definitions(
-    BIG_ENDIAN=0
+    BACNET_BIG_ENDIAN=0
     INTRINSIC_REPORTING=1
     CONFIG_ZTEST=1
     )
@@ -36,13 +36,17 @@ add_executable(${PROJECT_NAME}
     ${SRC_DIR}/bacnet/basic/object/nc.c
     # Support files and stubs (pathname alphabetical)
     ${SRC_DIR}/bacnet/access_rule.c
+    ${SRC_DIR}/bacnet/authentication_factor.c
+    ${SRC_DIR}/bacnet/authentication_factor_format.c
     ${SRC_DIR}/bacnet/bacaction.c
     ${SRC_DIR}/bacnet/bacaddr.c
     ${SRC_DIR}/bacnet/bacapp.c
     ${SRC_DIR}/bacnet/bacdcode.c
     ${SRC_DIR}/bacnet/bacdest.c
     ${SRC_DIR}/bacnet/bacdevobjpropref.c
+    ${SRC_DIR}/bacnet/abort.c
     ${SRC_DIR}/bacnet/bacerror.c
+    ${SRC_DIR}/bacnet/reject.c
     ${SRC_DIR}/bacnet/bacint.c
     ${SRC_DIR}/bacnet/baclog.c
     ${SRC_DIR}/bacnet/bacreal.c
@@ -72,6 +76,8 @@ add_executable(${PROJECT_NAME}
     # Test and test library files
     ./stubs.c
     ./src/main.c
+    ${TST_DIR}/bacnet/basic/object/test/datetime_local.c
+    ${TST_DIR}/bacnet/basic/object/test/device_mock.c
     ${ZTST_DIR}/ztest_mock.c
     ${ZTST_DIR}/ztest.c
     )

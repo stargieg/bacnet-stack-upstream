@@ -28,7 +28,7 @@
 /* Although this stack can implement any revision,
  * sometimes a specific revision is desired */
 #ifndef BACNET_PROTOCOL_REVISION
-#define BACNET_PROTOCOL_REVISION 24
+#define BACNET_PROTOCOL_REVISION 28
 #endif
 
 /* there are a few dependencies on the BACnet Protocol-Revision */
@@ -152,6 +152,7 @@ typedef uint32_t BACNET_UNSIGNED_INTEGER;
 
 /* largest BACnet Instance Number */
 /* Also used as a device instance number wildcard address */
+/* note: used with signed and unsigned comparisons - don't decorate with 'u'*/
 #define BACNET_MAX_INSTANCE (0x3FFFFF)
 #define BACNET_INSTANCE_BITS 22
 /* large BACnet Object Type */
@@ -160,7 +161,7 @@ typedef uint32_t BACNET_UNSIGNED_INTEGER;
 #define BACNET_ARRAY_ALL UINT32_MAX
 typedef uint32_t BACNET_ARRAY_INDEX;
 /* For device object property references with no device id defined */
-#define BACNET_NO_DEV_ID 0xFFFFFFFFu
+#define BACNET_NO_DEV_ID UINT32_MAX
 #define BACNET_NO_DEV_TYPE OBJECT_NONE
 /* Priority Array for commandable objects */
 #define BACNET_NO_PRIORITY 0
@@ -212,8 +213,24 @@ typedef struct BACnet_Object_Id {
     uint32_t instance;
 } BACNET_OBJECT_ID;
 
+#if !defined(BACNET_MAX_SEGMENTS_ACCEPTED)
+#if BACNET_SEGMENTATION_ENABLED
+/* note: BACNET_MAX_SEGMENTS_ACCEPTED can be 1..255.
+   ASDU in this library is usually sized for 16-bit at 65535 max.
+   Therefore, the default here is limited to avoid overflow warnings. */
+#define BACNET_MAX_SEGMENTS_ACCEPTED 32
+#else
+#define BACNET_MAX_SEGMENTS_ACCEPTED 1
+#endif
+#endif
+#if !defined(MAX_APDU)
+#define MAX_APDU 1476
+#endif
 #define MAX_NPDU (1 + 1 + 2 + 1 + MAX_MAC_LEN + 2 + 1 + MAX_MAC_LEN + 1 + 1 + 2)
 #define MAX_PDU (MAX_APDU + MAX_NPDU)
+/* Application Service Data Unit (ASDU) that has not yet been segmented
+   into a protocol data unit (PDU) by the lower layer. */
+#define MAX_ASDU ((MAX_APDU * BACNET_MAX_SEGMENTS_ACCEPTED) + MAX_NPDU)
 
 #define BACNET_ID_VALUE(bacnet_object_instance, bacnet_object_type)         \
     ((((bacnet_object_type) & BACNET_MAX_OBJECT) << BACNET_INSTANCE_BITS) | \

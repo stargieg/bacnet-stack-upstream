@@ -131,6 +131,7 @@ int bacnet_authentication_factor_decode(
     return apdu_len;
 }
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * @brief Decode the BACnetAuthenticationFactor complex data
  * @param apdu  Pointer to the buffer for decoding.
@@ -143,6 +144,7 @@ int bacapp_decode_authentication_factor(
 {
     return bacnet_authentication_factor_decode(apdu, MAX_APDU, af);
 }
+#endif
 
 /**
  * @brief Decode the context tagged BACnetAuthenticationFactor complex data
@@ -186,6 +188,7 @@ int bacnet_authentication_factor_context_decode(
     return apdu_len;
 }
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * @brief Decode the context tagged BACnetAuthenticationFactor complex data
  * @param apdu  Pointer to the buffer for decoding.
@@ -200,4 +203,27 @@ int bacapp_decode_context_authentication_factor(
     const uint8_t *apdu, uint8_t tag, BACNET_AUTHENTICATION_FACTOR *af)
 {
     return bacnet_authentication_factor_context_decode(apdu, MAX_APDU, tag, af);
+}
+#endif
+
+/**
+ * @brief Compare two BACnetAuthenticationFactor values for equality
+ * @param value  Pointer to the first value to compare
+ * @param test_value  Pointer to the second value to compare
+ * @return true if the values are the same, false otherwise
+ */
+bool bacnet_authentication_factor_same(
+    const BACNET_AUTHENTICATION_FACTOR *value,
+    const BACNET_AUTHENTICATION_FACTOR *test_value)
+{
+    if (value == NULL || test_value == NULL) {
+        return false;
+    }
+    if (value->format_type != test_value->format_type) {
+        return false;
+    }
+    if (value->format_class != test_value->format_class) {
+        return false;
+    }
+    return octetstring_value_same(&value->value, &test_value->value);
 }

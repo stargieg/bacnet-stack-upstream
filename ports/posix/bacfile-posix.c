@@ -13,11 +13,14 @@
 #include <string.h>
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
-#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/object/bacfile.h"
+#include "bacnet/basic/sys/debug.h"
+#include "bacnet/basic/sys/filename.h"
+/* me! */
+#include "bacfile-posix.h"
 
-#ifndef FILE_RECORD_SIZE
-#define FILE_RECORD_SIZE MAX_OCTET_STRING_BYTES
+#ifndef BACNET_FILE_POSIX_RECORD_SIZE
+#define BACNET_FILE_POSIX_RECORD_SIZE MAX_OCTET_STRING_BYTES
 #endif
 
 /**
@@ -50,7 +53,7 @@ size_t bacfile_posix_file_size(const char *pathname)
     long file_position = 0;
     size_t file_size = 0;
 
-    if (pathname) {
+    if (filename_path_valid(pathname)) {
         pFile = fopen(pathname, "rb");
         if (pFile) {
             file_position = fsize(pFile);
@@ -59,7 +62,9 @@ size_t bacfile_posix_file_size(const char *pathname)
             }
             fclose(pFile);
         } else {
-            debug_printf_stderr("Failed to open %s for reading!\n", pathname);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Failed to open %s for reading!\n",
+                pathname);
         }
     }
 
@@ -87,6 +92,8 @@ bool bacfile_posix_file_size_set(const char *pathname, size_t file_size)
  * @brief Reads stream data from a file
  * @param pathname - name of the file to read from
  * @param fileStartPosition - starting position in the file
+ *  If the 'File Start Position' parameter is either less than 0
+ *  or exceeds the actual file size, then an error is returned.
  * @param fileData - data buffer to read into
  * @param fileDataLen - size of the data buffer
  * @return number of bytes read, or 0 if not successful
@@ -100,14 +107,25 @@ size_t bacfile_posix_read_stream_data(
     FILE *pFile = NULL;
     size_t len = 0;
 
-    if (pathname) {
+    if (fileStartPosition < 0) {
+        /* invalid file start position */
+        return 0;
+    }
+    if (filename_path_valid(pathname)) {
         pFile = fopen(pathname, "rb");
         if (pFile) {
+            if (fileStartPosition > fsize(pFile)) {
+                /* invalid file start position */
+                fclose(pFile);
+                return 0;
+            }
             (void)fseek(pFile, fileStartPosition, SEEK_SET);
             len = fread(fileData, 1, fileDataLen, pFile);
             fclose(pFile);
         } else {
-            debug_printf_stderr("Failed to open %s for reading!\n", pathname);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Failed to open %s for reading!\n",
+                pathname);
         }
     }
 
@@ -118,6 +136,13 @@ size_t bacfile_posix_read_stream_data(
  * @brief Writes stream data to a file
  * @param pathname - name of the file to write to
  * @param fileStartPosition - starting position in the file
+ *  If the 'File Start Position' parameter exceeds the actual file size,
+ *  then the file shall be extended to the size indicated,
+ *  but the contents of any intervening octets or records
+ *  shall be a local matter.
+ *  If this parameter has the special value -1,
+ *  then the write operation shall be treated
+ *  as an append to the current end of file.
  * @param fileData - data buffer to write from
  * @param fileDataLen - size of the data buffer
  * @return number of bytes written, or 0 if not successful
@@ -131,7 +156,7 @@ size_t bacfile_posix_write_stream_data(
     size_t bytes_written = 0;
     FILE *pFile = NULL;
 
-    if (pathname) {
+    if (filename_path_valid(pathname)) {
         if (fileStartPosition == 0) {
             /* open the file as a clean slate when starting at 0 */
             pFile = fopen(pathname, "wb");
@@ -140,7 +165,7 @@ size_t bacfile_posix_write_stream_data(
                value -1, then the write operation shall be treated
                as an append to the current end of file. */
             pFile = fopen(pathname, "ab+");
-        } else {
+        } else if (fileStartPosition > 0) {
             /* open for update */
             pFile = fopen(pathname, "rb+");
         }
@@ -148,10 +173,12 @@ size_t bacfile_posix_write_stream_data(
             if (fileStartPosition != -1) {
                 (void)fseek(pFile, fileStartPosition, SEEK_SET);
             }
-            bytes_written = fwrite(fileData, fileDataLen, 1, pFile);
+            bytes_written = fwrite(fileData, 1, fileDataLen, pFile);
             fclose(pFile);
         } else {
-            debug_printf_stderr("Failed to open %s for writing!\n", pathname);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Failed to open %s for writing!\n",
+                pathname);
         }
     }
 
@@ -162,6 +189,10 @@ size_t bacfile_posix_write_stream_data(
  * @brief Writes record data to a file
  * @param pathname - name of the file to write to
  * @param fileStartRecord - starting record in the file
+ *  If 'File Start Record' parameter has the special
+ *  value -1, then the write operation shall be treated
+ *  as an append to the current end of file,
+ *  and fileIndexRecord can be ignored.
  * @param fileIndexRecord - index of the record to read
  * @param fileData - data buffer to read into
  * @param fileDataLen - size of the data buffer
@@ -177,11 +208,11 @@ bool bacfile_posix_write_record_data(
     bool status = false;
     FILE *pFile = NULL;
     uint32_t i = 0;
-    char dummy_data[FILE_RECORD_SIZE];
+    char dummy_data[BACNET_FILE_POSIX_RECORD_SIZE];
     const char *pData = NULL;
     size_t fileSeekRecord = 0;
 
-    if (pathname) {
+    if (filename_path_valid(pathname)) {
         if (fileStartRecord == 0) {
             /* open the file as a clean slate when starting at 0 */
             pFile = fopen(pathname, "wb");
@@ -192,7 +223,7 @@ bool bacfile_posix_write_record_data(
                as an append to the current end of file. */
             pFile = fopen(pathname, "ab+");
             fileSeekRecord = fileIndexRecord;
-        } else {
+        } else if (fileStartRecord > 0) {
             /* open for update */
             pFile = fopen(pathname, "rb+");
             fileSeekRecord = fileStartRecord + fileIndexRecord;
@@ -212,7 +243,9 @@ bool bacfile_posix_write_record_data(
             }
             fclose(pFile);
         } else {
-            debug_printf_stderr("Failed to open %s for writing!\n", pathname);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Failed to open %s for writing!\n",
+                pathname);
         }
     }
 
@@ -223,6 +256,8 @@ bool bacfile_posix_write_record_data(
  * @brief Reads record data from a file
  * @param pathname - name of the file to read from
  * @param fileStartRecord - starting record in the file
+ *  If the 'File Start Record' parameter is either less than 0
+ *  or exceeds the actual file size, then an error is returned.
  * @param fileIndexRecord - index of the record to read
  * @param fileData - data buffer to read into
  * @param fileDataLen - size of the data buffer
@@ -238,11 +273,15 @@ bool bacfile_posix_read_record_data(
     bool status = false;
     FILE *pFile = NULL;
     uint32_t i = 0;
-    char dummy_data[FILE_RECORD_SIZE] = { 0 };
+    char dummy_data[BACNET_FILE_POSIX_RECORD_SIZE] = { 0 };
     const char *pData = NULL;
     size_t fileSeekRecord = 0;
 
-    if (pathname) {
+    if (fileStartRecord < 0) {
+        /* invalid file start record */
+        return false;
+    }
+    if (filename_path_valid(pathname)) {
         pFile = fopen(pathname, "rb");
         if (pFile) {
             fileSeekRecord = fileStartRecord + fileIndexRecord;
@@ -254,13 +293,15 @@ bool bacfile_posix_read_record_data(
                 }
             }
             if ((i == fileSeekRecord) && (fileDataLen <= sizeof(dummy_data))) {
-                /* copy the record data */
+                /* We found the record, so copy it */
                 memmove(fileData, &dummy_data[0], fileDataLen);
                 status = true;
             }
             fclose(pFile);
         } else {
-            debug_printf_stderr("Failed to open %s for reading!\n", pathname);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Failed to open %s for reading!\n",
+                pathname);
         }
     }
 
@@ -272,14 +313,10 @@ bool bacfile_posix_read_record_data(
  */
 void bacfile_posix_init(void)
 {
-#if defined(BACFILE)
     bacfile_write_stream_data_callback_set(bacfile_posix_write_stream_data);
     bacfile_read_stream_data_callback_set(bacfile_posix_read_stream_data);
     bacfile_write_record_data_callback_set(bacfile_posix_write_record_data);
     bacfile_read_record_data_callback_set(bacfile_posix_read_record_data);
     bacfile_file_size_callback_set(bacfile_posix_file_size);
     bacfile_file_size_set_callback_set(bacfile_posix_file_size_set);
-#elif defined(BACDL_BSC)
-#error BACFILE is not defined for BACnet/SC!
-#endif
 }

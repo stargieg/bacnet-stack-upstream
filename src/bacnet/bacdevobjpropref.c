@@ -311,6 +311,7 @@ bool bacnet_device_object_property_reference_copy(
     return status;
 }
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * Decode a property reference of a device object.
  *
@@ -337,7 +338,9 @@ int bacapp_decode_device_obj_property_ref(
     return bacnet_device_object_property_reference_decode(
         apdu, MAX_APDU, value);
 }
+#endif
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * Decode the opening tag and the property reference of
  * an device object and check for the closing tag as well.
@@ -359,6 +362,7 @@ int bacapp_decode_context_device_obj_property_ref(
     return bacnet_device_object_property_reference_context_decode(
         apdu, MAX_APDU, tag_number, value);
 }
+#endif
 
 /**
  * Encode the opening tag and the device object reference
@@ -445,6 +449,31 @@ int bacapp_encode_device_obj_ref(
 }
 
 /**
+ * @brief Encode BACnetDeviceObjectReference data if it fits in the buffer
+ * @param apdu - buffer to hold the data to be encoded, or NULL for length
+ * @param apdu_size - number of bytes in the buffer
+ * @param value - device object reference value to encode
+ * @return returns the number of apdu bytes consumed,
+ *  or 0 if apdu_size is too small to fit the data
+ */
+int bacnet_device_object_reference_encode(
+    uint8_t *apdu,
+    uint32_t apdu_size,
+    const BACNET_DEVICE_OBJECT_REFERENCE *value)
+{
+    int apdu_len = 0; /* total length of the apdu, return value */
+
+    apdu_len = bacapp_encode_device_obj_ref(NULL, value);
+    if (apdu_len > apdu_size) {
+        apdu_len = 0;
+    } else {
+        apdu_len = bacapp_encode_device_obj_ref(apdu, value);
+    }
+
+    return apdu_len;
+}
+
+/**
  * Decode the device object reference.
  *
  * BACnetDeviceObjectReference ::= SEQUENCE {
@@ -485,8 +514,10 @@ int bacnet_device_object_reference_decode(
         return BACNET_STATUS_ERROR;
     } else {
         /* OPTIONAL - skip apdu_len increment */
-        value->deviceIdentifier.type = BACNET_NO_DEV_TYPE;
-        value->deviceIdentifier.instance = BACNET_NO_DEV_ID;
+        if (value) {
+            value->deviceIdentifier.type = BACNET_NO_DEV_TYPE;
+            value->deviceIdentifier.instance = BACNET_NO_DEV_ID;
+        }
     }
     /* object-identifier [1] BACnetObjectIdentifier */
     len = bacnet_object_id_context_decode(
@@ -599,6 +630,7 @@ bool bacnet_device_object_reference_copy(
     return status;
 }
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * Decode the device object reference.
  *
@@ -619,7 +651,9 @@ int bacapp_decode_device_obj_ref(
 {
     return bacnet_device_object_reference_decode(apdu, MAX_APDU, value);
 }
+#endif
 
+#if defined(BACNET_STACK_DEPRECATED_DISABLE)
 /**
  * Decode the context device object reference. Check for
  * an opening tag and a closing tag as well.
@@ -640,6 +674,7 @@ int bacapp_decode_context_device_obj_ref(
     return bacnet_device_object_reference_context_decode(
         apdu, MAX_APDU, tag_number, value);
 }
+#endif
 
 /**
  * @brief Encode a BACnetObjectPropertyReference

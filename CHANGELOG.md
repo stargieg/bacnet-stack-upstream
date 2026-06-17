@@ -9,18 +9,342 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The git repositories are hosted at the following sites:
-* https://bacnet.sourceforge.net/
-* https://github.com/bacnet-stack/bacnet-stack/
 
-## [Unreleased] - 2025-12-04
+* <https://bacnet.sourceforge.net/>
+* <https://github.com/bacnet-stack/bacnet-stack/>
+
+## [Unreleased] - 2026-05-29
 
 ### Security
 
-* Secured npdu_is_expected_reply() function where the MS/TP reply matcher
-  could have an out-of-bounds read. (#1178)
+* Secured the basic device object which had a string use after free.
+  Added character string buffer stndup and same/diff functions.
+  Changed all the device object character string handling to use
+  character string buffers, where the API set calls use static memory
+  and WriteProperty uses dynamic memory. This improves memory usage
+  and prevents use after free since the character string buffer tracks
+  allocated vs non-allocated strings. (#1375)
+* Secured rpm_decode_object_property by fixing a DoS vulnerability
+  for malformed RPM requests. (#1374)
+* Secured bsc_node_parse_urls() by fixing buffer overflows by using relative
+  lengths and adding array bounds checks before every write. (#1365)
+* Secured apps/epics by preventing a buffer overflow in ProcessRPMData,
+  resolving destination slot for property values. (#1366)
+* Secured address_list_encode() function buffer overrun by using
+  existing BACnetAddressBinding encoding function for length check
+  and refactoring. Added unit test for validation.(#1363)
+* Secured AtomicReadFile and AtomicWriteFile handling by addig bounds
+  checking on start position. (#1362)
+* Secured BACnetList and BACnetARRAY encoding function buffer overflow
+  in Access Credential, Access User, Access Zone, and Credential Data Input
+  by honoring buffer size limits. Added encoding functions for
+  BACnetAuthenticationFactorFormat and BACnetDeviceObjectReferencewith buffer
+  size check. (#1356)
+* Secured Loop object internal Read_Property function buffer overflow. (#1355)
+* Secured Life Safety Point and Zone Read_Property of accepted-modes property
+  buffer overflow. (#1354)
+* Secured Notification Class AddListElement and RemoveListElement stack
+  based buffer overflow. (#1353)
+* Secured Device ENDRESTORE so that it does not delete existing objects
+  until after the first record is decoded (#1352)
+* Secured Timer object State_Change_Values property self-reference that
+  caused uncontrolled recursion. (#1347)
+* Secured Channel object member self-reference that caused uncontrolled
+  recursion. Changed Channel property handling to use device object
+  property reference and unsigned value specific decoders. Fixed handling
+  of Write_Status in Channel_Write_Members to properly reflect success
+  or failure of property writes. (#1345)
+* Secured AtomicReadFile-ACK Record-Access Encoder by initializing
+  BACNET_CHARACTER_STRING and OCTET_STRING to prevent uninitialized
+  usage and conditional information disclosure. (#1344)
+* Secured AtomicReadFile and AtomicWriteFile callbacks into bacfile.c
+  by adding null checks and fixing out-of-bounds read/write.(#1344)
+* Secured WriteProperty to Structured View subordinate-list that caused a NULL
+  pointer dereference in bacnet_device_object_reference_decode(). (#1321)
+* Secured AtomicReadFile handler by implementing bounds checks for
+  RecordCount stack based out-of-bounds write. (#1340)
 
 ### Added
 
+* Added BACnet/SC (BSC) datalink support to the modbus-gateway application.
+  Extended GW_CONFIG with sc sub-struct holding all BACNET_SC_* fields, and
+  added compile-time fallback: non-BSC binary + "bsc" JSON → warns and falls
+  back to compiled datalink; BSC binary + non-"bsc" JSON → overrides to "bsc"
+  Removed duplicate datalink_init() call (dlenv_init() already calls it
+  internally). (#1382)
+* Added lighting command event notification callbacks and update related
+  functions. (#1376)
+* Added support for DEVICE_UUID property in Device_Read_Property_Local. (#1375)
+* Added test-only shim for bsc_node_parse_urls() to support unit testing (#1369)
+* Added lcov target for code coverage in Makefile and CMakeLists. (#1370)
+* Added multistate text resizable array. (#1361)
+* Added bacnet_strndup() function for string duplication with a length
+  limit. (#1361)
+* Added Keylist_Data_Set() function to update data for existing keys. (#1361)
+* Added bacnet_array_write_resizable() function for writing array-index beyond
+  bounds without error.  (#1361)
+* Added debug logging with severity (0-7) control in debug.c module. (#1360)
+* Added debug severity level option to various applications using `--debug`
+  command-line option or environment BACNET_DATALINK_DEBUG. (#1360)
+* Added Copilot cloud agent onboarding instructions. (#1359)
+* Added Min and Max Actual Value properties to Lighting Output object. (#1357)
+* Added a mixed static-reference and dynamic-allocation characterstring
+  buffer API for object strings. The new character string buffer API functions
+  include init/strdup/length/value/free/conversion and use a flag to track
+  dynamic memory and mix static-reference and dynamic-allocation.
+  Changed buffer_length type from uint32_t to size_t so that smaller
+  bit-size devices are not penalized. (#1351)
+* Added multistate text to value and sys state text to basic multistate objects.
+  Added state name utility functions and corresponding unit tests.
+  Added multistate object API to set present-value using state-name. (#1348)
+* Added proprietary object functions to device object list (#1343)
+* Added a BACnet Zigbee link layer general handler. (#1336)
+* Added generic Modbus RTU to BACnet gateway application that bridges
+  Modbus RTU devices to a BACnet network via a JSON-based runtime
+  configuration. (#1316)
+* Added pseudo abstract-syntax data write in bac-rw module with WriteProperty
+  write success callback. Added bacapp encode data for a possible array of
+  values used in EPICS WriteProperty service option. (#1331)
+* Added routed virtual device backup/restore reinitialization which enables
+  routed virtual devices to accept ReinitializeDevice so Backup and Restore
+  states can be handled per device. Gateway behavior remains unchanged, and
+  DeviceCommunicationControl remains disabled for virtual devices.
+  Virtual-device COLDSTART, WARMSTART, and ACTIVATE_CHANGES requests now return
+  OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED instead of being acknowledged. (#1320)
+* Added Last_Restart_Reason property support to Device object (#1323)
+
+### Changed
+
+* Changed debug_print to debug_log_fprintf in ReadRange handler. (#1303)
+* Changed logging in many modules to use debug_log_fprintf for consistent
+  error and debug output that can be adjusted during runtime. (#1364)
+* Changed the apps/gtk-discover demo app to replace the previous
+  discovery-specific flow with the bac-rw read/write queue, adding
+  an in-memory cache for devices/objects/properties and improving
+  the UI around asynchronous reads and writes including progress indicators.
+  Changed the property name text to include array index handling for
+  BACnetARRAY property names. Changed the property view tree WriteProperty
+  handling by reading after writing to show current value after writing.
+  Changed the property acquisition handling to introduce new phases
+  for reading properties, starting with RPM ALL, falling back to reading
+  the property-list property, and failing those, reading each required
+  and optional property expected for this object. (#1377)
+* Changed application tag name text to use a dash instead of a space,
+  and added strtol support for parsing an application tag name for handling
+  application tags in WriteProperty and WritePropertyMultiple demo apps. (#1367)
+* Changed bacnet_character_string_buffer_decode to support zero copy
+  for buffer. (#1361)
+* Changed the basic multistate input, multistate output, and multistate value
+  objects to use keylist for state texts and add related functions for
+  resizeable state text arrays so they can be restored after a backup. (#1361)
+* Changed BACnet/IP broadcast destination port to be decoupled from bind
+  port. (#1311)
+* Changed lighting output object and lighting command structure to enable
+  loose coupling.  Added locking callbacks in lighting command that are
+  engaged when accessing any of the lighting command structure data. (#1306)
+* Changed COV subscription encoding and decoding functions to reduce code
+  size and reuse existing unit tested functions. Added BACnetRecipientProcess
+  type encoding and decoding functions with associated tests. (#1296)
+* Changed COV Subscriptions handling to use use keylist instead of array
+  for performance optimization. (#1295) (#1309)
+
+### Fixed
+
+* Fixed ReadRange service request to reject for missing mandatory parameters
+  in Read Range request. (#1303)
+* Fixed BACnet/SC primary hub reconnection logic when connected to failover
+  hub by adding primary-retry scheduling/handling while in CONNECTED_FAILOVER.
+  Extended hub-connector socket event handling to support restoring primary
+  while failover is active. (#1381)
+* Fixed apps/blinkt and apps/server-basic to use the BACnet Basic Port
+  callback for dlenv_init(). Added callback mechanism for BACnet Basic
+  Port task execution which skips default datalink init and task when
+  callback is set, and calls the callback during the task instead. (#1380)
+* Fixed C++ incompatibility in host-n-port structure by moving the two
+  nested struct definitions to top-level since those are used later
+  outside the nest. Declaring a struct inside a struct make it globally
+  available in C, but only locally available with a C++ compiler. (#1378)
+* Fixed write property error code to indicate success in decode functions.
+  In wp_decode_service_request(), wpdata->error_code was set to OTHER at
+  decode start. On success the function does not update it, so error_code
+  stays OTHER even when decode returns a positive length. (#1379)
+* Fixed apps/server demo backup and restore POSIX file backend initialization.
+  Removed BACFILE references and now rely on BACDL_BSC when a POSIX file
+  backend is needed to be included by the BACnet/SC datalink layer.
+  Fixed POSIX file backend initialization and correct offset handling in
+  the backup process. (#1368)
+* Fixed logging output to use stderr instead of stdout in NPDU routing
+  encoding function. (#1360)
+* Fixed mingw32 compiler warning in modbus-gateway app.
+* Fixed _WIN32_WINNT definition for IPv6 compatibility on Windows.
+* Fixed off-by-one error in Life_Safety_Point_Read_Property for
+  accepted modes property. (#1349)
+* Fixed WriteProperty handling across the stack by rejecting zero-length
+  application payloads for non-list properties (returning
+  ERROR_CODE_INVALID_TAG) and by adding defensive wp_data == NULL checks
+  in many object *_Write_Property() handlers. (#1337)
+* Fixed access-doors array to be in array list and use common array
+  encoding function.(#1331)
+* Fixed Network Port object local IPv4 gateway address configuration for
+  Linux/BSD/Windows. (#1335)
+* Fixed Device_Reinitialize_Data initialization at runtime and clean up
+  unused variables in Device_Configuration_Files_Value. (#1325)
+* Fixed null pointer check for value when resetting device identifier
+  in bacdevobjpropref. (#1321)
+* Fixed lighting command update notifications to use scaled physical
+  values using min/max actual value. (#1315)
+* Fixed lighting command off to off behavior. (#1314)
+* Fixed lighting command refresh logic in trim set functions. (#1313)
+* Fixed EPICS values for recipient list, empty lists, and authentication
+  factors. Changed EPICS app to allow target MAC or IP address format. (#1310)
+* Fixed BBMD_Result handling to avoid false positive error message when no
+  registration is requested. (#1305)
+* Fixed keylist CheckArraySize return value, and added memory exhaustion
+  check to Keylist_Data_Add. (#1295)
+
+### Removed
+
+* Removed unmaintained ports/uip, ports/arduino_uno, ports/pic18*,
+  and ports/rx62n folders and references. (#1324)
+
+## [1.5.0] - 2026-04-16
+
+### Security
+
+* Secured various BACnet type and service request decoders by replacing
+  deprecated decoders. Secured ReadProperty-Ack decoder, Trend Log object
+  TL_fetch_property() function, WritePropertyMultiple service decoders,
+  TimeSynchronization-Request decoder, ReadPropertyMultiple-Request and
+  ReadPropertyMultiple-Ack decoders, ConfirmedPrivateTransfer-Request
+  and UnconfirmedPrivateTransfer-Request decoders, Add/Remove ListElement
+  service request decoder, I-Have-Request service decoder, BACnetEventState
+  change-of-state decoder, BACnetCredentialAuthenticationFactor decoder,
+  BACnetPropertyState decoder, BACnetAssignedAccessRights decoder,
+  LifeSafetyOperation-Request service decoder, BACnetAuthenticationFactor
+  decoder in the Crediential Data Input object. (#1244)
+* Secured BVLC decoder by replacing deprecated primitive decoder usage. (#1241)
+* Secured decoding length underflow in wp_decode_service_request() and
+  bacnet_action_command_decode() which had similar issue. (#1231)
+* Secured Schedule_Weekly_Schedule_Set() the example schedule object
+  by fixing stack buffer overflow. The memcpy was using
+  sizeof(BACNET_WEEKLY_SCHEDULE) instead of sizeof(BACNET_DAILY_SCHEDULE),
+  causing it to read 6784 bytes from a 968-byte source buffer, leading
+  to stack buffer overflow and segmentation fault in the test_schedule
+  unit test. (#1222)
+* Secured npdu_is_expected_reply() function where the MS/TP reply matcher
+  could have an out-of-bounds read. (#1178)
+* Secured ubasic interpreter tokenizer_string() and tokenizer_label()
+  off-by-one buffer overflow when processing string literals longer
+  than the buffer limit.
+  Fixed ubasic potential string buffer overflows by using snprintf.
+  Fixed ubasic label strings to use UBASIC_LABEL_LEN_MAX as buffer limit.
+  Fixed ubasic string variables to initialize with zeros.
+  Fixed compile errors when UBASIC_DEBUG_STRINGVARIABLES is defined.
+  Added ubasic string variables user accessor API and unit testing. (#1196)
+* Secured BACnet file object pathname received from BACnet AtomicWriteFile
+  or ReadFile service used without validation which was vulnerable to
+  directory traversal attacks. (#1197)
+
+### Added
+
+* Added parsing for property name and optional array in ReadPropertyMultiple
+  example application. Added the priority value when printing special-event
+  property types, specificially for exception-schedule property. (#1291)
+* Added parsing for BACnetSpecialEvent in bacapp for use in apps/writeproperty
+  and add unit tests. (#1290)
+* Added multi-device support for BACnet gateway routing. Expanded Object_List
+  to Object_List[MAX_NUM_DEVICES] array to support per-device objects for
+  virtual remote devices. Added multi-device iteration for COV handler,
+  device timer, and intrinsic reporting. Added apps/gateway2 demo application.
+  When MAX_NUM_DEVICES == 1, behavior is identical to the original
+  gateway implementation. Conditional compilation with macros ensures
+  no impact on non-gateway applications. (#1279)
+* Added structured-view object subordinate-list add, remove, exist, same
+  API for interfacing as a list.  Added purge API for unit testing. (#1283)
+* Added ports/pico for Raspberry Pi Pico port of the BACnet stack
+  supporting both BACnet/IP and BACnet MS/TP. (#1232)
+* Added new functions for duplicating and copying octet string buffers.
+  Refactor existing OctetString Value object to enable writes to object name
+  description, and present-value, with functional tests to ensure
+  the correctness of the new features. (#1266)
+* Added octetstring_length_value_same() API for comparing an OctetString
+  to value and len parameters. Added verification tests. (#1264)
+* Added property_list_read_only_member function to check for READ-ONLY
+  properties. (#1258)
+* Added WriteProperty support in the basic Structured View object.
+  Converted Structured View internal storage to dynamically allocated
+  character strings and a keylist-based subordinate list that is resizable
+  via array index 0. Updated and expanded tests for structured view
+  and generic property read/write behaviors. (#1256)
+* Added CreateObject and DeleteObject for Octet StringValue and
+  PositiveInteger Value objects. (#1246)
+* Added PROP_TIMER_RUNNING to writable properties and implement
+  Timer_Running_Set functionality. (#1245)
+* Added BACNET_STACK_DEPRECATED_DISABLE guards around all of the deprecated
+  decoding functions to ensure they are not used except intentionally for
+  legacy code bases. (#1244)
+* Added Who-Is-Router-To-Network process in basic Notification Class when
+  recipient address router MAC address is unknown. (#1243)
+* Add initialization and unpacking functions for BACnet Character
+  String buffer structure. (#1242)
+* Added Host-N-Port minimal encode and decode which utilizes the octet
+  string and character string buffer encode and decode. (#1239)
+* Added API for extending the basic Device object and children with
+  proprietary properties for ReadProperty and WriteProperty services. (#1238)
+* Added octet and character string buffer codecs to used with fixed
+  size buffers that are not declared as BACNET_OCTET_STRING
+  or BACNET_CHARACTER_STRING. (#1237)
+* Added CreateObject and DeleteObject for basic Accumulator objects and
+  WriteProperty handling for object-name, scale, out-of-service, units,
+  and max-pres-value. (#1234)
+* Added text and parser for BACnet ReinitializeDevice service states. (#1228)
+* Added Device Management-Backup and Restore-B to example object/device.c
+  and basic/server/bacnet-device.c so that when ReinitializeDevice STARTBACKUP
+  is requested a backup file is stored in CreateObject format for all the
+  writable properties in the device. When ReinitializeDevice STARTRESTORE
+  is requested a backup file is restored from CreateObject format for all the
+  writable properties in the device. (#1223)
+* Added apps/dmbrcap for Device Management-Backup and Restore to convert
+  a backup file encoded with CreateObject to Wireshark PCAP format. (#1223)
+* Added segmentation support functions and example changes, but
+  no support for segmentation in the TSM or APDU handlers. (#1218)
+* Added channel and timer object write-property observers in blinkt app
+  to monitor internal writes. Added vacancy timer command line argument
+  for testing initial timer object vacancy time for lights channel. (#1212)
+* Added debug prints for lighting output properties to assist in identifying
+  out-of-range values. (#1211)
+* Added API to get the RGB pixel and brightness values from the blinkt
+  interface. Added API to the color-RGB library to convert from ASCII
+  CSS color name to X,Y and brightness. Added a default color name command
+  line option. Set the color and brightness at startup. Changed the Blinkt
+  example app to use the basic-server framework. (#1210)
+* Added enumeration text lookup for BACnetAuthenticationStatus,
+  BACnetAuthorizationMode, BACnetAccessCredentialDisable,
+  BACnetAccessCredentialDisableReason, BACnetAccessUserType,
+  BACnetAccessZoneOccupancyState, BACnetWriteStatus, BACnetIPMode,
+  BACnetDoorValue, BACnetMaintenance, BACnetEscalatorFault,
+  BACnetEscalatorMode, BACnetEscalatorOperationDirection,
+  BACnetBackupState, BACnetSecurityLevel, BACnetLiftCarDirection,
+  BACnetLiftCarDoorCommand, BACnetLiftCarDriveStatus, BACnetLiftCarMode,
+  BACnetLiftFault, BACnetLiftGroupMode, BACnetAuditLevel, BACnetAuditOperation,
+  BACnetSCHubConnectorState, BACnetSCConnectionState, BACnetNodeRelationship,
+  BACnetAction, BACnetFileAccessMethod, BACnetLockStatus,
+  BACnetDoorAlarmState, BACnetDoorStatus, BACnetDoorSecuredStatus,
+  and BACnetAccessEvent. (#1209)
+* Added a new API for writable property lists across all the basic example
+  object types, preparing for the introduction of a Writable_Property_List
+  property in every object in a future BACnet standard revision.
+  The lists can be used by backup and restore feature to automatically
+  choose the object property values in the backup that can be restored
+  via internal WriteProperty directly from BACnet CreateObject services with
+  List of Initial Values. Updated existing device objects to include
+  these writable property lists. (#1206)
+* Added post-write notifications for channel, timer, and loop objects. (#1204)
+* Added device WriteProperty callbacks for Timer object in example device
+  objects implementations. (#1203)
+* Added file path name checking for AtomicReadFile and AtomicWriteFile
+  example applications. Prohibits use of relative and absolute file paths
+  when BACNET_FILE_PATH_RESTRICTED is defined non-zero. (#1197)
 * Added API and optional properties to basic load control object example
   Refactored BACnetShedLevel encoding, decoding, and printing into separate
   file. Added BACnetShedLevel validation testing. (#1187)
@@ -52,6 +376,26 @@ The git repositories are hosted at the following sites:
 
 ### Changed
 
+* Changed the OctetString Value object present-value get function
+  to perform a copy return rather than a pointer return and deprecate
+  the pointer return function. (#1264)
+* Changed the COV FSM handler to remiain in the IDLE state until there
+  is a valid subscriber. (#1257)
+* Changed bacnet_array_write() write_function callback API by adding
+  array size parameter to avoid a duplicate decoding operation.
+  Removed duplicate checking of array size in object handlers. (#1253)
+* Changed bacfile_strdup to bacnet_strdup function to replace POSIX strdup
+  and update bacfile to use bacnet_strdup. (#1251)
+* Changed PositiveInteger present-value datatype to
+  BACNET_UNSIGNED_INTEGER. (#1246)
+* Changed BACFILE define dependencies to reflect bacfile-posix.c dependence
+  since bacfile.c is now independent of any back end file system. (#1227)
+* Changed the default BACnet protocol revision to 28 to enable usage of
+  special lighting output values. (#1211)
+* Changed bacnet_strtof and bacnet_strtold functions to use strtod to
+  improve compatibility with C89 standards while ensuring proper type
+  casting and range checking. (#1207)
+* Changed RGB color clamp function to avoid Zephyr RTOS name collisions. (#1201)
 * Changed the load control object AbleToMeetShed to only check for immediate
   shed ability and added CanNowComplyWithShed function to attempt to meet the
   shed request while in the non-compliant state. (#1191)
@@ -66,6 +410,58 @@ The git repositories are hosted at the following sites:
 
 ### Fixed
 
+* Fixed type definition compiler warnings in DNET list when int32_t is
+  defined as long int instead of int on 32-bit platforms, and in bacapp
+  module for inner_tag and object_instance when uint32_t is defined
+  as long unsigned int instead of unsigned int on 32-bit platforms. (#1293)
+* Fixed CMakeLists.txt by replacing BIG_ENDIAN definition with
+  BACNET_BIG_ENDIAN to fix missing function in builds. (#1284)
+* Fixed CMakeLists.txt by adding INTRINSIC_REPORTING CMake option
+  to enable intrinsic reporting at build time. (#1275)
+* Fixed missing keylist.h include in objects.h for OS_Keylist type
+  dependency (#1277)
+* Fixed lighting output and lighting command low and high trim fade. (#1268)
+* Fixed FQDN hostname size in minimal hostnport implementation. (#1263)
+* Fixed segmentation fault in Schedule_Recalculate_PV() during application
+  startup. (#1258)
+* Fixed the ReadRange-ACK of the Address_List property. (#1149)
+* Fixed ReadRangeACK by sequence in Trend Log object. (#1150)
+* Fixed Device Management-Backup and Restore-B functionality to keep
+  configuration files during the restore operation. (#1250)
+* Fixed Device Management-Backup and Restore-B Backup_Failure_Timeout
+  to count down and abort at BACKUP_FAILURE or RESTORE_FAILURE states,
+  successful STARTBACKUP to end in PERFORMING_A_BACKUP state,
+  and moved STARTRESTORE functionality into ENDRESTORE. (#1247)
+* Fixed the basic Schedule object to set the correct present-value
+  based on the Device object date and time. (#1236)
+* Fixed dlenv_init() for BACnet/SC. bsc_register_as_node() was blocking
+  when the hub was not reachable. Added API so that BACnet/SC
+  node can register via thread that is reponsible for connecting
+  BACnet/SC hub and the dlenv_init() can continue without waiting. (#1230)
+* Fixed bacfile-posix file write to return the number of bytes written. (#1223)
+* Fixed Event parsing and help text for the example uevent and event apps.
+  Fixed initialization of event data by adding static CharacterString for
+  message text. Fixed the event parsing to start at argument zero. (#1221)
+* Fixed You-Are-Request encoding and decoding to use object-id instead
+  of unsigned. (#1220)
+* Fixed handling for abort and reject errors in Write Property service. (#1216)
+* Fixed lighting output object lighting-commands for warn-off and
+  warn-relinquish when an update at the specified priority slot
+  shall occur after an egress time delay. (#1214)
+* Fixed lighting output object lighting-commands for warn-off and
+  warn-relinquish when blink-warn notification shall not occur. (#1212)
+* Fixed timer object task to initiate a write-request at expiration. (#1212)
+* Fixed the server name in the blinkt app and removed the unnecessary
+  device.c module. (#1211)
+* Fixed Channel object for Color object present-value which does not
+  use coercion. (#1210)
+* Fixed lighting output object lighting-command last-on-value to only
+  be updated with the last value of the Present_Value property that
+  was greater than or equal to 1.0%, keeping in mind that the Present_Value
+  shall indicate the target level of the operation and not the current
+  value. (#1205)
+* Fixed CreateObject service list-of-initial-values encoding and decoding.
+  Changed the data structure to be similar to WriteProperty. (#1199)
 * Fixed lighting-output object blink warn to honor blink-warn-enable.
   Fixed the blink warn logic for a non-zero percent value blink inhibit.
   Fixed the warn relinquish to actually relinquish. (#1192)
@@ -366,6 +762,7 @@ The git repositories are hosted at the following sites:
 ## [1.4.1] - 2025-04-11
 
 ### Security
+
 * Secured ReadRange service codecs. Added ReadRange unit testing.
   Secured ReadRange-ACK handler to enable APDU size checking. (#957)
 * Secured BACnet/SC URL handling by changing all the sprintf
@@ -453,7 +850,7 @@ The git repositories are hosted at the following sites:
   handlers. (#908)
 * Fixed multi-state-input and multi-state-value basic objects usage of the
   Write_Enabled flag by adding an API to get/set the flag. (#903)
- * Fixed usage of 8-bit modulo operator off-by-one maximums. (#901)
+* Fixed usage of 8-bit modulo operator off-by-one maximums. (#901)
 * Fixed legacy make build recipe for library. 'make library' now builds.
 * Fixed IPv6 to leave multicast when registering as foreign device. (#899)
 * Fixed IPv6 handler to ignore original-broadcast when registered as
@@ -604,7 +1001,7 @@ The git repositories are hosted at the following sites:
 * Changed the datalink abstraction to enable selecting multiple datalinks
   using BACDL_MULTIPLE and one or more other BACDL defines. (#717)
 * Moved west manifest, zephyr folder, and ports/zephyr folders to
-  another repository https://github.com/bacnet-stack/bacnet-stack-zephyr
+  another repository <https://github.com/bacnet-stack/bacnet-stack-zephyr>
   so that the rapid pace of Zephyr OS development changes will have
   a less impact on the development of the BACnet Stack library. (#757)
 * Removed static scope on character array used for object-name since the array
@@ -793,7 +1190,6 @@ The git repositories are hosted at the following sites:
   bacapp_decode_context_data_len() as they are no longer used in any code
   in the library.(#702)
 
-
 ## [1.3.7] - 2024-06-26
 
 ### Security
@@ -864,7 +1260,6 @@ The git repositories are hosted at the following sites:
 * Fixed basic analog-value object write property of present-value to
   priority 6. (#640)
 * Fixed basic analog-value alarm-ack functionality. (#639)
-
 
 ### Removed
 
@@ -1328,7 +1723,7 @@ tags. (#491)
 
 ### Added
 
-* Added minimim support for BACnet protocol-revision 0 through 24. See 
+* Added minimim support for BACnet protocol-revision 0 through 24. See
 BACNET_PROTOCOL_REVISION define in bacdef.h
 * Added example objects for color and color temperature, new for protocol-revision 24.
 * Added current-command-priority to output objects revision 17 or later.
@@ -1354,20 +1749,20 @@ these objects: file, analog output, binary output, multi-state output, color,
 color temperature).
 * Unit tests and functional tests have been moved from the source C files
 into their own test files under the test folder in a src/ mirrored folder
-structure under test/. 
-* The testing framework was moved from ctest to ztest, using CMake, CTest, and LCOV. 
+structure under test/.
+* The testing framework was moved from ctest to ztest, using CMake, CTest, and LCOV.
 It's now possible to visually view code coverage from the testing of each file
 in the library. The tests are run in continuous integration.  Adding new tests
 can be done by as copying an existing folder under test/ as a starting point, and
 adding the new test folder name into the CMakeLists.txt under test/ folder, or
-editing the existing test C file and extending or fixing the existing test. 
+editing the existing test C file and extending or fixing the existing test.
 * Most (all?) of the primitive value encoders are now using a snprintf()
 style API pattern, where passing NULL in the buffer parameter will
 return the length that the buffer would use (i.e. returns the length that the
 buffer needs to be).  This makes simple to write the parent encoders to check
 the length versus their buffer before attempting the encoding at the expense of
 an extra function call to get the length.
-* BACnetARRAY property types now have a helper function to use for encoding (see bacnet_array_encode) 
+* BACnetARRAY property types now have a helper function to use for encoding (see bacnet_array_encode)
 
 ## Deprecated
 

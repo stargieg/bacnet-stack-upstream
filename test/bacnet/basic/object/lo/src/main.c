@@ -24,7 +24,29 @@
  */
 static bool is_float_equal(float x1, float x2)
 {
-    return fabs(x1 - x2) < 0.001;
+    return fabsf(x1 - x2) < 0.001f;
+}
+
+/**
+ * @brief Search for a property identifier in a terminated property list
+ * @param list pointer to list terminated by -1
+ * @param property property identifier to find
+ * @return true when found in list
+ */
+static bool property_list_contains(const int32_t *list, int32_t property)
+{
+    unsigned i;
+
+    if (!list) {
+        return false;
+    }
+    for (i = 0; list[i] != -1; i++) {
+        if (list[i] == property) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 static float Test_Tracking_Value;
@@ -40,6 +62,141 @@ static void lighting_command_tracking_value_observer(
     (void)key;
     (void)old_value;
     Test_Tracking_Value = value;
+}
+
+/**
+ * @brief Test writable property list API
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(lo_tests, testLightingOutputWritablePropertyList)
+#else
+static void testLightingOutputWritablePropertyList(void)
+#endif
+{
+    const int32_t *properties = NULL;
+
+    Lighting_Output_Writable_Property_List(1, NULL);
+    Lighting_Output_Writable_Property_List(1, &properties);
+    zassert_not_null(properties, NULL);
+    zassert_true(
+        property_list_contains(properties, PROP_PRESENT_VALUE),
+        "missing PROP_PRESENT_VALUE");
+    zassert_true(
+        property_list_contains(properties, PROP_LIGHTING_COMMAND),
+        "missing PROP_LIGHTING_COMMAND");
+    zassert_true(
+        property_list_contains(properties, PROP_EGRESS_TIME),
+        "missing PROP_EGRESS_TIME");
+    zassert_true(
+        property_list_contains(properties, PROP_TRIM_FADE_TIME),
+        "missing PROP_TRIM_FADE_TIME");
+    zassert_true(
+        property_list_contains(
+            properties, PROP_LIGHTING_COMMAND_DEFAULT_PRIORITY),
+        "missing PROP_LIGHTING_COMMAND_DEFAULT_PRIORITY");
+}
+
+/**
+ * @brief Test delayed WARN_OFF path that triggers blink-stop callback
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(lo_tests, testLightingOutputBlinkStop)
+#else
+static void testLightingOutputBlinkStop(void)
+#endif
+{
+    const uint32_t instance = 321;
+    const unsigned priority = 8;
+    BACNET_LIGHTING_IN_PROGRESS in_progress;
+    float test_real;
+    bool status;
+
+    Lighting_Output_Init();
+    Lighting_Output_Create(instance);
+    status = Lighting_Output_Blink_Warn_Enable_Set(instance, true);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Egress_Time_Set(instance, 1);
+    zassert_true(status, NULL);
+    status =
+        Lighting_Output_Blink_Warn_Feature_Set(instance, 0.0f, 0, UINT16_MAX);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Present_Value_Set(instance, 75.0f, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    test_real = Lighting_Output_Present_Value(instance);
+    zassert_true(is_float_equal(test_real, 75.0f), NULL);
+
+    status = Lighting_Output_Present_Value_Set(
+        instance, BACNET_LIGHTING_SPECIAL_VALUE_WARN_OFF, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 500);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(in_progress, BACNET_LIGHTING_OTHER, NULL);
+    test_real = Lighting_Output_Present_Value(instance);
+    zassert_true(is_float_equal(test_real, 75.0f), NULL);
+
+    Lighting_Output_Timer(instance, 500);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(in_progress, BACNET_LIGHTING_IDLE, NULL);
+    test_real = Lighting_Output_Present_Value(instance);
+    zassert_true(is_float_equal(test_real, 0.0f), NULL);
+    test_real = Lighting_Output_Priority_Array_Value(instance, priority);
+    zassert_true(is_float_equal(test_real, 0.0f), NULL);
+    status = Lighting_Output_Priority_Array_Relinquished(instance, priority);
+    zassert_false(status, NULL);
+
+    status = Lighting_Output_Delete(instance);
+    zassert_true(status, NULL);
+    Lighting_Output_Cleanup();
+}
+
+/**
+ * @brief Test WARN_RELINQUISH behavior with egress-time configured
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(lo_tests, testLightingOutputWarnRelinquishEgress)
+#else
+static void testLightingOutputWarnRelinquishEgress(void)
+#endif
+{
+    const uint32_t instance = 322;
+    const unsigned priority = 8;
+    BACNET_LIGHTING_IN_PROGRESS in_progress;
+    float test_real;
+    bool status;
+
+    Lighting_Output_Init();
+    Lighting_Output_Create(instance);
+    status = Lighting_Output_Blink_Warn_Enable_Set(instance, true);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Egress_Time_Set(instance, 1);
+    zassert_true(status, NULL);
+    status =
+        Lighting_Output_Blink_Warn_Feature_Set(instance, 0.0f, 0, UINT16_MAX);
+    zassert_true(status, NULL);
+
+    status = Lighting_Output_Present_Value_Set(instance, 60.0f, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    test_real = Lighting_Output_Present_Value(instance);
+    zassert_true(is_float_equal(test_real, 60.0f), NULL);
+    status = Lighting_Output_Priority_Array_Relinquished(instance, priority);
+    zassert_false(status, NULL);
+
+    status = Lighting_Output_Present_Value_Set(
+        instance, BACNET_LIGHTING_SPECIAL_VALUE_WARN_RELINQUISH, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 500);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(in_progress, BACNET_LIGHTING_IDLE, NULL);
+    status = Lighting_Output_Priority_Array_Relinquished(instance, priority);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Present_Value(instance);
+    zassert_true(is_float_equal(test_real, 0.0f), NULL);
+
+    status = Lighting_Output_Delete(instance);
+    zassert_true(status, NULL);
+    Lighting_Output_Cleanup();
 }
 
 /**
@@ -331,14 +488,14 @@ static void testLightingOutput(void)
     test_real = Lighting_Output_Tracking_Value(instance);
     zassert_true(
         is_float_equal(test_real, real_value), "value=%f test_value=%f",
-        real_value, test_real);
+        (double)real_value, (double)test_real);
     status = Lighting_Output_Present_Value_Set(instance, 99.0f, priority);
     zassert_true(status, NULL);
     Lighting_Output_Timer(instance, 10);
     test_real = Lighting_Output_Tracking_Value(instance);
     zassert_true(
         is_float_equal(test_real, real_value), "value=%f test_value=%f",
-        real_value, test_real);
+        (double)real_value, (double)test_real);
     real_value = Lighting_Output_Present_Value(instance);
     status = Lighting_Output_Overridden_Clear(instance);
     zassert_true(status, NULL);
@@ -354,14 +511,14 @@ static void testLightingOutput(void)
     test_real = Lighting_Output_Tracking_Value(instance);
     zassert_true(
         is_float_equal(test_real, real_value), "value=%f test_value=%f",
-        real_value, test_real);
+        (double)real_value, (double)test_real);
     status = Lighting_Output_Present_Value_Set(instance, 98.0f, priority);
     Lighting_Output_Timer(instance, 10);
     real_value = Lighting_Output_Present_Value(instance);
     test_real = Lighting_Output_Tracking_Value(instance);
     zassert_true(
         is_float_equal(test_real, real_value), "value=%f test_value=%f",
-        real_value, test_real);
+        (double)real_value, (double)test_real);
     /* refresh */
     Lighting_Output_Lighting_Command_Refresh(instance);
     /* color-override */
@@ -402,6 +559,114 @@ static void testLightingOutput(void)
     test_real = Lighting_Output_Tracking_Value(instance);
     zassert_true(is_float_equal(test_real, real_value), NULL);
     zassert_true(is_float_equal(Test_Tracking_Value, real_value), NULL);
+    /* high-end-trim, low-end-trim, and trim-fade-time */
+    Lighting_Output_Present_Value_Relinquish_All(instance);
+    status = Lighting_Output_Transition_Set(
+        instance, BACNET_LIGHTING_TRANSITION_NONE);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Trim_Fade_Time_Set(instance, 0);
+    zassert_true(status, NULL);
+    status = Lighting_Output_High_End_Trim_Set(instance, 90.0f);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_High_End_Trim(instance);
+    zassert_true(is_float_equal(test_real, 90.0f), NULL);
+    status = Lighting_Output_Low_End_Trim_Set(instance, 10.0f);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Low_End_Trim(instance);
+    zassert_true(is_float_equal(test_real, 10.0f), NULL);
+    priority = 8;
+    status = Lighting_Output_Present_Value_Set(instance, 100.0f, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_TRIM_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 90.0f), NULL);
+    Lighting_Output_Timer(instance, 10);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_IDLE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    status = Lighting_Output_Present_Value_Set(instance, 1.0f, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_TRIM_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 10.0f), "tracking=%f", (double)test_real);
+    Lighting_Output_Timer(instance, 10);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_IDLE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    Lighting_Output_Present_Value_Relinquish_All(instance);
+    status = Lighting_Output_Present_Value_Set(instance, 100.0f, 1);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_IDLE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 100.0f), "tracking=%f", (double)test_real);
+    Lighting_Output_Present_Value_Relinquish_All(instance);
+    status = Lighting_Output_Present_Value_Set(instance, 80.0f, priority);
+    zassert_true(status, NULL);
+    Lighting_Output_Timer(instance, 10);
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 80.0f), NULL);
+    unsigned_value = 1000;
+    status = Lighting_Output_Trim_Fade_Time_Set(instance, unsigned_value);
+    zassert_true(status, NULL);
+    test_unsigned = Lighting_Output_Trim_Fade_Time(instance);
+    zassert_equal(test_unsigned, unsigned_value, NULL);
+    status = Lighting_Output_Default_Fade_Time_Set(instance, 2000);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Transition_Set(
+        instance, BACNET_LIGHTING_TRANSITION_FADE);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Present_Value_Set(instance, 100.0f, priority);
+    zassert_true(status, NULL);
+    milliseconds = 500;
+    Lighting_Output_Timer(instance, milliseconds);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_FADE_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 85.0f), NULL);
+    Lighting_Output_Timer(instance, milliseconds);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_FADE_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 90.0f), NULL);
+    Lighting_Output_Timer(instance, milliseconds);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_TRIM_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 92.5f), NULL);
+    Lighting_Output_Timer(instance, milliseconds);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_TRIM_ACTIVE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
+    test_real = Lighting_Output_Tracking_Value(instance);
+    zassert_true(is_float_equal(test_real, 90.0f), NULL);
+    Lighting_Output_Timer(instance, milliseconds);
+    in_progress = Lighting_Output_In_Progress(instance);
+    zassert_equal(
+        in_progress, BACNET_LIGHTING_IDLE, "in_progress=%s",
+        bactext_lighting_in_progress(in_progress));
     /* feedback value */
     status = Lighting_Output_Feedback_Value_Set(instance, 55.5f);
     zassert_true(status, NULL);
@@ -420,6 +685,32 @@ static void testLightingOutput(void)
     /* context get/set */
     Lighting_Output_Context_Set(
         instance, Lighting_Output_Context_Get(instance));
+    /* min-actual-value get/set */
+    real_value = 5.0f;
+    status = Lighting_Output_Min_Actual_Value_Set(instance, real_value);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Min_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, real_value), "value=%f test=%f",
+        (double)real_value, (double)test_real);
+    real_value = 1.0f;
+    status = Lighting_Output_Min_Actual_Value_Set(instance, real_value);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Min_Actual_Value(instance);
+    zassert_true(is_float_equal(test_real, real_value), NULL);
+    /* max-actual-value get/set */
+    real_value = 95.0f;
+    status = Lighting_Output_Max_Actual_Value_Set(instance, real_value);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Max_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, real_value), "value=%f test=%f",
+        (double)real_value, (double)test_real);
+    real_value = 100.0f;
+    status = Lighting_Output_Max_Actual_Value_Set(instance, real_value);
+    zassert_true(status, NULL);
+    test_real = Lighting_Output_Max_Actual_Value(instance);
+    zassert_true(is_float_equal(test_real, real_value), NULL);
     /* out-of-bounds */
     test_instance = Lighting_Output_Create(BACNET_MAX_INSTANCE + 1);
     zassert_equal(test_instance, BACNET_MAX_INSTANCE, NULL);
@@ -433,6 +724,112 @@ static void testLightingOutput(void)
     return;
 }
 /**
+ * @brief Test boundary and relationship behavior for Min/Max Actual Value
+ *
+ * Verifies:
+ *  - values outside 1.0..100.0 are rejected
+ *  - exact boundary values 1.0 and 100.0 are accepted
+ *  - setting Min above Max clamps Min down to the current Max value
+ *  - setting Max below Min forces Min down to the new Max value
+ *  - calls on a non-existent instance fail gracefully
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(lo_tests, testLightingOutputMinMaxActualValue)
+#else
+static void testLightingOutputMinMaxActualValue(void)
+#endif
+{
+    const uint32_t instance = 400;
+    bool status;
+    float test_real;
+
+    Lighting_Output_Init();
+    Lighting_Output_Create(instance);
+
+    /* --- out-of-range rejection for Min_Actual_Value --- */
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 0.0f);
+    zassert_false(status, "Min=0.0 should be rejected (below 1.0)");
+    status = Lighting_Output_Min_Actual_Value_Set(instance, -1.0f);
+    zassert_false(status, "Min=-1.0 should be rejected");
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 100.1f);
+    zassert_false(status, "Min=100.1 should be rejected (above 100.0)");
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 200.0f);
+    zassert_false(status, "Min=200.0 should be rejected");
+
+    /* --- out-of-range rejection for Max_Actual_Value --- */
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 0.0f);
+    zassert_false(status, "Max=0.0 should be rejected (below 1.0)");
+    status = Lighting_Output_Max_Actual_Value_Set(instance, -1.0f);
+    zassert_false(status, "Max=-1.0 should be rejected");
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 100.1f);
+    zassert_false(status, "Max=100.1 should be rejected (above 100.0)");
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 200.0f);
+    zassert_false(status, "Max=200.0 should be rejected");
+
+    /* --- exact boundary values must be accepted --- */
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 1.0f);
+    zassert_true(status, "Min=1.0 (lower bound) should be accepted");
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 100.0f);
+    zassert_true(status, "Max=100.0 (upper bound) should be accepted");
+
+    /* --- relationship invariant: Min > Max clamps Min down to Max ---
+     * Per the implementation: when the requested Min exceeds the current Max,
+     * Min is clamped to the current Max value (Max is unchanged). */
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 50.0f);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 1.0f);
+    zassert_true(status, NULL);
+    /* request Min=80 with Max=50: call succeeds, Min stored as 50 */
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 80.0f);
+    zassert_true(status, "Min=80 > Max=50 should succeed (clamped)");
+    test_real = Lighting_Output_Min_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 50.0f),
+        "Min should be clamped to Max(50.0), got %f", (double)test_real);
+    test_real = Lighting_Output_Max_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 50.0f), "Max should remain 50.0, got %f",
+        (double)test_real);
+
+    /* --- relationship invariant: Max < Min forces Min down to new Max ---
+     * Per the implementation: when the requested Max is below the current Min,
+     * Min is set to the new Max and then Max is set to the new Max. */
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 80.0f);
+    zassert_true(status, NULL);
+    status = Lighting_Output_Min_Actual_Value_Set(instance, 60.0f);
+    zassert_true(status, NULL);
+    /* request Max=30 with Min=60: call succeeds, both become 30 */
+    status = Lighting_Output_Max_Actual_Value_Set(instance, 30.0f);
+    zassert_true(status, "Max=30 < Min=60 should succeed (forces Min down)");
+    test_real = Lighting_Output_Max_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 30.0f), "Max should be 30.0, got %f",
+        (double)test_real);
+    test_real = Lighting_Output_Min_Actual_Value(instance);
+    zassert_true(
+        is_float_equal(test_real, 30.0f),
+        "Min should be forced to new Max(30.0), got %f", (double)test_real);
+
+    /* --- non-existent instance fails gracefully --- */
+    status = Lighting_Output_Min_Actual_Value_Set(instance + 1, 50.0f);
+    zassert_false(status, "Min set on non-existent instance should fail");
+    status = Lighting_Output_Max_Actual_Value_Set(instance + 1, 50.0f);
+    zassert_false(status, "Max set on non-existent instance should fail");
+    test_real = Lighting_Output_Min_Actual_Value(instance + 1);
+    zassert_true(
+        is_float_equal(test_real, 0.0f),
+        "Min get on non-existent instance should return 0.0");
+    test_real = Lighting_Output_Max_Actual_Value(instance + 1);
+    zassert_true(
+        is_float_equal(test_real, 0.0f),
+        "Max get on non-existent instance should return 0.0");
+
+    status = Lighting_Output_Delete(instance);
+    zassert_true(status, NULL);
+    Lighting_Output_Cleanup();
+}
+
+/**
  * @}
  */
 
@@ -441,7 +838,12 @@ ZTEST_SUITE(lo_tests, NULL, NULL, NULL, NULL, NULL);
 #else
 void test_main(void)
 {
-    ztest_test_suite(lo_tests, ztest_unit_test(testLightingOutput));
+    ztest_test_suite(
+        lo_tests, ztest_unit_test(testLightingOutput),
+        ztest_unit_test(testLightingOutputWritablePropertyList),
+        ztest_unit_test(testLightingOutputBlinkStop),
+        ztest_unit_test(testLightingOutputWarnRelinquishEgress),
+        ztest_unit_test(testLightingOutputMinMaxActualValue));
 
     ztest_run_test_suite(lo_tests);
 }

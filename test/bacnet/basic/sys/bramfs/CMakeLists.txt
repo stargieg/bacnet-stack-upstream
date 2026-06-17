@@ -21,13 +21,14 @@ string(REGEX REPLACE
 set(ZTST_DIR "${TST_DIR}/ztest/src")
 
 add_compile_definitions(
-    BIG_ENDIAN=0
+    BACNET_BIG_ENDIAN=0
     CONFIG_ZTEST=1
     )
 
 include_directories(
     ${SRC_DIR}
     ${TST_DIR}/ztest/include
+    ${TST_DIR}/bacnet/basic/object/test
     )
 
 add_executable(${PROJECT_NAME}
@@ -40,6 +41,7 @@ add_executable(${PROJECT_NAME}
     # Support files and stubs (pathname alphabetical)
     # Test and test library files
     ./src/main.c
+    ${TST_DIR}/bacnet/basic/object/test/bacfile_mock.c
     ${ZTST_DIR}/ztest_mock.c
     ${ZTST_DIR}/ztest.c
     )

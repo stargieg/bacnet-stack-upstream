@@ -14,14 +14,23 @@
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
+#include "bacnet/bacenum.h"
 #include "bacnet/wp.h"
 #include "bacnet/proplist.h"
 #include "bacnet/basic/object/access_credential.h"
 #include "bacnet/basic/services.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 
 static bool Access_Credential_Initialized = false;
 
-static ACCESS_CREDENTIAL_DESCR ac_descr[MAX_ACCESS_CREDENTIALS];
+static ACCESS_CREDENTIAL_DESCR ac_descrs[MAX_NUM_DEVICES]
+                                        [MAX_ACCESS_CREDENTIALS];
+#ifdef BAC_ROUTING
+#define ac_descr (ac_descrs[Routed_Device_Object_Index()])
+#else
+#define ac_descr (ac_descrs[0])
+#endif
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Properties_Required[] = {
@@ -46,6 +55,15 @@ static const int32_t Properties_Optional[] = { -1 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of writable properties */
+    PROP_GLOBAL_IDENTIFIER, -1
+};
+
 void Access_Credential_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
@@ -64,26 +82,54 @@ void Access_Credential_Property_Lists(
     return;
 }
 
+/**
+ * @brief Get the list of writable properties for an Access Credential object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Access_Credential_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
+
 void Access_Credential_Init(void)
 {
     unsigned i;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
     if (!Access_Credential_Initialized) {
         Access_Credential_Initialized = true;
-
-        for (i = 0; i < MAX_ACCESS_CREDENTIALS; i++) {
-            ac_descr[i].global_identifier =
-                0; /* set to some meaningful value */
-            ac_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
-            ac_descr[i].credential_status = false;
-            ac_descr[i].reasons_count = 0;
-            ac_descr[i].auth_factors_count = 0;
-            memset(&ac_descr[i].activation_time, 0, sizeof(BACNET_DATE_TIME));
-            memset(&ac_descr[i].expiration_time, 0, sizeof(BACNET_DATE_TIME));
-            ac_descr[i].credential_disable = ACCESS_CREDENTIAL_DISABLE_NONE;
-            ac_descr[i].assigned_access_rights_count = 0;
+        for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+            Set_Routed_Device_Object_Index(dev_id);
+#endif
+            for (i = 0; i < MAX_ACCESS_CREDENTIALS; i++) {
+                ac_descr[i].global_identifier =
+                    0; /* set to some meaningful value */
+                ac_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
+                ac_descr[i].credential_status = false;
+                ac_descr[i].reasons_count = 0;
+                ac_descr[i].auth_factors_count = 0;
+                memset(
+                    &ac_descr[i].activation_time, 0, sizeof(BACNET_DATE_TIME));
+                memset(
+                    &ac_descr[i].expiration_time, 0, sizeof(BACNET_DATE_TIME));
+                ac_descr[i].credential_disable = ACCESS_CREDENTIAL_DISABLE_NONE;
+                ac_descr[i].assigned_access_rights_count = 0;
+            }
         }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 
     return;
 }
@@ -251,10 +297,12 @@ int Access_Credential_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], ac_descr[object_index].credential_status);
             break;
         case PROP_REASON_FOR_DISABLE:
+            /* BACnetList */
             for (i = 0; i < ac_descr[object_index].reasons_count; i++) {
-                len = encode_application_enumerated(
-                    &apdu[0], ac_descr[object_index].reason_for_disable[i]);
-                if (apdu_len + len < MAX_APDU) {
+                len = bacnet_enumerated_application_encode(
+                    &apdu[apdu_len], apdu_size - apdu_len,
+                    ac_descr[object_index].reason_for_disable[i]);
+                if (len > 0) {
                     apdu_len += len;
                 } else {
                     rpdata->error_code =
@@ -321,6 +369,10 @@ bool Access_Credential_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     unsigned object_index = 0;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);

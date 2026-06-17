@@ -34,12 +34,20 @@
 #include "bacnet/basic/object/loop.h"
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List = NULL;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_LOOP;
 /* handling for manipulated and reference properties */
 static write_property_function Write_Property_Internal_Callback;
 static read_property_function Read_Property_Internal_Callback;
+static uint8_t Read_Property_Buffer[MAX_APDU];
+/* Write Property notification callbacks for logging or other purposes */
+static struct loop_write_property_notification Write_Property_Notification_Head;
 
 struct object_data {
     /* internal variables for PID calculations */
@@ -118,9 +126,36 @@ static const int32_t Properties_Optional[] = {
 
 /* handling for proprietary properties */
 static const int32_t Properties_Proprietary[] = { -1 };
-static const int32_t *Properties_Proprietary_Extended;
-static write_property_function Write_Property_Proprietary_Callback;
-static read_property_function Read_Property_Proprietary_Callback;
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    PROP_PRESENT_VALUE,
+    PROP_OUT_OF_SERVICE,
+    PROP_ACTION,
+    PROP_UPDATE_INTERVAL,
+    PROP_OUTPUT_UNITS,
+    PROP_CONTROLLED_VARIABLE_VALUE,
+    PROP_CONTROLLED_VARIABLE_UNITS,
+    PROP_PROPORTIONAL_CONSTANT,
+    PROP_PROPORTIONAL_CONSTANT_UNITS,
+    PROP_INTEGRAL_CONSTANT,
+    PROP_INTEGRAL_CONSTANT_UNITS,
+    PROP_DERIVATIVE_CONSTANT,
+    PROP_DERIVATIVE_CONSTANT_UNITS,
+    PROP_BIAS,
+    PROP_SETPOINT,
+    PROP_MINIMUM_OUTPUT,
+    PROP_MAXIMUM_OUTPUT,
+    PROP_PRIORITY_FOR_WRITING,
+    PROP_MANIPULATED_VARIABLE_REFERENCE,
+    PROP_CONTROLLED_VARIABLE_REFERENCE,
+    PROP_SETPOINT_REFERENCE,
+    PROP_COV_INCREMENT,
+    -1
+};
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -145,14 +180,24 @@ void Loop_Property_Lists(
         *pOptional = Properties_Optional;
     }
     if (pProprietary) {
-        if (Properties_Proprietary_Extended) {
-            *pProprietary = Properties_Proprietary_Extended;
-        } else {
-            *pProprietary = Properties_Proprietary;
-        }
+        *pProprietary = Properties_Proprietary;
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Loop object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Loop_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -169,35 +214,6 @@ static bool Loop_Property_Lists_Member(int object_property)
     Loop_Property_Lists(&pRequired, &pOptional, &pProprietary);
     return property_lists_member(
         pRequired, pOptional, pProprietary, object_property);
-}
-
-/**
- * @brief Set a  list of proprietary properties.
- * Used by ReadProperty/WriteProperty and Multiple services.
- * @param pProprietary - pointer to list of int terminated by -1, of
- * BACnet proprietary properties for this object.
- */
-void Loop_Proprietary_Property_List_Set(const int32_t *pProprietary)
-{
-    Properties_Proprietary_Extended = pProprietary;
-}
-
-/**
- * @brief Sets a callback used when the object supports proprietary properties.
- * @param cb - callback used to provide proprietary properties service handling.
- */
-void Loop_Read_Property_Proprietary_Callback_Set(read_property_function cb)
-{
-    Read_Property_Proprietary_Callback = cb;
-}
-
-/**
- * @brief Sets a callback used when the object supports proprietary properties.
- * @param cb - callback used to provide proprietary properties service handling.
- */
-void Loop_Write_Property_Proprietary_Callback_Set(write_property_function cb)
-{
-    Write_Property_Proprietary_Callback = cb;
 }
 
 /**
@@ -1581,13 +1597,9 @@ int Loop_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_real(&apdu[0], real_value);
             break;
         default:
-            if (Read_Property_Proprietary_Callback) {
-                apdu_len = Read_Property_Proprietary_Callback(rpdata);
-            } else {
-                rpdata->error_class = ERROR_CLASS_PROPERTY;
-                rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
-                apdu_len = BACNET_STATUS_ERROR;
-            }
+            rpdata->error_class = ERROR_CLASS_PROPERTY;
+            rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+            apdu_len = BACNET_STATUS_ERROR;
             break;
     }
 
@@ -1609,6 +1621,10 @@ bool Loop_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -1912,12 +1928,8 @@ bool Loop_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             break;
         default:
             if (Loop_Property_Lists_Member(wp_data->object_property)) {
-                if (Write_Property_Proprietary_Callback) {
-                    status = Write_Property_Proprietary_Callback(wp_data);
-                } else {
-                    wp_data->error_class = ERROR_CLASS_PROPERTY;
-                    wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-                }
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else {
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
@@ -1979,7 +1991,6 @@ static bool Loop_Read_Variable_Reference_Update(
     const BACNET_OBJECT_PROPERTY_REFERENCE *reference, float *value)
 {
     BACNET_READ_PROPERTY_DATA data = { 0 };
-    uint8_t apdu[32] = { 0 };
     int apdu_len = 0, len = 0;
     bool status = false;
 
@@ -1988,8 +1999,8 @@ static bool Loop_Read_Variable_Reference_Update(
         data.object_instance = reference->object_identifier.instance;
         data.object_property = reference->property_identifier;
         data.array_index = reference->property_array_index;
-        data.application_data = apdu;
-        data.application_data_len = sizeof(apdu);
+        data.application_data = Read_Property_Buffer;
+        data.application_data_len = sizeof(Read_Property_Buffer);
         data.error_class = ERROR_CLASS_PROPERTY;
         data.error_code = ERROR_CODE_UNKNOWN_PROPERTY;
         if (Read_Property_Internal_Callback) {
@@ -1997,7 +2008,8 @@ static bool Loop_Read_Variable_Reference_Update(
         }
         if (apdu_len > 0) {
             /* expecting only application tagged REAL values */
-            len = bacnet_real_application_decode(apdu, apdu_len, value);
+            len = bacnet_real_application_decode(
+                Read_Property_Buffer, apdu_len, value);
             if (len > 0) {
                 status = true;
             }
@@ -2014,6 +2026,49 @@ static bool Loop_Read_Variable_Reference_Update(
 void Loop_Write_Property_Internal_Callback_Set(write_property_function cb)
 {
     Write_Property_Internal_Callback = cb;
+}
+
+/**
+ * @brief Add a Loop notification callback
+ * @param notification - pointer to the notification structure
+ */
+void Loop_Write_Property_Notification_Add(
+    struct loop_write_property_notification *notification)
+{
+    struct loop_write_property_notification *head;
+
+    head = &Write_Property_Notification_Head;
+    do {
+        if (head->next == notification) {
+            /* already here! */
+            break;
+        } else if (!head->next) {
+            /* first available node */
+            head->next = notification;
+            break;
+        }
+        head = head->next;
+    } while (head);
+}
+
+/**
+ * @brief Calls all registered Loop write property notification callbacks
+ * @param instance - object instance number
+ * @param status - write property status
+ * @param wp_data - write property data
+ */
+void Loop_Write_Property_Notify(
+    uint32_t instance, bool status, BACNET_WRITE_PROPERTY_DATA *wp_data)
+{
+    struct loop_write_property_notification *head;
+
+    head = &Write_Property_Notification_Head;
+    do {
+        if (head->callback) {
+            head->callback(instance, status, wp_data);
+        }
+        head = head->next;
+    } while (head);
 }
 
 /**
@@ -2051,11 +2106,15 @@ static bool Loop_Write_Manipulated_Variable(
             wp_data.application_data_len =
                 encode_application_real(wp_data.application_data, value);
             if (Write_Property_Internal_Callback) {
-                status = Write_Property_Internal_Callback(&wp_data);
+                status = write_property_bacnet_array_valid(&wp_data);
                 if (status) {
-                    wp_data.error_code = ERROR_CODE_SUCCESS;
+                    status = Write_Property_Internal_Callback(&wp_data);
+                    if (status) {
+                        wp_data.error_code = ERROR_CODE_SUCCESS;
+                    }
                 }
             }
+            Loop_Write_Property_Notify(object_instance, status, &wp_data);
         }
     }
 
@@ -2266,18 +2325,30 @@ bool Loop_Delete(uint32_t object_instance)
 void Loop_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -2293,7 +2364,21 @@ size_t Loop_Size(void)
  */
 void Loop_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }

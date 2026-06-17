@@ -17,10 +17,17 @@
 #include "bacnet/wp.h"
 #include "access_user.h"
 #include "bacnet/basic/services.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 
 static bool Access_User_Initialized = false;
 
-static ACCESS_USER_DESCR au_descr[MAX_ACCESS_USERS];
+static ACCESS_USER_DESCR au_descrs[MAX_NUM_DEVICES][MAX_ACCESS_USERS];
+#ifdef BAC_ROUTING
+#define au_descr (au_descrs[Routed_Device_Object_Index()])
+#else
+#define au_descr (au_descrs[0])
+#endif
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Properties_Required[] = {
@@ -33,6 +40,16 @@ static const int32_t Properties_Required[] = {
 static const int32_t Properties_Optional[] = { -1 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of writable properties */
+    PROP_GLOBAL_IDENTIFIER,
+    -1,
+};
 
 void Access_User_Property_Lists(
     const int32_t **pRequired,
@@ -52,22 +69,49 @@ void Access_User_Property_Lists(
     return;
 }
 
+/**
+ * @brief Get the list of writable properties for an Access User object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Access_User_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
+
 void Access_User_Init(void)
 {
     unsigned i;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
     if (!Access_User_Initialized) {
         Access_User_Initialized = true;
 
-        for (i = 0; i < MAX_ACCESS_USERS; i++) {
-            au_descr[i].global_identifier =
-                0; /* set to some meaningful value */
-            au_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
-            au_descr[i].user_type = ACCESS_USER_TYPE_PERSON;
-            au_descr[i].credentials_count = 0;
-            /* fill in the credentials with proper ids */
+        for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+            Set_Routed_Device_Object_Index(dev_id);
+#endif
+            for (i = 0; i < MAX_ACCESS_USERS; i++) {
+                au_descr[i].global_identifier =
+                    0; /* set to some meaningful value */
+                au_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
+                au_descr[i].user_type = ACCESS_USER_TYPE_PERSON;
+                au_descr[i].credentials_count = 0;
+                /* fill in the credentials with proper ids */
+            }
         }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 
     return;
 }
@@ -134,6 +178,7 @@ bool Access_User_Object_Name(
 int Access_User_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int len = 0;
+    int apdu_size = 0;
     int apdu_len = 0; /* return value */
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
@@ -146,6 +191,7 @@ int Access_User_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         return 0;
     }
     apdu = rpdata->application_data;
+    apdu_size = rpdata->application_data_len;
     object_index = Access_User_Instance_To_Index(rpdata->object_instance);
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
@@ -182,10 +228,12 @@ int Access_User_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], au_descr[object_index].user_type);
             break;
         case PROP_CREDENTIALS:
+            /* BACnetList */
             for (i = 0; i < au_descr[object_index].credentials_count; i++) {
-                len = bacapp_encode_device_obj_ref(
-                    &apdu[0], &au_descr[object_index].credentials[i]);
-                if (apdu_len + len < MAX_APDU) {
+                len = bacnet_device_object_reference_encode(
+                    &apdu[apdu_len], apdu_size - apdu_len,
+                    &au_descr[object_index].credentials[i]);
+                if (len > 0) {
                     apdu_len += len;
                 } else {
                     rpdata->error_code =
@@ -213,6 +261,10 @@ bool Access_User_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     unsigned object_index = 0;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);

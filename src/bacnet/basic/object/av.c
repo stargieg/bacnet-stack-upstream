@@ -25,40 +25,80 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 /* me! */
 #include "bacnet/basic/object/av.h"
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ANALOG_VALUE;
 /* callback for present value writes */
 static analog_value_write_present_value_callback
     Analog_Value_Write_Present_Value_Callback;
 
-/* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Analog_Value_Properties_Required[] = {
-    PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME, PROP_OBJECT_TYPE,
-    PROP_PRESENT_VALUE, PROP_STATUS_FLAGS, PROP_EVENT_STATE,
-    PROP_OUT_OF_SERVICE, PROP_UNITS, -1
+    /* unordered list of required properties */
+    PROP_OBJECT_IDENTIFIER, PROP_OBJECT_NAME,  PROP_OBJECT_TYPE,
+    PROP_PRESENT_VALUE,     PROP_STATUS_FLAGS, PROP_EVENT_STATE,
+    PROP_OUT_OF_SERVICE,    PROP_UNITS,        -1
 };
 
 static const int32_t Analog_Value_Properties_Optional[] = {
-    PROP_DESCRIPTION, PROP_RELIABILITY, PROP_COV_INCREMENT,
+    /* unordered list of optional properties */
+    PROP_DESCRIPTION,
+    PROP_RELIABILITY,
+    PROP_COV_INCREMENT,
 #if defined(INTRINSIC_REPORTING)
-    PROP_TIME_DELAY, PROP_NOTIFICATION_CLASS, PROP_HIGH_LIMIT,
-    PROP_LOW_LIMIT, PROP_DEADBAND, PROP_LIMIT_ENABLE, PROP_EVENT_ENABLE,
-    PROP_ACKED_TRANSITIONS, PROP_NOTIFY_TYPE, PROP_EVENT_TIME_STAMPS,
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT,
+    PROP_DEADBAND,
+    PROP_LIMIT_ENABLE,
+    PROP_EVENT_ENABLE,
+    PROP_ACKED_TRANSITIONS,
+    PROP_NOTIFY_TYPE,
+    PROP_EVENT_TIME_STAMPS,
     PROP_EVENT_DETECTION_ENABLE,
 #endif
     -1
 };
 
 static const int32_t Analog_Value_Properties_Proprietary[] = {
+    /* unordered list of proprietary properties */
     -1
 };
-/* clang-format on */
+
+/* Every object shall have a Writable Property_List property
+which is a BACnetARRAY of property identifiers,
+one property identifier for each property within this object
+that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_PRESENT_VALUE,
+    PROP_OUT_OF_SERVICE,
+    PROP_UNITS,
+    PROP_COV_INCREMENT,
+#if defined(INTRINSIC_REPORTING)
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT,
+    PROP_DEADBAND,
+    PROP_LIMIT_ENABLE,
+    PROP_EVENT_ENABLE,
+    PROP_NOTIFY_TYPE,
+#endif
+    -1
+};
 
 /**
  * Initialize the pointers for the required, the optional and the properitary
@@ -84,6 +124,20 @@ void Analog_Value_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for an Analog Value object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Analog_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -329,57 +383,6 @@ unsigned Analog_Value_Event_State(uint32_t object_instance)
     }
 
     return state;
-}
-
-/**
- * For a given object instance-number, gets the event-detection-enable property
- * value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-detection-enable property value
- */
-bool Analog_Value_Event_Detection_Enable(uint32_t object_instance)
-{
-    bool retval = false;
-#if !defined(INTRINSIC_REPORTING)
-    (void)object_instance;
-#else
-    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
-
-    if (pObject) {
-        retval = pObject->Event_Detection_Enable;
-    }
-#endif
-
-    return retval;
-}
-
-/**
- * For a given object instance-number, sets the event-detection-enable property
- * value
- *
- * @param  object_instance - object-instance number of the object
- *
- * @return  event-detection-enable property value
- */
-bool Analog_Value_Event_Detection_Enable_Set(
-    uint32_t object_instance, bool value)
-{
-    bool retval = false;
-#if !defined(INTRINSIC_REPORTING)
-    (void)object_instance;
-    (void)value;
-#else
-    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
-
-    if (pObject) {
-        pObject->Event_Detection_Enable = value;
-        retval = true;
-    }
-#endif
-
-    return retval;
 }
 
 /**
@@ -936,9 +939,6 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     if (wp_data == NULL) {
         return false;
     }
-    if (wp_data->application_data_len == 0) {
-        return false;
-    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -1165,8 +1165,8 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
         CurrentAV->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = CurrentAV->Ack_notify_data.EventState;
-        debug_printf(
-            "Send Acknotification for (%s,%u).\n",
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr, "Send Acknotification for (%s,%u).\n",
             bactext_object_type_name(Object_Type), (unsigned)object_instance);
         characterstring_init_ansi(&msgText, "AckNotification");
 
@@ -1326,7 +1326,8 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
                     ExceededLimit = 0;
                     break;
             } /* switch (ToState) */
-            debug_printf(
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr,
                 "Event_State for (%s,%u) goes from %s to %s.\n",
                 bactext_object_type_name(Object_Type),
                 (unsigned)object_instance, bactext_event_state_name(FromState),
@@ -1441,7 +1442,8 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
         }
 
         /* add data from notification class */
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Analog-Value[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
@@ -1458,7 +1460,9 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
-            debug_printf("Analog-Value[%d]: Ack Required!\n", object_instance);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Analog-Value[%d]: Ack Required!\n",
+                object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                 case EVENT_STATE_HIGH_LIMIT:
@@ -1491,6 +1495,48 @@ void Analog_Value_Intrinsic_Reporting(uint32_t object_instance)
 }
 
 #if defined(INTRINSIC_REPORTING)
+/**
+ * For a given object instance-number, gets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Value_Event_Detection_Enable(uint32_t object_instance)
+{
+    bool retval = false;
+    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
+
+    if (pObject) {
+        retval = pObject->Event_Detection_Enable;
+    }
+
+    return retval;
+}
+
+/**
+ * For a given object instance-number, sets the event-detection-enable property
+ * value
+ *
+ * @param  object_instance - object-instance number of the object
+ *
+ * @return  event-detection-enable property value
+ */
+bool Analog_Value_Event_Detection_Enable_Set(
+    uint32_t object_instance, bool value)
+{
+    bool retval = false;
+    struct analog_value_descr *pObject = Analog_Value_Object(object_instance);
+
+    if (pObject) {
+        pObject->Event_Detection_Enable = value;
+        retval = true;
+    }
+
+    return retval;
+}
+
 /**
  * @brief Handles getting the Event Information for this object.
  * @param  index - index number of the object 0..count
@@ -1850,17 +1896,30 @@ bool Analog_Value_Delete(uint32_t object_instance)
 void Analog_Value_Cleanup(void)
 {
     struct analog_value_descr *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -1868,9 +1927,23 @@ void Analog_Value_Cleanup(void)
  */
 void Analog_Value_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 #if defined(INTRINSIC_REPORTING)
     /* Set handler for GetEventInformation function */
     handler_get_event_information_set(
