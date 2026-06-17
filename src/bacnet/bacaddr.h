@@ -130,6 +130,9 @@ BACNET_STACK_EXPORT
 int bacnet_address_binding_to_ascii(
     const BACNET_ADDRESS_BINDING *value, char *buf, size_t buf_size);
 BACNET_STACK_EXPORT
+int bacnet_address_binding_to_json(
+    const BACNET_ADDRESS_BINDING *value, char *buf, size_t buf_size);
+BACNET_STACK_EXPORT
 bool bacnet_address_binding_from_ascii(
     BACNET_ADDRESS_BINDING *value, const char *arg);
 

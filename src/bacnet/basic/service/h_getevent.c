@@ -53,6 +53,36 @@ void ge_ack_print_data(
 }
 
 /**
+ * @brief print the data for a GetEventInformation service request
+ * @param data [in]  The data to print
+ * @param device_id [in] The device id to print
+ */
+void ge_ack_print_json_data(
+    BACNET_GET_EVENT_INFORMATION_DATA *data, uint32_t device_id)
+{
+    unsigned int count = 0;
+    BACNET_GET_EVENT_INFORMATION_DATA *act_data = data;
+    const char *state_strs[] = { "NO", "FA", "ON", "HL", "LL" };
+    //printf("DeviceID\tType\tInstance\teventState\n");
+    //printf("--------------- ------- --------------- ---------------\n");
+    printf("[\n");
+    while (act_data) {
+        printf(
+            "[\"%u\",\"%u\",\"%u\",\"%s\"]", device_id, act_data->objectIdentifier.type,
+            act_data->objectIdentifier.instance, state_strs[data->eventState]);
+        act_data = act_data->next;
+        if (act_data) {
+            printf(",\n");
+        } else {
+            printf("\n");
+        }
+        count++;
+    }
+    //printf("\n%u\t Total\n", count);
+    printf("]\n");
+}
+
+/**
  * @brief Set the handler for the GetEventInformation service.
  * @param object_type [in] The BACNET_OBJECT_TYPE to set the handler for.
  * @param pFunction [in] The handler function to set.

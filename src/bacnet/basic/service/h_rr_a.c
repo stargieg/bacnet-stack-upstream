@@ -103,28 +103,6 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
     bool print_brace = false;
 
     if (data) {
-        debug_printf_stdout(
-            "%s #%lu\r\n", bactext_object_type_name(data->object_type),
-            (unsigned long)data->object_instance);
-        debug_printf_stdout("{\r\n");
-        if ((data->object_property < 512) ||
-            (data->object_property > 4194303)) {
-            /* Enumerated values 0-511 and 4194304+ are reserved
-               for definition by ASHRAE.*/
-            debug_printf_stdout(
-                "    %s", bactext_property_name(data->object_property));
-        } else {
-            /* Enumerated values 512-4194303 may be used
-                by others subject to the procedures and
-                constraints described in Clause 23. */
-            debug_printf_stdout(
-                "    proprietary %lu", (unsigned long)data->object_property);
-        }
-        if (data->array_index == BACNET_ARRAY_ALL) {
-            debug_printf_stdout(": ");
-        } else {
-            debug_printf_stdout("[%lu]: ", (unsigned long)data->array_index);
-        }
         application_data = data->application_data;
         application_data_len = data->application_data_len;
         /* loop until all of the len is gone... */
@@ -136,12 +114,9 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
                 /* error decoding */
                 break;
             }
-            if (!first_value) {
-                debug_printf_stdout("        ");
-            }
             if (first_value && (len < application_data_len)) {
                 first_value = false;
-                debug_printf_stdout("{");
+                debug_printf_stdout("[\n");
                 print_brace = true;
             }
 #ifdef BACAPP_PRINT_ENABLED
@@ -157,8 +132,9 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
                     application_data += len;
                     application_data_len -= len;
                     /* there's more! */
-                    debug_printf_stdout(",\r\n");
+                    debug_printf_stdout(",\n");
                 } else {
+                    debug_printf_stdout("\n");
                     break;
                 }
             } else {
@@ -166,9 +142,8 @@ static void PrintReadRangeData(BACNET_READ_RANGE_DATA *data)
             }
         }
         if (print_brace) {
-            debug_printf_stdout("}");
+            debug_printf_stdout("]\n");
         }
-        debug_printf_stdout("\r\n}\r\n");
     }
 }
 

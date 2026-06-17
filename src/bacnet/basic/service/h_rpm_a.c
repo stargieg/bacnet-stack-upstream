@@ -17,6 +17,7 @@
 #include "bacnet/apdu.h"
 #include "bacnet/bactext.h"
 #include "bacnet/rpm.h"
+#include "bacnet/bacapp_json.h"
 /* some demo stuff needed */
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/services.h"
@@ -230,18 +231,16 @@ void rpm_ack_print_data(BACNET_READ_ACCESS_DATA *rpm_data)
     bool array_value = false;
 
     if (rpm_data) {
-        PRINTF(
-            "%s #%lu\r\n", bactext_object_type_name(rpm_data->object_type),
-            (unsigned long)rpm_data->object_instance);
-        PRINTF("{\r\n");
+        PRINTF("{\n");
         listOfProperties = rpm_data->listOfProperties;
         while (listOfProperties) {
+            PRINTF("\"");
             if ((listOfProperties->propertyIdentifier < 512) ||
                 (listOfProperties->propertyIdentifier > 4194303)) {
                 /* Enumerated values 0-511 and 4194304+ are reserved
                    for definition by ASHRAE.*/
                 PRINTF(
-                    "    %s: ",
+                    "%s",
                     bactext_property_name(
                         listOfProperties->propertyIdentifier));
             } else {
@@ -249,16 +248,18 @@ void rpm_ack_print_data(BACNET_READ_ACCESS_DATA *rpm_data)
                     by others subject to the procedures and
                     constraints described in Clause 23. */
                 PRINTF(
-                    "    proprietary %u: ",
+                    "proprietary_%u",
                     (unsigned)listOfProperties->propertyIdentifier);
             }
             if (listOfProperties->propertyArrayIndex != BACNET_ARRAY_ALL) {
-                PRINTF("[%d]", listOfProperties->propertyArrayIndex);
+                PRINTF("_%d\":", listOfProperties->propertyArrayIndex);
+            } else {
+                PRINTF("\":");
             }
             value = listOfProperties->value;
             if (value) {
                 if (value->next) {
-                    PRINTF("{");
+                    PRINTF("[");
                     array_value = true;
                 } else {
                     array_value = false;
@@ -277,12 +278,12 @@ void rpm_ack_print_data(BACNET_READ_ACCESS_DATA *rpm_data)
                     bacapp_print_value(stdout, &object_value);
 #endif
                     if (value->next) {
-                        PRINTF(",\r\n        ");
+                        PRINTF(",\n");
                     } else {
                         if (array_value) {
-                            PRINTF("}\r\n");
-                        } else {
-                            PRINTF("\r\n");
+                            PRINTF("]\n");
+                        //} else {
+                        //    PRINTF("\n");
                         }
                     }
                     value = value->next;
@@ -290,15 +291,21 @@ void rpm_ack_print_data(BACNET_READ_ACCESS_DATA *rpm_data)
             } else {
                 /* AccessError */
                 PRINTF(
-                    "BACnet Error: %s: %s\r\n",
+                    "BACnet Error: %s: %s\n",
                     bactext_error_class_name(
                         (int)listOfProperties->error.error_class),
                     bactext_error_code_name(
                         (int)listOfProperties->error.error_code));
             }
+            if (listOfProperties->next)
+                fprintf(stdout, ",\n");
+            else
+                //json last element
+                fprintf(stdout, "\n");
+
             listOfProperties = listOfProperties->next;
         }
-        PRINTF("}\r\n");
+        PRINTF("}\n");
     }
 }
 

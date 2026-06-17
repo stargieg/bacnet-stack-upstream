@@ -935,6 +935,58 @@ int bacnet_address_binding_to_ascii(
 }
 
 /**
+ * @brief Produce a string from a BACnetAddressBinding structure
+ * @param value [in] The BACnetAddressBinding value
+ * @param str [out] The string to produce, NULL to get length only
+ * @param str_size [in] The size of the string buffer
+ * @return length of the produced string
+ * @details Output format:
+ *      ["1234","1234","c0:a8:00:0f"]
+ */
+int bacnet_address_binding_to_json(
+    const BACNET_ADDRESS_BINDING *value, char *str, size_t str_len)
+{
+    int offset = 0;
+    int i;
+
+    if (!value) {
+        return 0;
+    }
+    offset = bacnet_snprintf(str, str_len, offset, "[\"");
+    /* device-identifier */
+    offset = bacnet_snprintf(
+        str, str_len, offset, "%lu\",", (unsigned long)value->device_identifier);
+    /* snet */
+    offset = bacnet_snprintf(
+        str, str_len, offset, "\"%lu\",", (unsigned long)value->device_address.net);
+    /* octetstring */
+    offset = bacnet_snprintf(str, str_len, offset, "\"");
+    if (value->device_address.net) {
+        /* adr */
+        for (i = 0; i < value->device_address.len; i++) {
+            offset = bacnet_snprintf(
+                str, str_len, offset, "%d",
+                (unsigned)value->device_address.adr[i]);
+        }
+    } else {
+        /* mac */
+        for (i = 0; i < value->device_address.mac_len; i++) {
+            offset = bacnet_snprintf(
+                str, str_len, offset, "%02x",
+                (unsigned)value->device_address.mac[i]);
+            if (i < value->device_address.mac_len-1) {
+                offset = bacnet_snprintf(
+                    str, str_len, offset, ":");
+            }
+        }
+    }
+    offset = bacnet_snprintf(str, str_len, offset, "\"");
+    offset = bacnet_snprintf(str, str_len, offset, "]");
+
+    return offset;
+}
+
+/**
  * @brief Parse a string into a BACnetAddressBinding structure
  * @param value [out] The BACnetAddressBinding value
  * @param argv [in] The string to parse

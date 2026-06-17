@@ -95,7 +95,7 @@ void rp_ack_print_data(BACNET_READ_PROPERTY_DATA *data)
         if (print_brace) {
             fprintf(stdout, "}");
         }
-        fprintf(stdout, "\r\n");
+        fprintf(stdout, "\n");
 #endif
     }
 }

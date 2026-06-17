@@ -37,6 +37,9 @@ void handler_get_event_information(
 BACNET_STACK_EXPORT
 void ge_ack_print_data(
     BACNET_GET_EVENT_INFORMATION_DATA *data, uint32_t device_id);
+BACNET_STACK_EXPORT
+void ge_ack_print_json_data(
+    BACNET_GET_EVENT_INFORMATION_DATA *data, uint32_t device_id);
 
 #ifdef __cplusplus
 }

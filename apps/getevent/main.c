@@ -61,8 +61,8 @@ static void MyErrorHandler(
 {
     if (address_match(&Target_Address, src) &&
         (invoke_id == Request_Invoke_ID)) {
-        printf(
-            "BACnet Error: %s: %s\r\n",
+        fprintf(stderr,
+            "BACnet Error: %s: %s\n",
             bactext_error_class_name((int)error_class),
             bactext_error_code_name((int)error_code));
         Error_Detected = true;
@@ -75,8 +75,8 @@ static void MyAbortHandler(
     (void)server;
     if (address_match(&Target_Address, src) &&
         (invoke_id == Request_Invoke_ID)) {
-        printf(
-            "BACnet Abort: %s\r\n",
+        fprintf(stderr,
+            "BACnet Abort: %s\n",
             bactext_abort_reason_name((int)abort_reason));
         Error_Detected = true;
     }
@@ -87,8 +87,8 @@ MyRejectHandler(BACNET_ADDRESS *src, uint8_t invoke_id, uint8_t reject_reason)
 {
     if (address_match(&Target_Address, src) &&
         (invoke_id == Request_Invoke_ID)) {
-        printf(
-            "BACnet Reject: %s\r\n",
+        fprintf(stderr,
+            "BACnet Reject: %s\n",
             bactext_reject_reason_name((int)reject_reason));
         Error_Detected = true;
     }
@@ -115,18 +115,18 @@ static void My_Get_Event_Ack_Handler(
 
     (void)src;
     getevent_information_link_array(&data[0], ARRAY_SIZE(data));
-    printf(
+    fprintf(stderr,
         "Recieved Ack. Saved invoke ID was %i, service returned %i\n",
         Request_Invoke_ID, service_data->invoke_id);
 
     if (service_data->invoke_id == Request_Invoke_ID) {
         len = getevent_ack_decode_service_request(
             service_request, service_len, &data[0], &More_Events);
-        printf(
+        fprintf(stderr,
             "Decode of Ack returned length %i. MoreEvents flag was %i \n", len,
             More_Events);
         if (len > 0) {
-            ge_ack_print_data(&(data[0]), Target_Device_Object_Instance);
+            ge_ack_print_json_data(&(data[0]), Target_Device_Object_Instance);
             if (More_Events) {
                 BACNET_GET_EVENT_INFORMATION_DATA *lastData = &(data[0]);
                 while (lastData->next) {
@@ -236,10 +236,10 @@ int main(int argc, char *argv[])
         }
         if (found) {
             if (Request_Invoke_ID == 0) {
-                printf("\nSending first GetEventInformation request ...\n");
+                fprintf(stderr,"\nSending first GetEventInformation request ...\n");
                 Request_Invoke_ID = Send_GetEvent(&Target_Address, NULL);
             } else if (More_Events) {
-                printf("\nSending another GetEventInformation request ...\n");
+                fprintf(stderr,"\nSending another GetEventInformation request ...\n");
                 Request_Invoke_ID = Send_GetEvent(
                     &Target_Address, &LastReceivedObjectIdentifier);
                 More_Events = false;
@@ -248,7 +248,7 @@ int main(int argc, char *argv[])
                     break;
                 }
             } else if (tsm_invoke_id_failed(Request_Invoke_ID)) {
-                fprintf(stderr, "\rError: TSM Timeout!\r\n");
+                fprintf(stderr, "\rError: TSM Timeout!\n");
                 tsm_free_invoke_id(Request_Invoke_ID);
                 Error_Detected = true;
                 /* try again or abort? */
@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
             /* increment timer - exit if timed out */
             elapsed_seconds += (current_seconds - last_seconds);
             if (elapsed_seconds > timeout_seconds) {
-                printf("\rError: APDU Timeout!\r\n");
+                fprintf(stderr, "\rError: APDU Timeout!\n");
                 Error_Detected = true;
                 break;
             }

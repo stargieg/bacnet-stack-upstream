@@ -463,7 +463,7 @@ int bacapp_timestamp_to_ascii(
         case TIME_STAMP_TIME:
             /* 23:59:59.99 */
             str_len = snprintf(
-                str, str_size, "%02u:%02u:%02u.%02u",
+                str, str_size, "\"%02u:%02u:%02u.%02u\"",
                 (unsigned)timestamp->value.time.hour,
                 (unsigned)timestamp->value.time.min,
                 (unsigned)timestamp->value.time.sec,
@@ -472,13 +472,13 @@ int bacapp_timestamp_to_ascii(
         case TIME_STAMP_SEQUENCE:
             /* 65535 */
             str_len = snprintf(
-                str, str_size, "%u", (unsigned)timestamp->value.sequenceNum);
+                str, str_size, "\"%u\"", (unsigned)timestamp->value.sequenceNum);
             break;
         case TIME_STAMP_DATETIME:
             if (datetime_wildcard_year(&timestamp->value.dateTime.date)) {
                 /* 255/12/31-23:59:59.99 */
                 str_len = snprintf(
-                    str, str_size, "255/%02u/%02u-%02u:%02u:%02u.%02u",
+                    str, str_size, "\"255/%02u/%02u-%02u:%02u:%02u.%02u\"",
                     (unsigned)timestamp->value.dateTime.date.month,
                     (unsigned)timestamp->value.dateTime.date.day,
                     (unsigned)timestamp->value.dateTime.time.hour,
@@ -488,7 +488,7 @@ int bacapp_timestamp_to_ascii(
             } else {
                 /* 2021/12/31-23:59:59.99 */
                 str_len = snprintf(
-                    str, str_size, "%04u/%02u/%02u-%02u:%02u:%02u.%02u",
+                    str, str_size, "\"%04u/%02u/%02u-%02u:%02u:%02u.%02u\"",
                     (unsigned)timestamp->value.dateTime.date.year,
                     (unsigned)timestamp->value.dateTime.date.month,
                     (unsigned)timestamp->value.dateTime.date.day,

@@ -2154,7 +2154,7 @@ static int bacapp_snprintf_bit_string(
     int i = 0;
 
     len = bitstring_bits_used(value);
-    slen = bacapp_snprintf(str, str_len, "{");
+    slen = bacapp_snprintf(str, str_len, "[");
     ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
     for (i = 0; i < len; i++) {
         bool bit;
@@ -2166,7 +2166,7 @@ static int bacapp_snprintf_bit_string(
             ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
         }
     }
-    slen = bacapp_snprintf(str, str_len, "}");
+    slen = bacapp_snprintf(str, str_len, "]");
     ret_val += bacapp_snprintf_shift(slen, &str, &str_len);
 
     return ret_val;
@@ -2199,18 +2199,18 @@ static int bacapp_snprintf_enumerated(
         case PROP_OBJECT_TYPE:
             if (value <= BACNET_OBJECT_TYPE_RESERVED_MIN) {
                 ret_val = bacapp_snprintf(
-                    str, str_len, "%s", bactext_object_type_name(value));
+                    str, str_len, "\"%s\"", bactext_object_type_name(value));
             } else if (value <= BACNET_OBJECT_TYPE_RESERVED_MAX) {
                 ret_val = bacapp_snprintf(
-                    str, str_len, "reserved %lu", (unsigned long)value);
+                    str, str_len, "\"reserved %lu\"", (unsigned long)value);
             } else {
                 ret_val = bacapp_snprintf(
-                    str, str_len, "proprietary-%lu", (unsigned long)value);
+                    str, str_len, "\"proprietary-%lu\"", (unsigned long)value);
             }
             break;
         case PROP_EVENT_STATE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_event_state_name(value));
+                str, str_len, "\"%s\"", bactext_event_state_name(value));
             break;
         case PROP_UNITS:
         case PROP_CONTROLLED_VARIABLE_UNITS:
@@ -2221,15 +2221,15 @@ static int bacapp_snprintf_enumerated(
         case PROP_CAR_LOAD_UNITS:
             if (bactext_engineering_unit_name_proprietary((unsigned)value)) {
                 ret_val = bacapp_snprintf(
-                    str, str_len, "proprietary-%lu", (unsigned long)value);
+                    str, str_len, "\"proprietary-%lu\"", (unsigned long)value);
             } else {
                 ret_val = bacapp_snprintf(
-                    str, str_len, "%s", bactext_engineering_unit_name(value));
+                    str, str_len, "\"%s\"", bactext_engineering_unit_name(value));
             }
             break;
         case PROP_POLARITY:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_binary_polarity_name(value));
+                str, str_len, "\"%s\"", bactext_binary_polarity_name(value));
             break;
         case PROP_PRESENT_VALUE:
         case PROP_RELINQUISH_DEFAULT:
@@ -2238,12 +2238,12 @@ static int bacapp_snprintf_enumerated(
                 case OBJECT_BINARY_OUTPUT:
                 case OBJECT_BINARY_VALUE:
                     ret_val = bacapp_snprintf(
-                        str, str_len, "%s",
+                        str, str_len, "\"%s\"",
                         bactext_binary_present_value_name(value));
                     break;
                 case OBJECT_BINARY_LIGHTING_OUTPUT:
                     ret_val = bacapp_snprintf(
-                        str, str_len, "%s",
+                        str, str_len, "\"%s\"",
                         bactext_binary_lighting_pv_name(value));
                     break;
                 default:
@@ -2254,47 +2254,47 @@ static int bacapp_snprintf_enumerated(
             break;
         case PROP_RELIABILITY:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_reliability_name(value));
+                str, str_len, "\"%s\"", bactext_reliability_name(value));
             break;
         case PROP_SYSTEM_STATUS:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_device_status_name(value));
+                str, str_len, "\"%s\"", bactext_device_status_name(value));
             break;
         case PROP_SEGMENTATION_SUPPORTED:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_segmentation_name(value));
+                str, str_len, "\"%s\"", bactext_segmentation_name(value));
             break;
         case PROP_NODE_TYPE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_node_type_name(value));
+                str, str_len, "\"%s\"", bactext_node_type_name(value));
             break;
         case PROP_TRANSITION:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_lighting_transition(value));
+                str, str_len, "\"%s\"", bactext_lighting_transition(value));
             break;
         case PROP_IN_PROGRESS:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_lighting_in_progress(value));
+                str, str_len, "\"%s\"", bactext_lighting_in_progress(value));
             break;
         case PROP_LOGGING_TYPE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_logging_type_name(value));
+                str, str_len, "\"%s\"", bactext_logging_type_name(value));
             break;
         case PROP_MODE:
         case PROP_ACCEPTED_MODES:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_life_safety_mode_name(value));
+                str, str_len, "\"%s\"", bactext_life_safety_mode_name(value));
             break;
         case PROP_OPERATION_EXPECTED:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_life_safety_operation_name(value));
+                str, str_len, "\"%s\"", bactext_life_safety_operation_name(value));
             break;
         case PROP_TRACKING_VALUE:
             switch (object_type) {
                 case OBJECT_LIFE_SAFETY_POINT:
                 case OBJECT_LIFE_SAFETY_ZONE:
                     ret_val = bacapp_snprintf(
-                        str, str_len, "%s",
+                        str, str_len, "\"%s\"",
                         bactext_life_safety_state_name(value));
                     break;
                 default:
@@ -2303,43 +2303,43 @@ static int bacapp_snprintf_enumerated(
             break;
         case PROP_PROGRAM_CHANGE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_program_request_name(value));
+                str, str_len, "\"%s\"", bactext_program_request_name(value));
             break;
         case PROP_PROGRAM_STATE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_program_state_name(value));
+                str, str_len, "\"%s\"", bactext_program_state_name(value));
             break;
         case PROP_REASON_FOR_HALT:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_program_error_name(value));
+                str, str_len, "\"%s\"", bactext_program_error_name(value));
             break;
         case PROP_NETWORK_NUMBER_QUALITY:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_network_number_quality_name(value));
+                str, str_len, "\"%s\"", bactext_network_number_quality_name(value));
             break;
         case PROP_NETWORK_TYPE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_network_port_type_name(value));
+                str, str_len, "\"%s\"", bactext_network_port_type_name(value));
             break;
         case PROP_PROTOCOL_LEVEL:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_protocol_level_name(value));
+                str, str_len, "\"%s\"", bactext_protocol_level_name(value));
             break;
         case PROP_EVENT_TYPE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_event_type_name(value));
+                str, str_len, "\"%s\"", bactext_event_type_name(value));
             break;
         case PROP_NOTIFY_TYPE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_notify_type_name(value));
+                str, str_len, "\"%s\"", bactext_notify_type_name(value));
             break;
         case PROP_TIMER_STATE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_timer_state_name(value));
+                str, str_len, "\"%s\"", bactext_timer_state_name(value));
             break;
         case PROP_LAST_STATE_CHANGE:
             ret_val = bacapp_snprintf(
-                str, str_len, "%s", bactext_timer_transition_name(value));
+                str, str_len, "\"%s\"", bactext_timer_transition_name(value));
             break;
         default:
             ret_val =
@@ -3902,7 +3902,7 @@ int bacapp_snprintf_value(
 #endif
 #if defined(BACAPP_ADDRESS_BINDING)
             case BACNET_APPLICATION_TAG_ADDRESS_BINDING:
-                ret_val = bacnet_address_binding_to_ascii(
+                ret_val = bacnet_address_binding_to_json(
                     &value->type.Address_Binding, str, str_len);
                 break;
 #endif
@@ -3966,7 +3966,7 @@ bool bacapp_print_value(
                     case PROP_PRESENT_VALUE:
                     case PROP_SCHEDULE_DEFAULT:
                         fprintf(
-                            stream, "[%u] %s", object_value->value->tag, str);
+                            stream, "{\"%u\":\"%s\"}", object_value->value->tag, str);
                         break;
                     default:
                         fprintf(stream, "%s", str);
