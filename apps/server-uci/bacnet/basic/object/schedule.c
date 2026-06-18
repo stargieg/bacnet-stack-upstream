@@ -19,8 +19,7 @@
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
-#include "bacnet/basic/object/device.h"
-/* me! */
+#include "bacnet/basic/object/device.h" /* me! */
 #include "bacnet/basic/object/schedule.h"
 
 static const char *sec = "bacnet_sc";
@@ -255,7 +254,7 @@ static void uci_list(const char *sec_idx,
 void Schedule_Init(void)
 {
     struct uci_context *ctx;
-    SCHEDULE_DESCR_T tObject = { 0 };
+    SCHEDULE_DESCR_T tObject = { 0 }; 
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str = { 0 };
     struct itr_ctx itr_m;
@@ -489,14 +488,14 @@ bool Schedule_Weekly_Schedule_Set(
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-char *Schedule_Description(uint32_t object_instance)
+const char *Schedule_Description(uint32_t object_instance)
 {
     char *name = NULL;
     SCHEDULE_DESCR *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = (char *)pObject->Description;
+        name = pObject->Description;
     }
 
     return name;
@@ -508,7 +507,7 @@ char *Schedule_Description(uint32_t object_instance)
  * @param  new_name - holds the description to be set
  * @return  true if object-name was set
  */
-bool Schedule_Description_Set(uint32_t object_instance, char *new_name)
+bool Schedule_Description_Set(uint32_t object_instance, const char *new_name)
 {
     bool status = false; /* return value */
     SCHEDULE_DESCR *pObject;
@@ -903,8 +902,11 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 /**
  * @brief Write a value to a BACnetARRAY property element value
  * @param object_instance [in] BACnet network port object instance number
- * @param array_index [in] array index to write:
- *    0=array size, 1 to N for individual array members
+ * @param array_index [in] array index to be decoded
+ *    0 for the array size
+ *    1 to n for individual array members
+ *    BACNET_ARRAY_ALL for the full array to be written.
+ * @param array_size [in] number of elements in the array
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -912,6 +914,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -924,6 +927,8 @@ static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
     pObject = Schedule_Object(object_instance);
     if (pObject) {
         if (array_index == 0) {
+            error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+        } else if ( BACNET_WEEKLY_SCHEDULE_SIZE <= array_size ) {
             error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
         } else if (array_index <= BACNET_WEEKLY_SCHEDULE_SIZE) {
             array_index--;
@@ -982,6 +987,7 @@ static int Schedule_Weekly_Schedule_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] number of elements in the array
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -989,6 +995,7 @@ static int Schedule_Weekly_Schedule_Element_Length(
 static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -1001,6 +1008,8 @@ static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
     if (pObject) {
         if (array_index == 0) {
             error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+        } else if (BACNET_WEEKLY_SCHEDULE_SIZE <= array_size ) {
+            error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         } else if (array_index <= BACNET_WEEKLY_SCHEDULE_SIZE) {
             array_index--;
             len = bacnet_special_event_decode(
@@ -1049,6 +1058,7 @@ static int Schedule_Exception_Schedule_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] number of elements in the array
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -1056,6 +1066,7 @@ static int Schedule_Exception_Schedule_Element_Length(
 static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -1068,6 +1079,8 @@ static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
     pObject = Schedule_Object(object_instance);
     if (pObject) {
         if (array_index == 0) {
+            error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
+        } else if (BACNET_SCHEDULE_OBJ_PROP_REF_SIZE <= array_size ) {
             error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
         } else if (array_index <= BACNET_SCHEDULE_OBJ_PROP_REF_SIZE) {
             len = bacapp_decode_known_property(
@@ -1163,7 +1176,7 @@ BACNET_ERROR_CODE bacnet_array_write_idx(
             apdu, apdu_size, &unsigned_value);
         if (len > 0) {
             error_code =
-                write_function(object_instance, array_index, apdu, apdu_size);
+                write_function(object_instance, array_index, array_size, apdu, apdu_size); 
         } else if (len == 0) {
             error_code = ERROR_CODE_INVALID_DATA_TYPE;
         } else {
@@ -1193,7 +1206,7 @@ BACNET_ERROR_CODE bacnet_array_write_idx(
                 len = decode_function(
                     object_instance, &apdu[apdu_len], apdu_size - apdu_len);
                 error_code = write_function(
-                    object_instance, index, &apdu[apdu_len], len);
+                    object_instance, index, array_size, &apdu[apdu_len], len);
                 if (error_code != ERROR_CODE_SUCCESS) {
                     break;
                 }
@@ -1203,7 +1216,7 @@ BACNET_ERROR_CODE bacnet_array_write_idx(
     } else if (array_index <= array_size) {
         /* index was specified; write a single array element */
         error_code =
-            write_function(object_instance, array_index, apdu, apdu_size);
+            write_function(object_instance, array_index, array_size, apdu, apdu_size);
     } else {
         /* array_index was specified out of range */
         error_code = ERROR_CODE_INVALID_ARRAY_INDEX;

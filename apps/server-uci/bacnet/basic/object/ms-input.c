@@ -226,7 +226,7 @@ static char *state_name_by_index(const struct object_data *pObject, unsigned ind
     if (pObject) {
         if (index > 0) {
             index--;
-            pName = (char *)pObject->State_Text[index];
+            pName = (const char *)pObject->State_Text[index];
         }
     }
     return pName;

@@ -7,7 +7,8 @@
  * uses an enumerated two state active/inactive data type.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_BINARY_INPUT_H
+#ifndef BACNET_BASIC_UCI_OBJECT_BINARY_INPUT_H
+#define BACNET_BASIC_UCI_OBJECT_BINARY_INPUT_H
 #define BACNET_BASIC_OBJECT_BINARY_INPUT_H
 #include <stdbool.h>
 #include <stdint.h>

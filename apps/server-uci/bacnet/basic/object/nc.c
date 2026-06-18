@@ -1058,7 +1058,7 @@ void Notification_Class_common_reporting_function(
             continue;
         }
         if (IsRecipientActive(pBacDest, event_data->toState)) {
-            BACNET_ADDRESS dest;
+            BACNET_ADDRESS dest = {0};
             uint32_t device_id;
             unsigned max_apdu;
 
@@ -1478,14 +1478,14 @@ bool Notification_Class_Name_Set(uint32_t object_instance, char *new_name)
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-char *Notification_Class_Description(uint32_t object_instance)
+const char *Notification_Class_Description(uint32_t object_instance)
 {
     char *name = NULL;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = (char *)pObject->Description;
+        name = (const char *)pObject->Description;
     }
 
     return name;
@@ -1497,7 +1497,7 @@ char *Notification_Class_Description(uint32_t object_instance)
  * @param  new_name - holds the description to be set
  * @return  true if object-name was set
  */
-bool Notification_Class_Description_Set(uint32_t object_instance, char *new_name)
+bool Notification_Class_Description_Set(uint32_t object_instance, const char *new_name)
 {
     bool status = false; /* return value */
     struct object_data *pObject;

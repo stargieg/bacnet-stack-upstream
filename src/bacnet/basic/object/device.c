@@ -2990,7 +2990,7 @@ void Device_Backup_Failure_Timeout_Restart(void)
  *  WritePropertyMultiple, CreateObject, or AtomicReadFile request
  *  that directly accesses a configuration File object.
  */
-void Device_Backup_Failure_Timeout_Countdown(uint32_t milliseconds)
+void Device_Backup_Failure_Timeout_Countdown(uint32_t milliseconds) 
 {
 #if defined(BACNET_BACKUP_RESTORE)
     BACNET_BACKUP_STATE *backup_state = Device_Backup_State_Value();

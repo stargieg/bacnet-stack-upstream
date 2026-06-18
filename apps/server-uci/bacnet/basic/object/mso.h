@@ -5,7 +5,8 @@
  * @brief API for basic Multi-State Output objects
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_MULTI_STATE_OUTPUT_H
+#ifndef BACNET_BASIC_UCI_OBJECT_MULTI_STATE_OUTPUT_H
+#define BACNET_BASIC_UCI_OBJECT_MULTI_STATE_OUTPUT_H
 #define BACNET_BASIC_OBJECT_MULTI_STATE_OUTPUT_H
 
 #include <stdbool.h>

@@ -5,7 +5,8 @@
  * @brief API for a basic Trend Log object implementation.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_TRENDLOG_H
+#ifndef BACNET_BASIC_UCI_OBJECT_TRENDLOG_H
+#define BACNET_BASIC_UCI_OBJECT_TRENDLOG_H
 #define BACNET_BASIC_OBJECT_TRENDLOG_H
 #include <stdbool.h>
 #include <stdint.h>

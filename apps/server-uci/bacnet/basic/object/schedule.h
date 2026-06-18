@@ -5,7 +5,8 @@
  * @brief API for a basic BACnet Schedule object implementation.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_SCHEDULE_H
+#ifndef BACNET_BASIC_UCI_OBJECT_SCHEDULE_H
+#define BACNET_BASIC_UCI_OBJECT_SCHEDULE_H
 #define BACNET_BASIC_OBJECT_SCHEDULE_H
 #include <stdbool.h>
 #include <stdint.h>
@@ -78,7 +79,7 @@ typedef struct object_data_t {
     const char *Object_Name;
     const char *Description;
 } SCHEDULE_DESCR_T;
-
+ 
 BACNET_STACK_EXPORT
 void Schedule_Property_Lists(
     const int32_t **pRequired,

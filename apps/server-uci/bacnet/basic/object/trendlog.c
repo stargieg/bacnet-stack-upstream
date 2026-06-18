@@ -437,14 +437,14 @@ bool Trend_Log_Name_Set(uint32_t object_instance, char *new_name)
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-char *Trend_Log_Description(uint32_t object_instance)
+const char *Trend_Log_Description(uint32_t object_instance)
 {
     char *name = NULL;
     struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
-        name = (char *)pObject->Description;
+        name = pObject->Description;
     }
 
     return name;

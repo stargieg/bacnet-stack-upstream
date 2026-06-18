@@ -7,7 +7,8 @@
  * uses a single precision floating point data type.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_ANALOG_VALUE_H
+#ifndef BACNET_BASIC_UCI_OBJECT_ANALOG_VALUE_H
+#define BACNET_BASIC_UCI_OBJECT_ANALOG_VALUE_H
 #define BACNET_BASIC_OBJECT_ANALOG_VALUE_H
 
 #include <stdbool.h>

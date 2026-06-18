@@ -7,7 +7,8 @@
  * property uses a priority array and an enumerated 2-state data type.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_BINARY_OUTPUT_H
+#ifndef BACNET_BASIC_UCI_OBJECT_BINARY_OUTPUT_H
+#define BACNET_BASIC_UCI_OBJECT_BINARY_OUTPUT_H
 #define BACNET_BASIC_OBJECT_BINARY_OUTPUT_H
 #include <stdbool.h>
 #include <stdint.h>

@@ -6,7 +6,8 @@
  * uses an integer data type with a sequence of 1 to N values.
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_MULTI_STATE_INPUT_H
+#ifndef BACNET_BASIC_UCI_OBJECT_MULTI_STATE_INPUT_H
+#define BACNET_BASIC_UCI_OBJECT_MULTI_STATE_INPUT_H
 #define BACNET_BASIC_OBJECT_MULTI_STATE_INPUT_H
 #include <stdbool.h>
 #include <stdint.h>

@@ -1362,6 +1362,8 @@ if(SERVER_UCI)
     src/bacnet/rp.h
     src/bacnet/rpm.c
     src/bacnet/rpm.h
+  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.c>
+  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.h>
     src/bacnet/shed_level.c
     src/bacnet/shed_level.h
     src/bacnet/timer_value.c

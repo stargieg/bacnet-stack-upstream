@@ -251,7 +251,7 @@ static unsigned state_name_count(const char *state_names)
  * @brief Get the specific state name at index 0..N
  * @param struct object_data
  * @param state_index - state index number 1..N of the state names
- * @return state name, or NULL
+ * @return state name, or NULL const
  */
 static char *state_name_by_index(const struct object_data *pObject, unsigned index)
 {
@@ -260,7 +260,7 @@ static char *state_name_by_index(const struct object_data *pObject, unsigned ind
     if (pObject) {
         if (index > 0) {
             index--;
-            pName = (char *)pObject->State_Text[index];
+            pName = (const char *)pObject->State_Text[index];
         }
     }
     return pName;

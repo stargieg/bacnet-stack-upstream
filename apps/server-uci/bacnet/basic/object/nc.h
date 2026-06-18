@@ -5,7 +5,8 @@
  * @brief API for a basic BACnet Notification Class object
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_NOTIFICATION_CLASS_H
+#ifndef BACNET_BASIC_UCI_OBJECT_NOTIFICATION_CLASS_H
+#define BACNET_BASIC_UCI_OBJECT_NOTIFICATION_CLASS_H
 #define BACNET_BASIC_OBJECT_NOTIFICATION_CLASS_H
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
@@ -134,11 +135,11 @@ bool Notification_Class_Name_Set(
     uint32_t object_instance, char *new_name);
 
 BACNET_STACK_EXPORT
-char *Notification_Class_Description(uint32_t instance);
+const char *Notification_Class_Description(uint32_t instance);
 
 BACNET_STACK_EXPORT
 bool Notification_Class_Description_Set(
-    uint32_t instance, char *new_name);
+    uint32_t instance, const char *new_name);
 
 BACNET_STACK_EXPORT
 bool Notification_Class_Priority(

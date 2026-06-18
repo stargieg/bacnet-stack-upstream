@@ -7,6 +7,7 @@
  * @copyright SPDX-License-Identifier: MIT
  */
 #ifndef BACNET_BASIC_OBJECT_MULTI_STATE_VALUE_H
+#define BACNET_BASIC_UCI_OBJECT_MULTI_STATE_VALUE_H
 #define BACNET_BASIC_OBJECT_MULTI_STATE_VALUE_H
 #include <stdbool.h>
 #include <stdint.h>

@@ -9,7 +9,8 @@
  * @date 2005
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_BASIC_OBJECT_ANALOG_OUTPUT_H
+#ifndef BACNET_BASIC_UCI_OBJECT_ANALOG_OUTPUT_H
+#define BACNET_BASIC_UCI_OBJECT_ANALOG_OUTPUT_H
 #define BACNET_BASIC_OBJECT_ANALOG_OUTPUT_H
 #include <stdbool.h>
 #include <stdint.h>
