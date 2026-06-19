@@ -50,7 +50,7 @@ static enum {
 
 char *Datalink_Ifname;
 
-void datalink_set(char *datalink_string)
+void datalink_set(const char *datalink_string)
 {
     if (bacnet_stricmp("none", datalink_string) == 0) {
         Datalink_Transport = DATALINK_NONE;
@@ -88,7 +88,7 @@ datalink_get_interface(void)
     return Datalink_Ifname;
 }
 
-bool datalink_init(char *ifname)
+bool datalink_init(const char *ifname)
 {
     bool status = false;
     Datalink_Ifname = ifname;
@@ -377,7 +377,7 @@ void datalink_get_my_address(BACNET_ADDRESS *my_address)
     }
 }
 
-void datalink_set_interface(char *ifname)
+void datalink_set_interface(const char *ifname)
 {
     switch (Datalink_Transport) {
         case DATALINK_NONE:
@@ -471,7 +471,7 @@ void datalink_maintenance_timer(uint16_t seconds)
 #endif
 
 #if defined(BACDL_NONE)
-bool datalink_init(char *ifname)
+bool datalink_init(const char *ifname)
 {
     (void)ifname;
 
@@ -517,12 +517,12 @@ void datalink_get_my_address(BACNET_ADDRESS *my_address)
     (void)my_address;
 }
 
-void datalink_set_interface(char *ifname)
+void datalink_set_interface(const char *ifname)
 {
     (void)ifname;
 }
 
-void datalink_set(char *datalink_string)
+void datalink_set(const char *datalink_string)
 {
     (void)datalink_string;
 }

@@ -6,7 +6,8 @@
  * @copyright SPDX-License-Identifier: MIT
  * @ingroup DataLink
  */
-#ifndef BACNET_DATALINK_H
+#ifndef BACNET_DATALINK_UCI_H
+#define BACNET_DATALINK_UCI_H
 #define BACNET_DATALINK_H
 
 /* BACnet Stack defines - first */
@@ -48,7 +49,11 @@
 #define datalink_receive ethernet_receive
 #define datalink_cleanup ethernet_cleanup
 #define datalink_get_broadcast_address ethernet_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address ethernet_get_my_address
+#endif
 #define datalink_maintenance_timer(s)
 
 #elif defined(BACDL_ARCNET) && !defined(BACDL_MULTIPLE)
@@ -59,7 +64,11 @@
 #define datalink_receive arcnet_receive
 #define datalink_cleanup arcnet_cleanup
 #define datalink_get_broadcast_address arcnet_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address arcnet_get_my_address
+#endif
 #define datalink_maintenance_timer(s)
 
 #elif defined(BACDL_MSTP) && !defined(BACDL_MULTIPLE)
@@ -70,7 +79,11 @@
 #define datalink_receive dlmstp_receive
 #define datalink_cleanup dlmstp_cleanup
 #define datalink_get_broadcast_address dlmstp_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address dlmstp_get_my_address
+#endif
 #define datalink_maintenance_timer(s)
 
 #elif defined(BACDL_BIP) && !defined(BACDL_MULTIPLE)
@@ -82,15 +95,7 @@
 #define datalink_cleanup bip_cleanup
 #define datalink_get_broadcast_address bip_get_broadcast_address
 #ifdef BAC_ROUTING
-#ifdef __cplusplus
-extern "C" {
-#endif
-BACNET_STACK_EXPORT
-void routed_get_my_address(BACNET_ADDRESS *my_address);
-#ifdef __cplusplus
-}
-#endif
-#define datalink_get_my_address routed_get_my_address
+#define datalink_get_my_address Routed_Device_Get_My_Address
 #else
 #define datalink_get_my_address bip_get_my_address
 #endif
@@ -104,7 +109,11 @@ void routed_get_my_address(BACNET_ADDRESS *my_address);
 #define datalink_receive bip6_receive
 #define datalink_cleanup bip6_cleanup
 #define datalink_get_broadcast_address bip6_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address bip6_get_my_address
+#endif
 #define datalink_maintenance_timer bvlc6_maintenance_timer
 
 #elif defined(BACDL_ZIGBEE) && !defined(BACDL_MULTIPLE)
@@ -116,7 +125,11 @@ void routed_get_my_address(BACNET_ADDRESS *my_address);
 #define datalink_receive bzll_receive
 #define datalink_cleanup bzll_cleanup
 #define datalink_get_broadcast_address bzll_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address bzll_get_my_address
+#endif
 #define datalink_maintenance_timer bzll_maintenance_timer
 
 #elif defined(BACDL_BSC) && !defined(BACDL_MULTIPLE)
@@ -127,16 +140,19 @@ void routed_get_my_address(BACNET_ADDRESS *my_address);
 #define datalink_receive bsc_receive
 #define datalink_cleanup bsc_cleanup
 #define datalink_get_broadcast_address bsc_get_broadcast_address
+#ifdef BAC_ROUTING
+#define datalink_get_my_address Routed_Device_Get_My_Address
+#else
 #define datalink_get_my_address bsc_get_my_address
+#endif
 #define datalink_maintenance_timer(s) bsc_maintenance_timer(s)
 
 #elif !defined(BACDL_TEST) /* Multiple, none or custom datalink */
-#include "bacnet/npdu.h"
-#endif
-#endif
+#endif // not BACDL_TEST
+#endif // endif 0
 #include "bacnet/npdu.h"
 
-#define MAX_HEADER (8)
+#define MAX_HEADER (17) /* ETHERNET_HEADER_MAX */
 #define MAX_MPDU (MAX_HEADER + MAX_PDU)
 
 #ifdef __cplusplus
@@ -144,7 +160,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 BACNET_STACK_EXPORT
-bool datalink_init(char *ifname);
+bool datalink_init(const char *ifname);
 
 BACNET_STACK_EXPORT
 int datalink_send_pdu(
@@ -167,10 +183,10 @@ BACNET_STACK_EXPORT
 void datalink_get_my_address(BACNET_ADDRESS *my_address);
 
 BACNET_STACK_EXPORT
-void datalink_set_interface(char *ifname);
+void datalink_set_interface(const char *ifname);
 
 BACNET_STACK_EXPORT
-void datalink_set(char *datalink_string);
+void datalink_set(const char *datalink_string);
 
 BACNET_STACK_EXPORT
 int datalink_get(void);
@@ -186,6 +202,7 @@ void datalink_maintenance_timer(uint16_t seconds);
 }
 #endif /* __cplusplus */
 /*
+not BACDL_TEST
 #endif
 */
 
@@ -207,8 +224,10 @@ void datalink_maintenance_timer(uint16_t seconds);
  * - BACDL_MSTP     -- for Clause 9 MASTER-SLAVE/TOKEN PASSING (MS/TP) LAN
  * - BACDL_BIP      -- for ANNEX J - BACnet/IPv4
  * - BACDL_BIP6     -- for ANNEX U - BACnet/IPv6
+ * - BACDL_BSC      -- for ANNEX AB - BACnet Secure Connect (BACnet/SC)
  * - BACDL_ALL      -- Unspecified for the build, so the transport can be
  *                     chosen at runtime from among these choices.
+ * - BACDL_MULTIPLE  -- For multiple transports enabled in the same application
  * - BACDL_NONE      -- Unspecified for the build for unit testing
  * - BACDL_CUSTOM    -- For externally linked datalink_xxx functions
  * - Clause 10 POINT-TO-POINT (PTP) and Clause 11 EIA/CEA-709.1 ("LonTalk") LAN

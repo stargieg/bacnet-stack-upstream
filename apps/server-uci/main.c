@@ -34,7 +34,6 @@
 #include "bacnet/datetime.h"
 /* include the device object */
 #include "bacnet/basic/object/device.h"
-
 #if 0
 /* objects that have tasks inside them */
 #if (BACNET_PROTOCOL_REVISION >= 14)
@@ -45,9 +44,8 @@
 #include "bacnet/basic/object/color_object.h"
 #include "bacnet/basic/object/color_temperature.h"
 #endif
-
-#endif
 #include "bacnet/basic/object/lc.h"
+#endif
 #include "bacnet/basic/object/trendlog.h"
 #if 0
 #include "bacnet/basic/object/structured_view.h"
@@ -58,6 +56,9 @@
 #endif /* defined(INTRINSIC_REPORTING) */
 #if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h"
+#if defined BACNET_BACKUP_RESTORE
+#include "bacfile-posix.h"
+#endif
 #endif /* defined(BACFILE) */
 #if defined(BAC_UCI)
 #include "bacnet/basic/ucix/ucix.h"
@@ -160,7 +161,7 @@ static void Structured_View_Update(void)
         /* update the device instance to internal */
         Lighting_Subordinate[i].Device_Instance = device_id;
         /* update the common node data */
-        Lighting_Subordinate[i].Node_Type = BACNET_NODE_ROOM;
+        Lighting_Subordinate[i].Node_Type = BACNET_NODE_POINT;
         Lighting_Subordinate[i].Relationship = BACNET_RELATIONSHIP_CONTAINS;
     }
     instance = Structured_View_Index_To_Instance(0);
@@ -171,9 +172,11 @@ static void Structured_View_Update(void)
     represents.deviceIdentifier.type = OBJECT_NONE;
     represents.deviceIdentifier.instance = BACNET_MAX_INSTANCE;
     represents.objectIdentifier.type = OBJECT_DEVICE;
-    represents.objectIdentifier.instance = Device_Object_Instance_Number();
+    represents.objectIdentifier.instance = device_id;
     Structured_View_Represents_Set(instance, &represents);
     Structured_View_Node_Type_Set(instance, BACNET_NODE_ROOM);
+    Structured_View_Default_Subordinate_Relationship_Set(
+        instance, BACNET_RELATIONSHIP_CONTAINS);
 }
 
 #endif
@@ -209,19 +212,40 @@ static void Init_Service_Handlers(void)
     unsigned int i = 0;
 
 #endif
+    /* Initialize the device object and its children */
     Device_Init(NULL);
 #if 0
     /* create some dynamically created objects as examples */
     object_data.object_instance = BACNET_MAX_INSTANCE;
-    for (i = 0; i <= BACNET_OBJECT_TYPE_RESERVED_MIN; i++) {
+    for (i = 0; i < BACNET_OBJECT_TYPE_RESERVED_MIN; i++) {
         object_data.object_type = i;
+        object_data.error_class = ERROR_CLASS_OBJECT;
+        object_data.error_code = ERROR_CODE_SUCCESS;
         if (Device_Create_Object(&object_data)) {
             printf(
-                "Created object %s-%u\n", bactext_object_type_name(i),
-                (unsigned)object_data.object_instance);
+                "CreateObject: %s-%u %s\n", bactext_object_type_name(i),
+                (unsigned)object_data.object_instance,
+                bactext_error_code_name(object_data.error_code));
         }
     }
+#if defined BACNET_BACKUP_RESTORE
+    /* initialize the POSIX file object backend */
+    bacfile_posix_init();
+    /* file for backup and restore example */
+    object_data.object_instance = bacfile_index_to_instance(0);
+    if (object_data.object_instance < BACNET_MAX_INSTANCE) {
+        bacfile_pathname_set(object_data.object_instance, "backup_1.bin");
+        Device_Configuration_File_Set(0, object_data.object_instance);
+        printf(
+            "Created %s-%u path=%s for backup and restore (%u files).\n",
+            bactext_object_type_name(OBJECT_FILE),
+            (unsigned)object_data.object_instance,
+            bacfile_pathname(object_data.object_instance), bacfile_count());
+    }
 #endif
+#endif
+    /* set up our confirmed service unrecognized service handler - required! */
+    apdu_set_unrecognized_service_handler_handler(handler_unrecognized_service);
     /* we need to handle who-is to support dynamic device binding */
     apdu_set_unconfirmed_handler(
         SERVICE_UNCONFIRMED_WHO_IS, handler_who_is_who_am_i_unicast);
@@ -241,9 +265,6 @@ static void Init_Service_Handlers(void)
     apdu_set_unconfirmed_handler(SERVICE_UNCONFIRMED_I_AM, handler_i_am_bind);
 
 
-    /* set the handler for all the services we don't implement */
-    /* It is required to send the proper reject message... */
-    apdu_set_unrecognized_service_handler_handler(handler_unrecognized_service);
     /* Set the handlers for any confirmed services that we support. */
     /* We must implement read property - it's required! */
     apdu_set_confirmed_handler(
@@ -361,6 +382,7 @@ int main(int argc, char *argv[])
     uint32_t elapsed_milliseconds = 0;
     uint32_t elapsed_seconds = 0;
     BACNET_CHARACTER_STRING DeviceName;
+    uint32_t device_id = 0xFFFFFFFF;
 #if defined(BACNET_TIME_MASTER)
     BACNET_DATE_TIME bdatetime;
 #endif
@@ -511,6 +533,17 @@ int main(int argc, char *argv[])
 #endif
     /* loop forever */
     for (;;) {
+        if (device_id != Device_Object_Instance_Number()) {
+            device_id = Device_Object_Instance_Number();
+#if 0
+            /* update structured view with this device instance */
+            Structured_View_Update();
+#endif
+            if (Device_Object_Instance_Number() != BACNET_MAX_INSTANCE) {
+                /* broadcast an I-Am on startup */
+                Send_I_Am(&Handler_Transmit_Buffer[0]);
+            }
+        }
         /* input */
         switch (Datalink_Transport) {
 #if defined(BACDL_ARCNET)
