@@ -4284,6 +4284,9 @@ void Device_Init(object_functions_t *object_table)
     if (!(option && characterstring_init_ansi(&My_Object_Name, option)))
         characterstring_init_ansi(&My_Object_Name, "SimpleServer");
     Object_Instance_Number = ucix_get_option_int(ctx, sec, sec_idx, "Id", 4711);
+    option = ucix_get_option(ctx, sec, sec_idx, "serialnumber");
+    if (option && characterstring_init_ansi(&option_str, option))
+        characterstring_ansi_copy(Serial_Number,sizeof(Serial_Number),&option_str);
     option = ucix_get_option(ctx, sec, sec_idx, "Location");
     if (option && characterstring_init_ansi(&option_str, option))
         characterstring_ansi_copy(Location,sizeof(Location),&option_str);
