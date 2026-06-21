@@ -1362,8 +1362,8 @@ if(SERVER_UCI)
     src/bacnet/rp.h
     src/bacnet/rpm.c
     src/bacnet/rpm.h
-  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.c>
-  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.h>
+    $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.c>
+    $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.h>
     src/bacnet/shed_level.c
     src/bacnet/shed_level.h
     src/bacnet/timer_value.c
@@ -1467,6 +1467,7 @@ if(SERVER_UCI)
     $<$<BOOL:${BACDL_NONE}>:BACDL_NONE>
     $<$<BOOL:${BACNET_PROPERTY_LISTS}>:BACNET_PROPERTY_LISTS=1>
     $<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
+    $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:BACNET_SEGMENTATION_ENABLED=1>
     BACNET_STACK_STATIC_DEFINE
     BACFILE
     $<$<BOOL:${INTRINSIC_REPORTING}>:INTRINSIC_REPORTING>
