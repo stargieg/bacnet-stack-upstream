@@ -1397,6 +1397,8 @@ if(SERVER_UCI)
     apps/server-uci/bacnet/datalink/datalink.h
     apps/server-uci/bacnet/datalink/dlenv.c
     apps/server-uci/bacnet/datalink/dlenv.h
+    apps/server-uci/bacnet/basic/object/analog.c
+    apps/server-uci/bacnet/basic/object/analog.h
     apps/server-uci/bacnet/basic/object/ao.c
     apps/server-uci/bacnet/basic/object/ao.h
     apps/server-uci/bacnet/basic/object/av.c
