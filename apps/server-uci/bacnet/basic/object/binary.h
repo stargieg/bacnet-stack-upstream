@@ -5,8 +5,8 @@
  * @date April 2024
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_OBJECT_ANALOG_H
-#define BACNET_OBJECT_ANALOG_H
+#ifndef BACNET_OBJECT_BINARY_H
+#define BACNET_OBJECT_BINARY_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -40,39 +40,29 @@ typedef int (*bacnet_array_property_element_encode_function_object)(
 extern "C" {
 #endif /* __cplusplus */
 
-
-// Analog
-
-//typedef struct object_data_analog {
 typedef struct object_data {
     bool Out_Of_Service : 1;
     bool Overridden : 1;
     bool Changed : 1;
-    float COV_Increment;
-    float Prior_Value;
+    bool Prior_Value : 1;
     bool Relinquished[BACNET_MAX_PRIORITY];
-    float Priority_Array[BACNET_MAX_PRIORITY];
-    float Relinquish_Default;
-    float Min_Pres_Value;
-    float Max_Pres_Value;
-    float Resolution;
-    BACNET_ENGINEERING_UNITS Units;
+    bool Priority_Array[BACNET_MAX_PRIORITY];
+    bool Relinquish_Default : 1;
+    bool Polarity : 1;
     uint8_t Reliability;
     const char *Object_Name;
     const char *Description;
+    const char *Active_Text;
+    const char *Inactive_Text;
     void *Context;
 #if defined(INTRINSIC_REPORTING)
-    unsigned Event_State:3;
+    unsigned Event_State: 3 ;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
-    float High_Limit;
-    float Low_Limit;
-    float Feedback_Value;
-    float Deadband;
-    unsigned Limit_Enable:2;
-    unsigned Event_Enable:3;
+    bool Feedback_Value;
+    unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
-    unsigned Notify_Type:1;
+    unsigned Notify_Type : 1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
     const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
@@ -82,40 +72,34 @@ typedef struct object_data {
     /* AckNotification informations */
     ACK_NOTIFICATION Ack_notify_data;
     BACNET_RELIABILITY Last_ToFault_Event_Reliability;
+    BACNET_BINARY_PV Alarm_Value;
 #endif /* INTRINSIC_REPORTING */
-} OBJECT_DATA_ANALOG;
+} OBJECT_DATA_BINARY;
 
-//typedef struct object_data_analog_t {
 typedef struct object_data_t {
     bool Out_Of_Service : 1;
-    const char *COV_Increment;
     const char *Prior_Value;
     const char *Relinquish_Default;
-    const char *Min_Pres_Value;
-    const char *Max_Pres_Value;
+    const char *Inactive_Text;
+    const char *Active_Text;
     const char *Resolution;
-    BACNET_ENGINEERING_UNITS Units;
     uint8_t Reliability;
     const char *Object_Name;
     const char *Description;
 #if defined(INTRINSIC_REPORTING)
-    unsigned Event_State:3;
+    unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
-    const char *High_Limit;
-    const char *Low_Limit;
-    const char *Deadband;
-    unsigned Limit_Enable:2;
-    unsigned Event_Enable:3;
+    const char *Alarm_Value;
+    unsigned Limit_Enable : 2;
+    unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
-    unsigned Notify_Type:1;
-    const char *Event_Message_Texts;
-    const char *Event_Message_Texts_Custom;
+    unsigned Notify_Type : 1;
 #endif /* INTRINSIC_REPORTING */
-} OBJECT_DATA_ANALOG_T;
+} OBJECT_DATA_BINARY_T;
 
 BACNET_STACK_EXPORT
-int bacnet_array_encode_analog(
+int bacnet_array_encode_binary(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
@@ -123,144 +107,126 @@ int bacnet_array_encode_analog(
     BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *apdu,
     int max_apdu);
-BACNET_STACK_EXPORT
-float limit_value_by_resolution(float value_f, float resolution);
-BACNET_STACK_EXPORT
-int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f);
-BACNET_STACK_EXPORT
-bool Analog_Object_Name(
+bool Binary_Object_Name(
     const struct object_data *pObject, BACNET_CHARACTER_STRING *object_name);
 BACNET_STACK_EXPORT
-const char *Analog_Description(
+const char *Binary_Description(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-float Analog_Present_Value(
+BACNET_BINARY_PV Binary_Present_Value(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-unsigned Analog_Present_Value_Priority(
+unsigned Binary_Present_Value_Priority(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Analog_Object_Fault(
+bool Binary_Object_Fault(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Analog_Present_Value_Set(
-    struct object_data *pObject, float value, unsigned priority);
+bool Binary_Present_Value_Set(
+    struct object_data *pObject,
+    BACNET_BINARY_PV value,
+    unsigned priority);
 BACNET_STACK_EXPORT
-void Analog_COV_Detect(
-    struct object_data *pObject, float value);
+void Binary_COV_Detect(
+    struct object_data *pObject, BACNET_BINARY_PV value);
 BACNET_STACK_EXPORT
-int Analog_Priority_Array_Encode(
+int Binary_Priority_Array_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-bool Analog_Encode_Value_List(
+bool Binary_Encode_Value_List(
     struct object_data *pObject,
     BACNET_PROPERTY_VALUE *value_list);
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
-const char *Analog_Event_Message_Text(
+const char *Binary_Event_Message_Text(
     bacnet_get_pObject get_pObject,
     const uint32_t object_instance,
     const enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-int Analog_Event_Time_Stamps_Encode(
+int Binary_Event_Time_Stamps_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-int Analog_Event_Message_Texts_Encode(
+int Binary_Event_Message_Texts_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-const char *Analog_Event_Message(
+const char *Binary_Event_Message(
     struct object_data *pObject,
     enum BACnetEventTransitionBits transition,
     const char *default_text);
 BACNET_STACK_EXPORT
-void Analog_Intrinsic_Reporting(
+void Binary_Intrinsic_Reporting(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance);
 BACNET_STACK_EXPORT
-int Analog_Event_Information(
+int Binary_Event_Information(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
     BACNET_GET_EVENT_INFORMATION_DATA *getevent_data);
 BACNET_STACK_EXPORT
-int Analog_Alarm_Ack(
+int Binary_Alarm_Ack(
     struct object_data *pObject,
     BACNET_ALARM_ACK_DATA *alarmack_data,
     BACNET_ERROR_CODE *error_code);
 BACNET_STACK_EXPORT
-int Analog_Alarm_Summary(
+int Binary_Alarm_Summary(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
     BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
 #endif
 BACNET_STACK_EXPORT
-bool Analog_Acked_Transitions(
+bool Binary_Acked_Transitions(
     struct object_data *pObject, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
 BACNET_STACK_EXPORT
-bool Analog_Present_Value_Write(
-    struct object_data *pObject, float value, uint8_t priority,
+bool Binary_Present_Value_Write(
+    struct object_data *pObject, BACNET_BINARY_PV value, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code);
-bool Analog_Present_Value_Relinquish(
+bool Binary_Present_Value_Relinquish(
     struct object_data *pObject, unsigned priority);
 BACNET_STACK_EXPORT
-bool Analog_Present_Value_Relinquish_Write(
+bool Binary_Present_Value_Relinquish_Write(
     struct object_data *pObject, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code);
 BACNET_STACK_EXPORT
-void Analog_Out_Of_Service_Set(
+void Binary_Out_Of_Service_Set(
     struct object_data *pObject, bool value);
 BACNET_STACK_EXPORT
-void Analog_COV_Increment_Set(
-    struct object_data *pObject, float value);
-BACNET_STACK_EXPORT
-bool Analog_Name_Set(
+bool Binary_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance);
 BACNET_STACK_EXPORT
-bool Analog_Reliability_Set(
+bool Binary_Reliability_Set(
     struct object_data *pObject, BACNET_RELIABILITY value);
 BACNET_STACK_EXPORT
-bool Analog_Relinquish_Default_Set(
-    struct object_data *pObject, float value);
+bool Binary_Relinquish_Default_Set(
+    struct object_data *pObject, BACNET_BINARY_PV value);
 BACNET_STACK_EXPORT
-bool Analog_Max_Pres_Value_Set(
-    struct object_data *pObject, float value);
-BACNET_STACK_EXPORT
-bool Analog_Min_Pres_Value_Set(
-    struct object_data *pObject, float value);
-BACNET_STACK_EXPORT
-void Analog_Overridden_Set(
+void Binary_Overridden_Set(
     struct object_data *pObject, bool value);
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
-bool Analog_High_Limit_Set(
-    struct object_data *pObject, float value);
+bool Binary_Alarm_Value_Set(
+    struct object_data *pObject, BACNET_BINARY_PV value);
 BACNET_STACK_EXPORT
-bool Analog_Low_Limit_Set(
-    struct object_data *pObject, float value);
-BACNET_STACK_EXPORT
-bool Analog_Deadband_Set(
-    struct object_data *pObject, float value);
-BACNET_STACK_EXPORT
-void Analog_Reset_Event_Properties(
+void Binary_Reset_Event_Properties(
     struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Analog_Event_Detection_Enable_Set(
+bool Binary_Event_Detection_Enable_Set(
     struct object_data *pObject, bool value);
 
 #endif //INTRINSIC_REPORTING

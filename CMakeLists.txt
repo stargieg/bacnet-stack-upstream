@@ -1405,6 +1405,8 @@ if(SERVER_UCI)
     apps/server-uci/bacnet/basic/object/av.h
     apps/server-uci/bacnet/basic/object/ai.c
     apps/server-uci/bacnet/basic/object/ai.h
+    apps/server-uci/bacnet/basic/object/binary.c
+    apps/server-uci/bacnet/basic/object/binary.h
     apps/server-uci/bacnet/basic/object/bo.c
     apps/server-uci/bacnet/basic/object/bo.h
     apps/server-uci/bacnet/basic/object/bv.c

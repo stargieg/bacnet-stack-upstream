@@ -425,7 +425,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], units);
             break;
         case PROP_PRIORITY_ARRAY:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Value_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Priority_Array_Encode,
@@ -546,7 +546,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], i ? NOTIFY_EVENT : NOTIFY_ALARM);
             break;
         case PROP_EVENT_TIME_STAMPS:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Value_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Event_Time_Stamps_Encode,
@@ -560,7 +560,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             }
             break;
         case PROP_EVENT_MESSAGE_TEXTS:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Value_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Event_Message_Texts_Encode,

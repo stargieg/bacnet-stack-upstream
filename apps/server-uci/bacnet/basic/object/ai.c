@@ -133,6 +133,7 @@ void Analog_Input_Property_Lists(
  * @brief Get the list of writable properties for an Analog Input object
  * @param  object_instance - object-instance number of the object
  * @param  properties - Pointer to the pointer of writable properties.
+ * export
  */
 void Analog_Input_Writable_Property_List(
     uint32_t object_instance, const int32_t **properties)
@@ -422,7 +423,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = encode_application_enumerated(&apdu[0], units);
             break;
         case PROP_PRIORITY_ARRAY:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Input_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Priority_Array_Encode,
@@ -543,7 +544,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[0], i ? NOTIFY_EVENT : NOTIFY_ALARM);
             break;
         case PROP_EVENT_TIME_STAMPS:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Input_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Event_Time_Stamps_Encode,
@@ -557,7 +558,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             }
             break;
         case PROP_EVENT_MESSAGE_TEXTS:
-            apdu_len = bacnet_array_encode_object(
+            apdu_len = bacnet_array_encode_analog(
                 Analog_Input_Object,
                 rpdata->object_instance, rpdata->array_index,
                 Analog_Event_Message_Texts_Encode,
@@ -938,7 +939,6 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     return status;
 }
 
-
 /**
  * @brief Handles the Intrinsic Reporting Service for the Analog Input Object
  * @param  object_instance - object-instance number of the object
@@ -975,8 +975,8 @@ int Analog_Input_Event_Information(
     struct object_data *pObject;
     uint32_t instance;
 
-    pObject = Keylist_Data(Object_List, Analog_Input_Index_To_Instance(index));
     instance = Analog_Input_Index_To_Instance(index);
+    pObject = Keylist_Data(Object_List, instance);
     i = Analog_Event_Information(pObject, Object_Type, instance, getevent_data);
     return i;
 }
@@ -998,7 +998,7 @@ int Analog_Input_Alarm_Ack(
     }
     pObject =
         Keylist_Data(Object_List, alarmack_data->eventObjectIdentifier.instance);
-    return Analog_Alarm_Ack(pObject,alarmack_data,error_code);
+    return Analog_Alarm_Ack(pObject, alarmack_data, error_code);
 }
 
 /**
@@ -1056,6 +1056,7 @@ void Analog_Input_Context_Set(uint32_t object_instance, void *context)
  * @brief Creates a Analog Input object
  * @param object_instance - object-instance number of the object
  * @return the object-instance that was created, or BACNET_MAX_INSTANCE
+ * export
  */
 uint32_t Analog_Input_Create(uint32_t object_instance)
 {
@@ -1102,6 +1103,7 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
             pObject->Time_Delay = 0;
             /* notification class not connected */
             pObject->Notification_Class = BACNET_MAX_INSTANCE;
+            Analog_Reset_Event_Properties(pObject);
 #endif
             /* add to list */
             index = Keylist_Data_Add(Object_List, object_instance, pObject);
@@ -1109,9 +1111,6 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
                 free(pObject);
                 return BACNET_MAX_INSTANCE;
             }
-#if defined(INTRINSIC_REPORTING)
-            Analog_Reset_Event_Properties(pObject);
-#endif
         } else {
             return BACNET_MAX_INSTANCE;
         }
@@ -1125,6 +1124,7 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
  * @brief Deletes an Analog Input object
  * @param object_instance - object-instance number of the object
  * @return true if the object-instance was deleted
+ * export
  */
 bool Analog_Input_Delete(uint32_t object_instance)
 {

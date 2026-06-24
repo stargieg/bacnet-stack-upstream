@@ -39,47 +39,31 @@ typedef void (*binary_value_write_present_value_callback)(
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-
+/* Default_Object_Table Start */
 BACNET_STACK_EXPORT
 void Binary_Value_Init(void);
-
-BACNET_STACK_EXPORT
-void Binary_Value_Property_Lists(
-    const int32_t **pRequired,
-    const int32_t **pOptional,
-    const int32_t **pProprietary);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 unsigned Binary_Value_Count(void);
 BACNET_STACK_EXPORT
 uint32_t Binary_Value_Index_To_Instance(unsigned index);
 BACNET_STACK_EXPORT
-unsigned Binary_Value_Instance_To_Index(uint32_t object_instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Object_Instance_Add(uint32_t instance);
-
+bool Binary_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Binary_Value_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
 BACNET_STACK_EXPORT
-bool Binary_Value_Name_Set(uint32_t object_instance, const char *new_name);
-BACNET_STACK_EXPORT
-const char *Binary_Value_Name_ASCII(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-BACNET_RELIABILITY Binary_Value_Reliability(uint32_t object_instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Reliability_Set(
-    uint32_t object_instance, BACNET_RELIABILITY value);
-
-BACNET_STACK_EXPORT
 int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
-
 BACNET_STACK_EXPORT
 bool Binary_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
-
+BACNET_STACK_EXPORT
+void Binary_Value_Property_Lists(
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
+/* BACNET_STACK_EXPORT */
+/* ReadRangeInfo */
+/* BACNET_STACK_EXPORT */
+/* Iterator */
 BACNET_STACK_EXPORT
 bool Binary_Value_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list);
@@ -87,148 +71,44 @@ BACNET_STACK_EXPORT
 bool Binary_Value_Change_Of_Value(uint32_t instance);
 BACNET_STACK_EXPORT
 void Binary_Value_Change_Of_Value_Clear(uint32_t instance);
-
+/* note: header of Intrinsic_Reporting function is required
+   even when INTRINSIC_REPORTING is not defined */
 BACNET_STACK_EXPORT
-BACNET_BINARY_PV Binary_Value_Present_Value(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Present_Value_Set(uint32_t instance, BACNET_BINARY_PV binary_value, unsigned priority);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Present_Value_Relinquish(uint32_t instance, unsigned priority);
-BACNET_STACK_EXPORT
-unsigned Binary_Value_Present_Value_Priority(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-void Binary_Value_Write_Present_Value_Callback_Set(
-    binary_value_write_present_value_callback cb);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Write_Enabled(uint32_t instance);
-BACNET_STACK_EXPORT
-void Binary_Value_Write_Enable(uint32_t instance);
-BACNET_STACK_EXPORT
-void Binary_Value_Write_Disable(uint32_t instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Out_Of_Service(uint32_t instance);
-BACNET_STACK_EXPORT
-void Binary_Value_Out_Of_Service_Set(uint32_t object_instance, bool value);
-
-BACNET_STACK_EXPORT
-BACNET_BINARY_PV Binary_Value_Relinquish_Default(
-    uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Relinquish_Default_Set(
-    uint32_t object_instance,
-    BACNET_BINARY_PV value);
-
-BACNET_STACK_EXPORT
-const char *Binary_Value_Description(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Description_Set(
-    uint32_t object_instance, const char *text_string);
-
-BACNET_STACK_EXPORT
-const char *Binary_Value_Inactive_Text(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Inactive_Text_Set(uint32_t instance, const char *new_name);
-BACNET_STACK_EXPORT
-const char *Binary_Value_Active_Text(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Active_Text_Set(uint32_t instance, const char *new_name);
-
-BACNET_STACK_EXPORT
-BACNET_POLARITY Binary_Value_Polarity(uint32_t instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Polarity_Set(
-    uint32_t object_instance, BACNET_POLARITY polarity);
-
-BACNET_STACK_EXPORT
-void *Binary_Value_Context_Get(uint32_t object_instance);
-BACNET_STACK_EXPORT
-void Binary_Value_Context_Set(uint32_t object_instance, void *context);
-
+void Binary_Value_Intrinsic_Reporting(uint32_t object_instance);
+/* BACNET_STACK_EXPORT */
+/* Add_List_Element */
+/* BACNET_STACK_EXPORT */
+/* Remove_List_Element */
 BACNET_STACK_EXPORT
 uint32_t Binary_Value_Create(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Binary_Value_Delete(uint32_t object_instance);
+/* BACNET_STACK_EXPORT */
+/* Timer */
 BACNET_STACK_EXPORT
-void Binary_Value_Cleanup(void);
-
-BACNET_STACK_EXPORT
-const char *Binary_Value_Event_Message_Text(
-    uint32_t object_instance, enum BACnetEventTransitionBits transition);
-BACNET_STACK_EXPORT
-bool Binary_Value_Event_Message_Text_Custom_Set(
-    uint32_t object_instance,
-    enum BACnetEventTransitionBits transition,
-    const char *custom_text);
+void Binary_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
+/* Default_Object_Table End */
 
 #if defined(INTRINSIC_REPORTING)
-BACNET_STACK_EXPORT
-bool Binary_Value_Event_Detection_Enable(uint32_t object_instance);
-BACNET_STACK_EXPORT
-bool Binary_Value_Event_Detection_Enable_Set(
-    uint32_t object_instance, bool value);
-
+/* event handler start */
 BACNET_STACK_EXPORT
 int Binary_Value_Event_Information(
     unsigned index, BACNET_GET_EVENT_INFORMATION_DATA *getevent_data);
-
 BACNET_STACK_EXPORT
 int Binary_Value_Alarm_Ack(
     BACNET_ALARM_ACK_DATA *alarmack_data, BACNET_ERROR_CODE *error_code);
-
 BACNET_STACK_EXPORT
 int Binary_Value_Alarm_Summary(
     unsigned index, BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
-
-BACNET_STACK_EXPORT
-uint32_t Binary_Value_Time_Delay(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Time_Delay_Set(uint32_t object_instance, uint32_t time_delay);
-
-BACNET_STACK_EXPORT
-uint32_t Binary_Value_Notification_Class(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Notification_Class_Set(
-    uint32_t object_instance, uint32_t notification_class);
-
-BACNET_STACK_EXPORT
-BACNET_BINARY_PV Binary_Value_Alarm_Value(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Alarm_Value_Set(
-    uint32_t object_instance, BACNET_BINARY_PV value);
-
-BACNET_STACK_EXPORT
-uint32_t Binary_Value_Event_Enable(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Event_Enable_Set(
-    uint32_t object_instance, uint32_t event_enable);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Acked_Transitions(
-    uint32_t object_instance, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
-
-BACNET_STACK_EXPORT
-BACNET_NOTIFY_TYPE Binary_Value_Notify_Type(uint32_t object_instance);
-
-BACNET_STACK_EXPORT
-bool Binary_Value_Notify_Type_Set(
-    uint32_t object_instance, BACNET_NOTIFY_TYPE notify_type);
-BACNET_STACK_EXPORT
-bool Binary_Value_Event_Time_Stamps(
-    uint32_t object_instance, BACNET_DATE_TIME *value[MAX_BACNET_EVENT_TRANSITION]);
-
+/* event handler end */
 #endif
-
 BACNET_STACK_EXPORT
-void Binary_Value_Intrinsic_Reporting(uint32_t object_instance);
+void *Binary_Value_Context_Get(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Binary_Value_Context_Set(uint32_t object_instance, void *context);
+BACNET_STACK_EXPORT
+void Binary_Value_Cleanup(void);
 
 #ifdef __cplusplus
 }
