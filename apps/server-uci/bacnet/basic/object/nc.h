@@ -51,34 +51,35 @@ typedef struct Ack_Notification {
     uint8_t EventState;
 } ACK_NOTIFICATION;
 
-BACNET_STACK_EXPORT
-void Notification_Class_Property_Lists(
-    const int32_t **pRequired,
-    const int32_t **pOptional,
-    const int32_t **pProprietary);
-
+/* Default_Object_Table Start */
 BACNET_STACK_EXPORT
 void Notification_Class_Init(void);
-
-bool Notification_Class_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 unsigned Notification_Class_Count(void);
 BACNET_STACK_EXPORT
 uint32_t Notification_Class_Index_To_Instance(unsigned index);
 BACNET_STACK_EXPORT
-unsigned Notification_Class_Instance_To_Index(uint32_t object_instance);
+bool Notification_Class_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Notification_Class_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
 BACNET_STACK_EXPORT
+int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
+BACNET_STACK_EXPORT
+bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
+BACNET_STACK_EXPORT
+void Notification_Class_Property_Lists(
+    const int32_t **pRequired,
+    const int32_t **pOptional,
+    const int32_t **pProprietary);
+/* Default_Object_Table End */
+
+
+/* event handler start */
+BACNET_STACK_EXPORT
 const char *Notification_Class_Event_Message_Text(
     const uint32_t object_instance,
     const enum BACnetEventTransitionBits transition);
-BACNET_STACK_EXPORT
-int Notification_Class_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data);
 
 BACNET_STACK_EXPORT
 int Notification_Class_Add_List_Element(BACNET_LIST_ELEMENT_DATA *list_element);
@@ -92,58 +93,11 @@ void Notification_Class_Get_Priorities(
     uint32_t Object_Instance, uint32_t *pPriorityArray);
 
 BACNET_STACK_EXPORT
-void Notification_Class_Set_Priority(
-    uint32_t object_instance, uint8_t Priority, uint8_t a);
- 
-BACNET_STACK_EXPORT
-void Notification_Class_Set_Priorities(
-    uint32_t Object_Instance, uint8_t PriorityArray[MAX_BACNET_EVENT_TRANSITION]);
-
-BACNET_STACK_EXPORT
-void Notification_Class_Get_Ack_Required(
-    uint32_t Object_Instance, uint8_t *pAckRequired);
-
-BACNET_STACK_EXPORT
-void Notification_Class_Set_Ack_Required(
-    uint32_t Object_Instance, uint8_t Ack_Required);
-
-BACNET_STACK_EXPORT
-BACNET_DESTINATION * Notification_Class_Get_Recipient(
-    uint32_t Object_Instance, uint8_t b);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Get_Recipient_List(
-    uint32_t Object_Instance, BACNET_DESTINATION *pRecipientList);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Set_Recipient(
-    uint32_t Object_Instance, BACNET_DESTINATION *pRecipient, uint8_t idx);
-
-    BACNET_STACK_EXPORT
-bool Notification_Class_Set_Recipient_List(
-    uint32_t Object_Instance, BACNET_DESTINATION *pRecipientList);
-
-BACNET_STACK_EXPORT
 void Notification_Class_common_reporting_function(
     BACNET_EVENT_NOTIFICATION_DATA *event_data);
 
 BACNET_STACK_EXPORT
 void Notification_Class_find_recipient(void);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Name_Set(
-    uint32_t object_instance, char *new_name);
-
-BACNET_STACK_EXPORT
-const char *Notification_Class_Description(uint32_t instance);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Description_Set(
-    uint32_t instance, const char *new_name);
-
-BACNET_STACK_EXPORT
-bool Notification_Class_Priority(
-    uint32_t object_instance, uint8_t value[MAX_BACNET_EVENT_TRANSITION]);
 
 #endif /* defined(INTRINSIC_REPORTING) */
 

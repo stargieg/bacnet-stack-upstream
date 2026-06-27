@@ -5,8 +5,8 @@
  * @date April 2024
  * @copyright SPDX-License-Identifier: MIT
  */
-#ifndef BACNET_OBJECT_BINARY_H
-#define BACNET_OBJECT_BINARY_H
+#ifndef BACNET_OBJECT_MULTI_STATE_H
+#define BACNET_OBJECT_MULTI_STATE_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -44,22 +44,23 @@ typedef struct object_data {
     bool Out_Of_Service : 1;
     bool Overridden : 1;
     bool Changed : 1;
-    bool Prior_Value : 1;
+    uint8_t Prior_Value;
     bool Relinquished[BACNET_MAX_PRIORITY];
-    bool Priority_Array[BACNET_MAX_PRIORITY];
-    bool Relinquish_Default : 1;
-    bool Polarity : 1;
+    uint8_t Priority_Array[BACNET_MAX_PRIORITY];
+    uint8_t Relinquish_Default;
     uint8_t Reliability;
+    /* The state text functions expect a list of C strings separated by '\0' */
+    const char *State_Text[254];
+    uint32_t State_Count;
     const char *Object_Name;
     const char *Description;
-    const char *Active_Text;
-    const char *Inactive_Text;
     void *Context;
 #if defined(INTRINSIC_REPORTING)
-    unsigned Event_State: 3 ;
+    unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
-    bool Feedback_Value;
+    bool Alarm_State[254];
+    uint8_t Feedback_Value;
     unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
@@ -72,34 +73,31 @@ typedef struct object_data {
     /* AckNotification informations */
     ACK_NOTIFICATION Ack_notify_data;
     BACNET_RELIABILITY Last_ToFault_Event_Reliability;
-    BACNET_BINARY_PV Alarm_Value;
 #endif /* INTRINSIC_REPORTING */
-} OBJECT_DATA_BINARY;
+} OBJECT_DATA_MULTI_STATE;
 
 typedef struct object_data_t {
     bool Out_Of_Service : 1;
     const char *Prior_Value;
     const char *Relinquish_Default;
-    const char *Inactive_Text;
-    const char *Active_Text;
-    const char *Resolution;
     uint8_t Reliability;
+    const char *State_Text[254];
+    uint32_t State_Count;
     const char *Object_Name;
     const char *Description;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
-    const char *Alarm_Value;
-    unsigned Limit_Enable : 2;
+    bool Alarm_State[254];
     unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
 #endif /* INTRINSIC_REPORTING */
-} OBJECT_DATA_BINARY_T;
+} OBJECT_DATA_MULTI_STATE_T;
 
 BACNET_STACK_EXPORT
-int bacnet_array_encode_binary(
+int bacnet_array_encode_multistate(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
@@ -107,126 +105,134 @@ int bacnet_array_encode_binary(
     BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *apdu,
     int max_apdu);
-bool Binary_Object_Name(
+BACNET_STACK_EXPORT
+bool Multistate_Object_Name(
     const struct object_data *pObject, BACNET_CHARACTER_STRING *object_name);
 BACNET_STACK_EXPORT
-const char *Binary_Description(
+const char *Multistate_Description(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-BACNET_BINARY_PV Binary_Present_Value(
+uint8_t Multistate_Present_Value(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-unsigned Binary_Present_Value_Priority(
+const char *Multistate_State_Text(
+    const struct object_data *pObject,
+    uint32_t state_index);
+BACNET_STACK_EXPORT
+unsigned Multistate_Present_Value_Priority(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Binary_Object_Fault(
+bool Multistate_Object_Fault(
     const struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Binary_Present_Value_Set(
-    struct object_data *pObject,
-    BACNET_BINARY_PV value,
-    unsigned priority);
+bool Multistate_Present_Value_Set(
+    struct object_data *pObject, uint8_t value, unsigned priority);
 BACNET_STACK_EXPORT
-void Binary_COV_Detect(
-    struct object_data *pObject, BACNET_BINARY_PV value);
+void Multistate_COV_Detect(
+    struct object_data *pObject, uint8_t value);
 BACNET_STACK_EXPORT
-int Binary_Priority_Array_Encode(
+int Multistate_Priority_Array_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-bool Binary_Encode_Value_List(
+bool Multistate_Encode_Value_List(
     struct object_data *pObject,
     BACNET_PROPERTY_VALUE *value_list);
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
-const char *Binary_Event_Message_Text(
+const char *Multistate_Event_Message_Text(
     bacnet_get_pObject get_pObject,
     const uint32_t object_instance,
     const enum BACnetEventTransitionBits transition);
 BACNET_STACK_EXPORT
-int Binary_Event_Time_Stamps_Encode(
+int Multistate_Event_Time_Stamps_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-int Binary_Event_Message_Texts_Encode(
+int Multistate_Event_Message_Texts_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
     uint8_t *apdu);
 BACNET_STACK_EXPORT
-const char *Binary_Event_Message(
+const char *Multistate_Event_Message(
     struct object_data *pObject,
     enum BACnetEventTransitionBits transition,
     const char *default_text);
 BACNET_STACK_EXPORT
-void Binary_Intrinsic_Reporting(
+void Multistate_Intrinsic_Reporting(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance);
 BACNET_STACK_EXPORT
-int Binary_Event_Information(
+int Multistate_Event_Information(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
     BACNET_GET_EVENT_INFORMATION_DATA *getevent_data);
 BACNET_STACK_EXPORT
-int Binary_Alarm_Ack(
+int Multistate_Alarm_Ack(
     struct object_data *pObject,
     BACNET_ALARM_ACK_DATA *alarmack_data,
     BACNET_ERROR_CODE *error_code);
 BACNET_STACK_EXPORT
-int Binary_Alarm_Summary(
+int Multistate_Alarm_Summary(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
     BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
 BACNET_STACK_EXPORT
-bool Binary_Acked_Transitions(
+bool Multistate_Acked_Transitions(
     struct object_data *pObject, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
 #endif
 BACNET_STACK_EXPORT
-bool Binary_Present_Value_Write(
-    struct object_data *pObject, BACNET_BINARY_PV value, uint8_t priority,
+bool Multistate_Present_Value_Write(
+    struct object_data *pObject, uint8_t value, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code);
-bool Binary_Present_Value_Relinquish(
+bool Multistate_Present_Value_Relinquish(
     struct object_data *pObject, unsigned priority);
 BACNET_STACK_EXPORT
-bool Binary_Present_Value_Relinquish_Write(
+bool Multistate_Present_Value_Relinquish_Write(
     struct object_data *pObject, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code);
 BACNET_STACK_EXPORT
-void Binary_Out_Of_Service_Set(
+void Multistate_Out_Of_Service_Set(
     struct object_data *pObject, bool value);
 BACNET_STACK_EXPORT
-bool Binary_Name_Set(
+bool Multistate_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance);
 BACNET_STACK_EXPORT
-bool Binary_Reliability_Set(
+bool Multistate_State_Text_Set(
+    struct object_data *pObject,
+    uint32_t state_index,
+    BACNET_CHARACTER_STRING *char_string);
+BACNET_STACK_EXPORT
+bool Multistate_Reliability_Set(
     struct object_data *pObject, BACNET_RELIABILITY value);
 BACNET_STACK_EXPORT
-bool Binary_Relinquish_Default_Set(
-    struct object_data *pObject, BACNET_BINARY_PV value);
+bool Multistate_Relinquish_Default_Set(
+    struct object_data *pObject, uint8_t value);
 BACNET_STACK_EXPORT
-void Binary_Overridden_Set(
+void Multistate_Overridden_Set(
     struct object_data *pObject, bool value);
 #if defined(INTRINSIC_REPORTING)
 BACNET_STACK_EXPORT
-bool Binary_Alarm_Value_Set(
-    struct object_data *pObject, BACNET_BINARY_PV value);
+bool Multistate_High_Limit_Set(
+    struct object_data *pObject, uint8_t value);
 BACNET_STACK_EXPORT
-void Binary_Reset_Event_Properties(
+void Multistate_Reset_Event_Properties(
     struct object_data *pObject);
 BACNET_STACK_EXPORT
-bool Binary_Event_Detection_Enable_Set(
+bool Multistate_Event_Detection_Enable_Set(
     struct object_data *pObject, bool value);
 
 #endif //INTRINSIC_REPORTING

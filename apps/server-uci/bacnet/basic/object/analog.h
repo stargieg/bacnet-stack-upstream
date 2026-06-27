@@ -40,10 +40,6 @@ typedef int (*bacnet_array_property_element_encode_function_object)(
 extern "C" {
 #endif /* __cplusplus */
 
-
-// Analog
-
-//typedef struct object_data_analog {
 typedef struct object_data {
     bool Out_Of_Service : 1;
     bool Overridden : 1;
@@ -62,15 +58,15 @@ typedef struct object_data {
     const char *Description;
     void *Context;
 #if defined(INTRINSIC_REPORTING)
-    unsigned Event_State:3;
+    unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
     float High_Limit;
     float Low_Limit;
     float Feedback_Value;
     float Deadband;
-    unsigned Limit_Enable:2;
-    unsigned Event_Enable:3;
+    unsigned Limit_Enable : 2;
+    unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type:1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
@@ -85,7 +81,6 @@ typedef struct object_data {
 #endif /* INTRINSIC_REPORTING */
 } OBJECT_DATA_ANALOG;
 
-//typedef struct object_data_analog_t {
 typedef struct object_data_t {
     bool Out_Of_Service : 1;
     const char *COV_Increment;
@@ -99,16 +94,16 @@ typedef struct object_data_t {
     const char *Object_Name;
     const char *Description;
 #if defined(INTRINSIC_REPORTING)
-    unsigned Event_State:3;
+    unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
     const char *High_Limit;
     const char *Low_Limit;
     const char *Deadband;
-    unsigned Limit_Enable:2;
-    unsigned Event_Enable:3;
+    unsigned Limit_Enable : 2;
+    unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
-    unsigned Notify_Type:1;
+    unsigned Notify_Type : 1;
     const char *Event_Message_Texts;
     const char *Event_Message_Texts_Custom;
 #endif /* INTRINSIC_REPORTING */
@@ -203,10 +198,10 @@ int Analog_Alarm_Summary(
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
     BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
-#endif
 BACNET_STACK_EXPORT
 bool Analog_Acked_Transitions(
     struct object_data *pObject, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION]);
+#endif
 BACNET_STACK_EXPORT
 bool Analog_Present_Value_Write(
     struct object_data *pObject, float value, uint8_t priority,

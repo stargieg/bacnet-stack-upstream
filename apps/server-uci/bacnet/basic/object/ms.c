@@ -19,7 +19,7 @@
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/object/device.h"
 /* me! */
-#include "bacnet/basic/object/binary.h"
+#include "bacnet/basic/object/ms.h"
 
 
 /**
@@ -38,7 +38,7 @@
  *   BACNET_STATUS_ERROR for an invalid array index
  *   BACNET_STATUS_ABORT for abort message.
  */
-int bacnet_array_encode_binary(
+int bacnet_array_encode_multistate(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
@@ -96,12 +96,32 @@ int bacnet_array_encode_binary(
 }
 
 /**
+ * @brief For a given object instance-number, returns the state-text in
+ *  a C string.
+ * @param  struct object_data
+ * @param  state_index - state index number 1..N of the text requested
+ * @return  C string retrieved
+ */
+const char *
+Multistate_State_Text(const struct object_data *pObject, uint32_t state_index)
+{
+    const char *pName = NULL; /* return value */
+    if (pObject) {
+        if (state_index > 0) {
+            pName = (const char *)pObject->State_Text[state_index-1];
+        }
+    }
+
+    return pName;
+}
+
+/**
  * @brief Get the object name
  * @param  object pointer - struct object_data
  * @param  object_name - holds the object-name to be retrieved
  * @return  true if object-name was retrieved
  */
-bool Binary_Object_Name(
+bool Multistate_Object_Name(
     const struct object_data *pObject, BACNET_CHARACTER_STRING *object_name)
 {
     bool status = false;
@@ -120,7 +140,7 @@ bool Binary_Object_Name(
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-const char *Binary_Description(const struct object_data *pObject)
+const char *Multistate_Description(const struct object_data *pObject)
 {
     const char *name = NULL;
     if (pObject) {
@@ -135,9 +155,9 @@ const char *Binary_Description(const struct object_data *pObject)
  * @param  object pointer - struct object_data
  * @return  present-value of the object
  */
-BACNET_BINARY_PV Binary_Present_Value(const struct object_data *pObject)
+uint8_t Multistate_Present_Value(const struct object_data *pObject)
 {
-    BACNET_BINARY_PV value = 0;
+    uint8_t value = 1;
     uint8_t priority = 0; /* loop counter */
 
     if (pObject) {
@@ -158,7 +178,7 @@ BACNET_BINARY_PV Binary_Present_Value(const struct object_data *pObject)
  * @param  object_instance - object-instance number of the object
  * @return  active priority 1..16, or 0 if no priority is active
  */
-unsigned Binary_Present_Value_Priority(
+unsigned Multistate_Present_Value_Priority(
     const struct object_data *pObject)
 {
     unsigned p = 0; /* loop counter */
@@ -180,7 +200,7 @@ unsigned Binary_Present_Value_Priority(
  * @param  object pointer - struct object_data
  * @return  true the status flag is in Fault
  */
-bool Binary_Object_Fault(const struct object_data *pObject)
+bool Multistate_Object_Fault(const struct object_data *pObject)
 {
     bool fault = false;
 
@@ -198,9 +218,9 @@ bool Binary_Object_Fault(const struct object_data *pObject)
  * @param object pointer - struct object_data
  * @param value  Given present value.
  */
-void Binary_COV_Detect(struct object_data *pObject, BACNET_BINARY_PV value)
+void Multistate_COV_Detect(struct object_data *pObject, uint8_t value)
 {
-    BACNET_BINARY_PV prior_value = false;
+    uint8_t prior_value = 1;
 
     if (pObject) {
         prior_value = pObject->Prior_Value;
@@ -221,7 +241,7 @@ void Binary_COV_Detect(struct object_data *pObject, BACNET_BINARY_PV value)
  * @return The length of the apdu encoded or
  *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-int Binary_Priority_Array_Encode(
+int Multistate_Priority_Array_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
@@ -229,7 +249,7 @@ int Binary_Priority_Array_Encode(
 {
     int apdu_len = BACNET_STATUS_ERROR;
     struct object_data *pObject;
-    BACNET_BINARY_PV value = BINARY_INACTIVE;
+    uint8_t value = 1;
 
     pObject = get_pObject(object_instance);
     if (pObject && (index < BACNET_MAX_PRIORITY)) {
@@ -253,7 +273,7 @@ int Binary_Priority_Array_Encode(
  *
  * @return  true if the value list is encoded
  */
-bool Binary_Encode_Value_List(
+bool Multistate_Encode_Value_List(
     struct object_data *pObject,
     BACNET_PROPERTY_VALUE *value_list)
 {
@@ -262,7 +282,7 @@ bool Binary_Encode_Value_List(
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
-    BACNET_BINARY_PV value = BINARY_INACTIVE;
+    uint8_t value = 1;
 
     if (pObject) {
 #if defined(INTRINSIC_REPORTING)
@@ -270,13 +290,13 @@ bool Binary_Encode_Value_List(
             in_alarm = true;
         }
 #endif
-        if (Binary_Object_Fault(pObject)){
+        if (Multistate_Object_Fault(pObject)){
             fault = true;
         }
         overridden = pObject->Overridden;
         out_of_service = pObject->Out_Of_Service;
-        value = Binary_Present_Value(pObject);
-        status = cov_value_list_encode_enumerated(
+        value = Multistate_Present_Value(pObject);
+        status = cov_value_list_encode_unsigned(
             value_list, value, in_alarm, fault, overridden,
             out_of_service);
     }
@@ -293,7 +313,7 @@ bool Binary_Encode_Value_List(
  * @param  transition - transition type
  * @return event message text or NULL if object not found or transition invalid
  */
-const char *Binary_Event_Message_Text(
+const char *Multistate_Event_Message_Text(
     bacnet_get_pObject get_pObject,
     const uint32_t object_instance,
     const enum BACnetEventTransitionBits transition)
@@ -328,7 +348,7 @@ const char *Binary_Event_Message_Text(
  * @return The length of the apdu encoded or
  *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-int Binary_Event_Time_Stamps_Encode(
+int Multistate_Event_Time_Stamps_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
@@ -380,7 +400,7 @@ int Binary_Event_Time_Stamps_Encode(
  * @return The length of the apdu encoded or
  *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
  */
-int Binary_Event_Message_Texts_Encode(
+int Multistate_Event_Message_Texts_Encode(
     bacnet_get_pObject get_pObject,
     uint32_t object_instance,
     BACNET_ARRAY_INDEX index,
@@ -390,7 +410,7 @@ int Binary_Event_Message_Texts_Encode(
     const char *text = NULL; /* return value */
     BACNET_CHARACTER_STRING char_string = { 0 };
 
-    text = Binary_Event_Message_Text(get_pObject, object_instance, index);
+    text = Multistate_Event_Message_Text(get_pObject, object_instance, index);
     if (text) {
         characterstring_init_ansi(&char_string, text);
         apdu_len = encode_application_character_string(apdu, &char_string);
@@ -406,7 +426,7 @@ int Binary_Event_Message_Texts_Encode(
  * @param default_text [in] default message
  * @return Event_Message char
  */
-const char *Binary_Event_Message(
+const char *Multistate_Event_Message(
     struct object_data *pObject,
     enum BACnetEventTransitionBits transition,
     const char *default_text)
@@ -435,7 +455,7 @@ const char *Binary_Event_Message(
  * @param  object_instance - object-instance number of the object
  * export
  */
-void Binary_Intrinsic_Reporting(
+void Multistate_Intrinsic_Reporting(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance)
@@ -445,7 +465,7 @@ void Binary_Intrinsic_Reporting(
     BACNET_CHARACTER_STRING msgCharString = { 0 };
     uint8_t FromState = 0;
     uint8_t ToState = 0;
-    BACNET_BINARY_PV PresentVal = BINARY_INACTIVE;
+    uint8_t PresentVal = 1;
     BACNET_RELIABILITY Reliability = RELIABILITY_NO_FAULT_DETECTED;
     BACNET_PROPERTY_VALUE propertyValues = { 0 };
     bool SendNotify = false;
@@ -465,14 +485,14 @@ void Binary_Intrinsic_Reporting(
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
         debug_log_fprintf(DEBUG_LOG_INFO, stderr,
-            "Binary %i [%d]: Send AckNotification.\n", Object_Type, object_instance);
+            "Multi-State [%d]: Send AckNotification.\n", object_instance);
         msgText = "AckNotification";
         /* Notify Type */
         event_data.notifyType = NOTIFY_ACK_NOTIFICATION;
         /* Send EventNotification. */
         SendNotify = true;
     } else {
-        PresentVal = Binary_Present_Value(pObject);
+        PresentVal = Multistate_Present_Value(pObject);
         FromState = pObject->Event_State;
         Reliability = pObject->Reliability;
         if (Reliability != RELIABILITY_NO_FAULT_DETECTED) {
@@ -486,47 +506,44 @@ void Binary_Intrinsic_Reporting(
         } else {
             switch (pObject->Event_State) {
                 case EVENT_STATE_NORMAL:
-                    /* (a) If pCurrentState is NORMAL, and pMonitoredValue is equal
-                    to any of the values contained in pAlarmValues for
-                        pTimeDelay, then indicate a transition to the OFFNORMAL
-                    event state.
-                    */
-                    if ((PresentVal == pObject->Alarm_Value) &&
+                    /* A TO-OFFNORMAL event is generated under these conditions:
+                    (a) the Present_Value must exceed the High_Limit for a
+                    minimum period of time, specified in the Time_Delay
+                    property, and (b) the HighLimitEnable flag must be set in
+                    the Limit_Enable property, and (c) the TO-OFFNORMAL flag
+                    must be set in the Event_Enable property. */
+                    if (pObject->Alarm_State[PresentVal-1] &&
                         ((pObject->Event_Enable & EVENT_ENABLE_TO_OFFNORMAL) ==
                             EVENT_ENABLE_TO_OFFNORMAL)) {
-                        if (!pObject->Remaining_Time_Delay) {
+                        if (!pObject->Remaining_Time_Delay)
                             pObject->Event_State = EVENT_STATE_OFFNORMAL;
-                        } else {
+                        else
                             pObject->Remaining_Time_Delay--;
-                        }
                         break;
                     }
 
                     /* value of the object is still in the same event state */
                     pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-
                 case EVENT_STATE_OFFNORMAL:
-                    /* (b) If pCurrentState is OFFNORMAL, and pMonitoredValue is not
-                    equal to any of the values contained in pAlarmValues for
-                    pTimeDelayNormal, then indicate a transition to the NORMAL
-                    event state.
-                    */
-                    if (PresentVal != pObject->Alarm_Value &&
-                        ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
-                          EVENT_ENABLE_TO_NORMAL)) {
-                        if (!pObject->Remaining_Time_Delay) {
+                    /* Once exceeded, the Present_Value must fall below the High_Limit minus
+                    the Deadband before a TO-NORMAL event is generated under these conditions:
+                    (a) the Present_Value must fall below the High_Limit minus the Deadband
+                    for a minimum period of time, specified in the Time_Delay property, and
+                    (b) the HighLimitEnable flag must be set in the Limit_Enable property, and
+                    (c) the TO-NORMAL flag must be set in the Event_Enable property. */
+                    if (!pObject->Alarm_State[PresentVal-1]
+                        && ((pObject->Event_Enable & EVENT_ENABLE_TO_NORMAL) ==
+                            EVENT_ENABLE_TO_NORMAL)) {
+                        if (!pObject->Remaining_Time_Delay)
                             pObject->Event_State = EVENT_STATE_NORMAL;
-                        } else {
+                        else
                             pObject->Remaining_Time_Delay--;
-                        }
                         break;
                     }
-
                     /* value of the object is still in the same event state */
                     pObject->Remaining_Time_Delay = pObject->Time_Delay;
                     break;
-
                 default:
                     return; /* shouldn't happen */
             } /* switch (FromState) */
@@ -540,25 +557,23 @@ void Binary_Intrinsic_Reporting(
                Other parameters will be filled in common function. */
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
-                    msgText = Binary_Event_Message(
+                    msgText = Multistate_Event_Message(
                         pObject, TRANSITION_TO_OFFNORMAL,
                         "Goes to off-normal");
                     break;
-
                 case EVENT_STATE_NORMAL:
                     if (FromState == EVENT_STATE_OFFNORMAL) {
-                        msgText = Binary_Event_Message(
+                        msgText = Multistate_Event_Message(
                             pObject, TRANSITION_TO_NORMAL,
                             "Back to normal state from off-normal");
                     } else {
-                        msgText = Binary_Event_Message(
+                        msgText = Multistate_Event_Message(
                             pObject, TRANSITION_TO_NORMAL,
                             "Back to normal state from fault");
                     }
                     break;
-
                 case EVENT_STATE_FAULT:
-                    msgText = Binary_Event_Message(
+                    msgText = Multistate_Event_Message(
                             pObject, TRANSITION_TO_FAULT,
                         bactext_reliability_name(Reliability));
                     pObject->Last_ToFault_Event_Reliability = Reliability;
@@ -568,7 +583,7 @@ void Binary_Intrinsic_Reporting(
                     break;
             } /* switch (ToState) */
             debug_log_fprintf(DEBUG_LOG_INFO, stderr,
-                "Binary %i [%d]: Event_State goes from %s to %s.\n",
+                "Multi State %i [%d]: Event_State goes from %s to %s.\n",
                 Object_Type,
                 object_instance,
                 bactext_event_state_name(FromState),
@@ -624,7 +639,7 @@ void Binary_Intrinsic_Reporting(
             /* fill event_data timeStamp */
             switch (ToState) {
                 case EVENT_STATE_OFFNORMAL:
-                    event_data.eventType = EVENT_CHANGE_OF_STATE;
+                    event_data.eventType = EVENT_OUT_OF_RANGE;
                     datetime_copy(
                         &event_data.timeStamp.value.dateTime,
                         &pObject->Event_Time_Stamps[TRANSITION_TO_OFFNORMAL]);
@@ -664,8 +679,8 @@ void Binary_Intrinsic_Reporting(
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
             if (event_data.eventType == EVENT_OUT_OF_RANGE) {
                 /* Value that exceeded a limit. */
-                event_data.notificationParams.changeOfState.newState.tag = PROP_STATE_BINARY_VALUE;
-                event_data.notificationParams.changeOfState.newState.state.binaryValue = PresentVal;
+                event_data.notificationParams.changeOfState.newState.tag = PROP_STATE_UNSIGNED_VALUE;
+                event_data.notificationParams.changeOfState.newState.state.unsignedValue = PresentVal;
                 /* Status_Flags of the referenced object. */
                 bitstring_init(
                     &event_data.notificationParams.outOfRange.statusFlags);
@@ -688,8 +703,8 @@ void Binary_Intrinsic_Reporting(
 
                 propertyValues.propertyIdentifier = PROP_PRESENT_VALUE;
                 propertyValues.propertyArrayIndex = BACNET_ARRAY_ALL;
-                propertyValues.value.tag = BACNET_APPLICATION_TAG_BOOLEAN;
-                propertyValues.value.type.Boolean = PresentVal;
+                propertyValues.value.tag = BACNET_APPLICATION_TAG_UNSIGNED_INT;
+                propertyValues.value.type.Unsigned_Int = PresentVal;
                 event_data.notificationParams.changeOfReliability
                     .propertyValues = &propertyValues;
 
@@ -712,7 +727,7 @@ void Binary_Intrinsic_Reporting(
         }
         /* add data from notification class */
         debug_log_fprintf(DEBUG_LOG_INFO, stderr,
-            "Binary %i [%d]: Notification Class[%d]-%s "
+            "Multi-State %i [%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             Object_Type,
             object_instance,
@@ -730,7 +745,7 @@ void Binary_Intrinsic_Reporting(
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
             debug_log_fprintf(DEBUG_LOG_INFO, stderr,
-                "Binary %i [%d]: Ack Required!\n", Object_Type, object_instance);
+                "Multi-State %i [%d]: Ack Required!\n", Object_Type, object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                     pObject->Acked_Transitions[TRANSITION_TO_OFFNORMAL]
@@ -766,7 +781,7 @@ void Binary_Intrinsic_Reporting(
  * @return 1 if an active event is found, 0 if no active event, -1 if
  * end of list
  */
-int Binary_Event_Information(
+int Multistate_Event_Information(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
@@ -844,7 +859,7 @@ int Binary_Event_Information(
  * @param error_code - error code for the Event Acknowledgement
  * @return 1 if successful, -1 if error, -2 if request is out-of-range
  */
-int Binary_Alarm_Ack(
+int Multistate_Alarm_Ack(
     struct object_data *pObject,
     BACNET_ALARM_ACK_DATA *alarmack_data,
     BACNET_ERROR_CODE *error_code)
@@ -954,7 +969,7 @@ int Binary_Alarm_Ack(
  * @return 1 if an active alarm is found, 0 if no active alarm, -1 if
  * end of list
  */
-int Binary_Alarm_Summary(
+int Multistate_Alarm_Summary(
     struct object_data *pObject,
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance,
@@ -1007,7 +1022,7 @@ int Binary_Alarm_Summary(
  *
  * @return true
  */
-bool Binary_Acked_Transitions(struct object_data *pObject, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION])
+bool Multistate_Acked_Transitions(struct object_data *pObject, ACKED_INFO *value[MAX_BACNET_EVENT_TRANSITION])
 {
     uint8_t b = 0;
 
@@ -1025,20 +1040,23 @@ bool Binary_Acked_Transitions(struct object_data *pObject, ACKED_INFO *value[MAX
  * For a given object instance-number, sets the present-value
  *
  * @param  object pointer - struct object_data
- * @param  value - enumerated binary present-value
+ * @param  value - integer value
  * @param  priority - priority-array index value 1..16
  * @return  true if values are within range and present-value is set.
  */
-bool Binary_Present_Value_Set(
-    struct object_data *pObject, BACNET_BINARY_PV value, unsigned priority)
+bool Multistate_Present_Value_Set(
+    struct object_data *pObject, uint8_t value, unsigned priority)
 {
     bool status = false;
+    unsigned max_states = 0;
     if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+        max_states = pObject->State_Count;
+        if ((value >= 1) && (value <= max_states) &&
+            (priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
             pObject->Relinquished[priority - 1] = false;
             pObject->Priority_Array[priority - 1] = value;
-            Binary_COV_Detect(
-                pObject, Binary_Present_Value(pObject));
+            Multistate_COV_Detect(
+                pObject, Multistate_Present_Value(pObject));
             status = true;
         }
     }
@@ -1050,23 +1068,26 @@ bool Binary_Present_Value_Set(
  * @brief For a given object instance-number, writes the present-value to the
  * remote node
  * @param  object pointer - struct object_data
- * @param  value - boolean value
+ * @param  value - integer value
  * @param  priority - priority-array index value 1..16
  * @param  error_class - the BACnet error class
  * @param  error_code - BACnet Error code
  * @return  true if values are within range and present-value is set.
  */
-bool Binary_Present_Value_Write(
-    struct object_data *pObject, BACNET_BINARY_PV value, uint8_t priority,
+bool Multistate_Present_Value_Write(
+    struct object_data *pObject, uint8_t value, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code)
 {
     bool status = false;
+    unsigned max_states = 0;
 
     if (pObject) {
-        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
+        max_states = pObject->State_Count;
+        if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY) &&
+            (value >= 1) && (value <= max_states)) {
             if (priority != 6) {
-                Binary_Present_Value_Set(pObject, value, priority);
+                Multistate_Present_Value_Set(pObject, value, priority);
                 status = true;
             } else {
                 *error_class = ERROR_CLASS_PROPERTY;
@@ -1090,16 +1111,16 @@ bool Binary_Present_Value_Write(
  * @param  priority - priority-array index value 1..16
  * @return  true if values are within range and present-value is relinquished.
  */
-bool Binary_Present_Value_Relinquish(
+bool Multistate_Present_Value_Relinquish(
     struct object_data *pObject, unsigned priority)
 {
     bool status = false;
     if (pObject) {
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
             pObject->Relinquished[priority - 1] = true;
-            pObject->Priority_Array[priority - 1] = false;
-            Binary_COV_Detect(
-                pObject, Binary_Present_Value(pObject));
+            pObject->Priority_Array[priority - 1] = 1;
+            Multistate_COV_Detect(
+                pObject, Multistate_Present_Value(pObject));
             status = true;
         }
     }
@@ -1116,7 +1137,7 @@ bool Binary_Present_Value_Relinquish(
  * @param  error_code - BACnet Error code
  * @return  true if values are within range and write is requested
  */
-bool Binary_Present_Value_Relinquish_Write(
+bool Multistate_Present_Value_Relinquish_Write(
     struct object_data *pObject, uint8_t priority,
     BACNET_ERROR_CLASS *error_class,
     BACNET_ERROR_CODE *error_code)
@@ -1126,7 +1147,7 @@ bool Binary_Present_Value_Relinquish_Write(
     if (pObject) {
         if ((priority >= 1) && (priority <= BACNET_MAX_PRIORITY)) {
             if (priority != 6) {
-                Binary_Present_Value_Relinquish(pObject, priority);
+                Multistate_Present_Value_Relinquish(pObject, priority);
                 status = true;
             } else {
                 *error_class = ERROR_CLASS_PROPERTY;
@@ -1151,7 +1172,7 @@ bool Binary_Present_Value_Relinquish_Write(
  * @param value - boolean out-of-service value
  * @return true if the out-of-service property value was set
  */
-void Binary_Out_Of_Service_Set(struct object_data *pObject, bool value)
+void Multistate_Out_Of_Service_Set(struct object_data *pObject, bool value)
 {
     if (pObject) {
         if (pObject->Out_Of_Service != value) {
@@ -1169,7 +1190,7 @@ void Binary_Out_Of_Service_Set(struct object_data *pObject, bool value)
  *
  * @return  true if object-name was set
  */
-bool Binary_Name_Set(
+bool Multistate_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
@@ -1203,20 +1224,45 @@ bool Binary_Name_Set(
 }
 
 /**
+ * @brief For a given object instance-number, sets the state-text from
+ * a C string.
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  state_index - state index
+ * @param  state_text - state text
+ * @return true if the state text was set
+ */
+bool Multistate_State_Text_Set(
+    struct object_data *pObject,
+    uint32_t state_index,
+    BACNET_CHARACTER_STRING *char_string)
+{
+    bool status = false;
+    if (pObject && state_index > 0 && char_string) {
+        if (state_index > pObject->State_Count) pObject->State_Count = state_index;
+        state_index--;
+        pObject->State_Text[state_index] = strdup(char_string->value);
+        status = true;
+    }
+
+    return status;
+}
+
+/**
  * @brief For a given object instance-number, sets the reliability
  * @param  object pointer - struct object_data
  * @param  value - reliability property value
  * @return  true if the reliability property value was set
  */
-bool Binary_Reliability_Set(
+bool Multistate_Reliability_Set(
     struct object_data *pObject, BACNET_RELIABILITY value)
 {
     bool status = false;
     bool fault = false;
     if (pObject) {
-        fault = Binary_Object_Fault(pObject);
+        fault = Multistate_Object_Fault(pObject);
         pObject->Reliability = value;
-        if (fault != Binary_Object_Fault(pObject)) {
+        if (fault != Multistate_Object_Fault(pObject)) {
             pObject->Changed = true;
         }
         status = true;
@@ -1231,7 +1277,7 @@ bool Binary_Reliability_Set(
  * @param value - boolean out-of-service value
  * @return true if the overridden status flag was set
  */
-void Binary_Overridden_Set(struct object_data *pObject, bool value)
+void Multistate_Overridden_Set(struct object_data *pObject, bool value)
 {
     if (pObject) {
         if (pObject->Overridden != value) {
@@ -1243,33 +1289,11 @@ void Binary_Overridden_Set(struct object_data *pObject, bool value)
 
 #if defined(INTRINSIC_REPORTING)
 /**
- * @brief For a given object instance-number, sets the High Limit
- * @param  object pointer - struct object_data
- * @param  value - value to be set
- * @return true if valid object-instance and value within range
- */
-bool Binary_Alarm_Value_Set(struct object_data *pObject, BACNET_BINARY_PV value)
-{
-    bool status = false;
-
-    if (pObject) {
-        if (pObject->Polarity != POLARITY_NORMAL) {
-            value =
-                (value == BINARY_INACTIVE) ? BINARY_ACTIVE : BINARY_INACTIVE;
-        }
-        pObject->Alarm_Value = value;
-        status = true;
-    }
-
-    return status;
-}
-
-/**
  * @brief For a given object reset events
  * @param object pointer - struct object_data
  * @return void
  */
-void Binary_Reset_Event_Properties(struct object_data *pObject)
+void Multistate_Reset_Event_Properties(struct object_data *pObject)
 {
     unsigned j;
     /* initialize Event time stamps using wildcards
@@ -1291,7 +1315,7 @@ void Binary_Reset_Event_Properties(struct object_data *pObject)
  *
  * @return event-detection-enable property value
  */
-bool Binary_Event_Detection_Enable_Set(
+bool Multistate_Event_Detection_Enable_Set(
     struct object_data *pObject, bool value)
 {
     bool retval = false;
@@ -1303,7 +1327,7 @@ bool Binary_Event_Detection_Enable_Set(
             properties Acked_Transitions, Event_Time_Stamps, and
             Event_Message_Texts shall be equal to their respective initial
             conditions.*/
-            Binary_Reset_Event_Properties(pObject);
+            Multistate_Reset_Event_Properties(pObject);
         }
         retval = true;
     }

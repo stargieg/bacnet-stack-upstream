@@ -26,6 +26,7 @@
 /* some demo stuff needed */
 #include "bacnet/basic/binding/address.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/sys/filename.h"
 #include "bacnet/basic/sys/mstimer.h"
 #include "bacnet/basic/tsm/tsm.h"
@@ -435,7 +436,8 @@ int main(int argc, char *argv[])
 #endif /* defined(BAC_UCI) */
 #endif
 
-    printf(
+    debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
         "BACnet Server uci\n"
         "BACnet Stack Version %s\n",
         BACnet_Version);
@@ -443,7 +445,8 @@ int main(int argc, char *argv[])
        in our device bindings list */
     address_init();
     Init_Service_Handlers();
-    printf(
+    debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
         "BACnet Device ID: %u\n",
          Device_Object_Instance_Number());
     /* initialize timesync callback function. */
@@ -470,49 +473,69 @@ int main(int argc, char *argv[])
 #endif
 
     if (Device_Object_Name(Device_Object_Instance_Number(), &DeviceName)) {
-        printf("BACnet Device Name: %s\n", DeviceName.value);
+        debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
+        "BACnet Device Name: %s\n", DeviceName.value);
     }
 
     Datalink_Transport = dlenv_init();
-    printf("Datalink Interface: %s ", datalink_get_interface());
+    debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
+        "Datalink Interface: %s ", datalink_get_interface());
     switch (Datalink_Transport) {
         case DATALINK_ARCNET:
 #if defined(BACDL_ARCNET)
-            printf("Arcnet Max APDU: %d\n", ARCNET_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "Arcnet Max APDU: %d\n", ARCNET_MPDU_MAX);
 #endif
             break;
         case DATALINK_ETHERNET:
 #if defined(BACDL_ETHERNET)
-            printf("Ethernet Max APDU: %d\n", ETHERNET_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "Ethernet Max APDU: %d\n", ETHERNET_MPDU_MAX);
 #endif
             break;
         case DATALINK_BIP:
 #if defined(BACDL_BIP)
-            printf("IPv4 Max APDU: %d\n", BIP_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "IPv4 Max APDU: %d\n", BIP_MPDU_MAX);
 #endif
             break;
         case DATALINK_BIP6:
 #if defined(BACDL_BIP6)
-            printf("IPv6 Max APDU: %d\n", BIP6_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "IPv6 Max APDU: %d\n", BIP6_MPDU_MAX);
 #endif
             break;
         case DATALINK_MSTP:
 #if defined(BACDL_MSTP)
-            printf("MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "MSTP Max APDU: %d\n", DLMSTP_MPDU_MAX);
 #endif
             break;
         case DATALINK_BSC:
 #if defined(BACDL_BSC)
-            printf("BSC Socket Max APDU: %d\n", BSC_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "BSC Socket Max APDU: %d\n", BSC_MPDU_MAX);
 #endif
             break;
         case DATALINK_ZIGBEE:
 #if defined(BACDL_ZIGBEE)
-            printf("Zigbee Max APDU: %d\n", BZLL_MPDU_MAX);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "Zigbee Max APDU: %d\n", BZLL_MPDU_MAX);
 #endif
             break;
         default:
-            printf("No Datalink APDU: %d\n", MAX_APDU);
+            debug_log_fprintf(
+                DEBUG_LOG_INFO, stderr,
+                "No Datalink APDU: %d\n", MAX_APDU);
             break;
         }
 

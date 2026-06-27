@@ -135,7 +135,6 @@ int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f
     return ret;
 }
 
-
 /**
  * @brief Get the object name
  * @param  object pointer - struct object_data
@@ -311,26 +310,27 @@ bool Analog_Encode_Value_List(
     bool out_of_service = false;
     bool fault = false;
     bool overridden = false;
-    float present_value = 0.0f;
+    float value = 0.0f;
 
     if (pObject) {
+#if defined(INTRINSIC_REPORTING)
         if (pObject->Event_State != EVENT_STATE_NORMAL){
             in_alarm = true;
         }
+#endif
         if (Analog_Object_Fault(pObject)){
             fault = true;
         }
         overridden = pObject->Overridden;
         out_of_service = pObject->Out_Of_Service;
-        present_value = pObject->Prior_Value;
+        value = Analog_Present_Value(pObject);
         status = cov_value_list_encode_real(
-            value_list, present_value, in_alarm, fault, overridden,
+            value_list, value, in_alarm, fault, overridden,
             out_of_service);
     }
 
     return status;
 }
-
 
 #if defined(INTRINSIC_REPORTING)
 /**
@@ -477,7 +477,7 @@ const char *Analog_Event_Message(
 }
 
 /**
- * @brief Handles the Intrinsic Reporting Service for the Analog Input Object
+ * @brief Handles the Intrinsic Reporting Service for the Object
  * @param  object pointer - struct object_data
  * @param  object_type - type of the object
  * @param  object_instance - object-instance number of the object
@@ -504,7 +504,7 @@ void Analog_Intrinsic_Reporting(
     }
 
     /* check limits */
-    if (!pObject->Limit_Enable) {
+    if (!pObject->Event_Enable) {
         return; /* limits are not configured */
     }
 
@@ -513,7 +513,7 @@ void Analog_Intrinsic_Reporting(
         pObject->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = pObject->Ack_notify_data.EventState;
-        debug_printf(
+        debug_log_fprintf(DEBUG_LOG_INFO, stderr,
             "Analog [%d]: Send AckNotification.\n", object_instance);
         msgText = "AckNotification";
         /* Notify Type */
@@ -697,9 +697,11 @@ void Analog_Intrinsic_Reporting(
                     ExceededLimit = 0;
                     break;
             } /* switch (ToState) */
-            debug_printf(
-                "Analog-Input[%d]: Event_State goes from %s to %s.\n",
-                object_instance, bactext_event_state_name(FromState),
+            debug_log_fprintf(DEBUG_LOG_INFO, stderr,
+                "Analog %i [%d]: Event_State goes from %s to %s.\n",
+                Object_Type,
+                object_instance,
+                bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
             /* Notify Type */
             event_data.notifyType = pObject->Notify_Type;
@@ -714,10 +716,8 @@ void Analog_Intrinsic_Reporting(
         event_data.eventObjectIdentifier.instance = object_instance;
         /* Time Stamp */
         event_data.timeStamp.tag = TIME_STAMP_DATETIME;
+        Device_getCurrentDateTime(&event_data.timeStamp.value.dateTime);
         if (event_data.notifyType != NOTIFY_ACK_NOTIFICATION) {
-            datetime_local(
-                &event_data.timeStamp.value.dateTime.date,
-                &event_data.timeStamp.value.dateTime.time, NULL, NULL);
             /* set eventType and fill Event_Time_Stamps and
              * Event_Message_Texts*/
             switch (ToState) {
@@ -849,10 +849,12 @@ void Analog_Intrinsic_Reporting(
             }
         }
         /* add data from notification class */
-        debug_printf(
-            "Analog [%d]: Notification Class[%d]-%s "
+        debug_log_fprintf(DEBUG_LOG_INFO, stderr,
+            "Analog %i [%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
-            object_instance, event_data.notificationClass,
+            Object_Type,
+            object_instance,
+            event_data.notificationClass,
             bactext_event_type_name(event_data.eventType),
             (unsigned)event_data.timeStamp.value.dateTime.date.year,
             (unsigned)event_data.timeStamp.value.dateTime.date.month,
@@ -865,7 +867,8 @@ void Analog_Intrinsic_Reporting(
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
-            debug_printf("Analog-Input[%d]: Ack Required!\n", object_instance);
+            debug_log_fprintf(DEBUG_LOG_INFO, stderr,
+                "Analog %i [%d]: Ack Required!\n", Object_Type, object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                 case EVENT_STATE_HIGH_LIMIT:
@@ -895,7 +898,7 @@ void Analog_Intrinsic_Reporting(
 }
 
 /**
- * @brief Handles getting the Event Information for the Analog Input Object
+ * @brief Handles getting the Event Information for the Object
  * @param  object pointer - struct object_data
  * @param  object_type - type of the object
  * @param  object_instance - object-instance number of the object
@@ -975,7 +978,7 @@ int Analog_Event_Information(
 }
 
 /**
- * @brief Acknowledges the Event Information for the Analog Input Object
+ * @brief Acknowledges the Event Information for the Object
  * @param object pointer - struct object_data
  * @param alarmack_data - data for the Event Acknowledgement
  * @param error_code - error code for the Event Acknowledgement
@@ -1085,7 +1088,7 @@ int Analog_Alarm_Ack(
 }
 
 /**
- * @brief Handles getting the Alarm Summary for the Analog Input Object
+ * @brief Handles getting the Alarm Summary for the Object
  * @param  object pointer - struct object_data
  * @param  object_type - type of the object
  * @param  object_instance - object-instance number of the object
@@ -1101,7 +1104,7 @@ int Analog_Alarm_Summary(
 {
 
     if (getalarm_data == NULL) {
-        debug_printf(
+        debug_log_fprintf(DEBUG_LOG_ERROR, stderr,
             "[%s %d]: NULL pointer parameter! getalarm_data = %p\r\n", __FILE__,
             __LINE__, (void *)getalarm_data);
         return -2;
@@ -1138,7 +1141,6 @@ int Analog_Alarm_Summary(
     }
 }
 
-#endif
 /**
  * For a given object instance-number, returns the Acked Transitions
  *
@@ -1159,6 +1161,7 @@ bool Analog_Acked_Transitions(struct object_data *pObject, ACKED_INFO *value[MAX
     } else
         return false;
 }
+#endif
 
 /**
  * For a given object instance-number, sets the present-value

@@ -94,7 +94,9 @@ static enum {
     DATALINK_ZIGBEE,
 } Datalink_Transport;
 
+static const char *sec = "bacnet_dev";
 
+#if 0
 /**
  * @brief Enabled debug printing of BACnet/IPv4 DL
  */
@@ -110,6 +112,7 @@ void dlenv_debug_disable(void)
 {
     debug_log_severity_set(DEBUG_LOG_ERROR);
 }
+#endif
 
 /* Simple setters for BBMD registration variables. */
 
@@ -199,7 +202,7 @@ static int bbmd_register_as_foreign_device(void)
         BBMD_Address_Valid = bip_get_addr_by_name(option, &BBMD_Address);
     }
     if (BBMD_Address_Valid) {
-        debug_log_fprintf(
+         debug_log_fprintf(
             DEBUG_LOG_DEBUG, stderr,
             "Registering with BBMD at %u.%u.%u.%u:%u for %u seconds\n",
             (unsigned)BBMD_Address.address[0],
@@ -556,12 +559,14 @@ void dlenv_network_port_init_bip6(uint32_t instance)
 void dlenv_network_port_init_zigbee(uint32_t instance)
 {
     BACNET_ADDRESS addr = { 0 };
+#if 0
     char *pEnv = NULL;
 
     pEnv = getenv("BACNET_ZIGBEE_DEBUG");
     if (pEnv) {
         dlenv_debug_enable();
     }
+#endif
     Network_Port_Object_Instance_Number_Set(0, instance);
     Network_Port_Name_Set(instance, "BACnet Zigbee Link Layer Port");
     Network_Port_Type_Set(instance, PORT_TYPE_ZIGBEE);
@@ -632,9 +637,11 @@ void dlenv_network_port_init_bsc(
     (void)direct_connect_initiate;
     (void)direct_connect_accept_urls;
 #endif
+#if 0
     if (getenv("BACNET_SC_DEBUG")) {
         dlenv_debug_enable();
     }
+#endif
     srand((unsigned int)instance);
     Network_Port_Object_Instance_Number_Set(0, instance);
     Network_Port_Name_Set(instance, "BACnet/BSC Port");
@@ -1195,6 +1202,7 @@ int dlenv_init(void)
     int option_debug;
     int option_int;
     const char *option = NULL;
+    const char *sec_idx = "0";
     struct uci_context *ctx;
 #if defined(BACDL_BIP)
     BACNET_IP_ADDRESS addr;
@@ -1220,11 +1228,13 @@ int dlenv_init(void)
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
         exit(1);
     }
-    option_debug = ucix_get_option_int(ctx,
-        "bacnet_dev", "0", "debug", 0);
-    if (option_debug != 0) {
-        dlenv_debug_enable();
-    }
+/*
+ * debug.h
+ * Severity values MUST be in the range of 0 to 7 inclusive,
+ * or a special value of -1 to indicate that logging is disabled.
+ */
+    option_debug = ucix_get_option_int(ctx, sec, sec_idx, "debug", -1);
+    debug_log_severity_set(option_debug);
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "bacdl");
     if (option != 0) {
@@ -1235,15 +1245,13 @@ int dlenv_init(void)
     datalink_set(option_chr);
     Datalink_Transport = datalink_get();
 
-    printf("BACnet Data link: %i\n", Datalink_Transport);
+    debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
+        "BACnet Data link: %i\n", Datalink_Transport);
     switch (Datalink_Transport) {
     case DATALINK_BIP6:
         port_type = PORT_TYPE_BIP6;
 #if defined(BACDL_BIP6)
-        if (option_debug != 0) {
-            bip6_debug_enable();
-            bvlc6_debug_enable();
-        }
         option = ucix_get_option(ctx,
             "bacnet_dev", "0", "broadcast");
         if (option != 0) {
@@ -1265,10 +1273,6 @@ int dlenv_init(void)
     case DATALINK_BIP:
         port_type = PORT_TYPE_BIP;
 #if defined(BACDL_BIP)
-        if (option_debug != 0) {
-            bip_debug_enable();
-            bvlc_debug_enable();
-        }
         option_int = ucix_get_option_int(ctx,
             "bacnet_dev", "0", "port", 47808);
         bip_set_port(option_int);
@@ -1342,7 +1346,9 @@ int dlenv_init(void)
         "bacnet_dev", "0", "iface");
     if (option != 0) {
         snprintf(ifname,sizeof(ifname),"%s",option);
-        printf("BACnet Data link init: %s\n", ifname);
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "BACnet Data link init: %s\n", ifname);
         /* === Initialize the Datalink Here === */
         if (!datalink_init(ifname)) {
             if (ctx)

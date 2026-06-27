@@ -7,6 +7,7 @@ config mo 'default'
 	option description 'Multi State Output'
 	option nc '99222'
 	option event '7'
+	option event_detection '1'
 
 config mo '3'
 	option name 'R301DLDIM'

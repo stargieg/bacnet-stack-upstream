@@ -10,6 +10,7 @@ config mv 'default'
 	option description 'Multi State Value'
 	option nc '14080'
 	option event '7'
+	option event_detection '1'
 
 config mv '0'
 	option name 'TR_EZR00_SV01'

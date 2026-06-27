@@ -11,6 +11,7 @@ config ai 'default'
 	option cov_increment '0.1'
 	option max_value '100'
 	option min_value '0'
+	option event_detection '1'
 
 config ai '0'
 	option pgroup 'R801'

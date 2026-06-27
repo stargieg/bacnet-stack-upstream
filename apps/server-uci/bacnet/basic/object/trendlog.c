@@ -122,13 +122,17 @@ struct object_data_t {
 };
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_TRENDLOG;
 
-
 /* These three arrays are used by the ReadPropertyMultiple handler */
-static const int32_t Trend_Log_Properties_Required[] = {
+static const int32_t Properties_Required[] = {
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,
@@ -144,9 +148,12 @@ static const int32_t Trend_Log_Properties_Required[] = {
     -1
 };
 
-static const int32_t Trend_Log_Properties_Optional[] = {
-    PROP_DESCRIPTION, PROP_START_TIME, PROP_STOP_TIME,
-    PROP_LOG_DEVICE_OBJECT_PROPERTY, PROP_LOG_INTERVAL,
+static const int32_t Properties_Optional[] = {
+    PROP_DESCRIPTION,
+    PROP_START_TIME,
+    PROP_STOP_TIME,
+    PROP_LOG_DEVICE_OBJECT_PROPERTY,
+    PROP_LOG_INTERVAL,
 
     /* Required if COV logging supported
         PROP_COV_RESUBSCRIPTION_INTERVAL,
@@ -162,10 +169,35 @@ static const int32_t Trend_Log_Properties_Optional[] = {
         PROP_NOTIFY_TYPE,
         PROP_EVENT_TIME_STAMPS, */
 
-    PROP_ALIGN_INTERVALS, PROP_INTERVAL_OFFSET, PROP_TRIGGER, -1
+    PROP_ALIGN_INTERVALS,
+    PROP_INTERVAL_OFFSET,
+    PROP_TRIGGER,
+    -1
 };
 
-static const int32_t Trend_Log_Properties_Proprietary[] = { -1 };
+static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_OBJECT_NAME,
+    PROP_ENABLE,
+    PROP_STOP_WHEN_FULL,
+    PROP_RECORD_COUNT,
+    PROP_LOGGING_TYPE,
+    PROP_START_TIME,
+    PROP_STOP_TIME,
+    PROP_LOG_DEVICE_OBJECT_PROPERTY,
+    PROP_LOG_INTERVAL,
+    PROP_ALIGN_INTERVALS,
+    PROP_INTERVAL_OFFSET,
+    PROP_TRIGGER,
+    PROP_DESCRIPTION,
+    -1
+};
 
 void Trend_Log_Property_Lists(
     const int32_t **pRequired,
@@ -173,16 +205,30 @@ void Trend_Log_Property_Lists(
     const int32_t **pProprietary)
 {
     if (pRequired) {
-        *pRequired = Trend_Log_Properties_Required;
+        *pRequired = Properties_Required;
     }
     if (pOptional) {
-        *pOptional = Trend_Log_Properties_Optional;
+        *pOptional = Properties_Optional;
     }
     if (pProprietary) {
-        *pProprietary = Trend_Log_Properties_Proprietary;
+        *pProprietary = Properties_Proprietary;
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Trend Log object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Trend_Log_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /* we simply have 0-n object instances.  Yours might be */
@@ -339,27 +385,34 @@ void Trend_Log_Init(void)
     struct itr_ctx itr_m;
     Object_List = Keylist_Create();
     ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctx) {
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Failed to load config file %s\n",sec);
+    } else {
 
-    option = ucix_get_option(ctx, sec, "default", "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Description = strndup(option,option_str.length);
-    else
-        tObject.Description = "Trendlog";
-    tObject.ulLogInterval = ucix_get_option_int(ctx, sec, "default", "interval", 900);
-    tObject.LoggingType = ucix_get_option_int(ctx, sec, "default", "type", LOGGING_TYPE_POLLED);
-    tObject.Source.deviceIdentifier.instance = ucix_get_option_int(ctx, sec, "default", "device_id",
-        Device_Object_Instance_Number());
-    tObject.cov_data.covSubscribeToProperty = ucix_get_option_int(ctx, sec, "default", "subscribetoproperty", 0);
-    tObject.cov_data.lifetime = ucix_get_option_int(ctx, sec, "default", "lifetime", 300);
-	itr_m.section = sec;
-	itr_m.ctx = ctx;
-	itr_m.Object = tObject;
-    ucix_for_each_section_type(ctx, sec, type,
-        (void (*)(const char *, void *))uci_list, &itr_m);
-    if (ctx)
+        option = ucix_get_option(ctx, sec, "default", "description");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Description = strndup(option,option_str.length);
+        else
+            tObject.Description = "Trendlog";
+        tObject.ulLogInterval = ucix_get_option_int(ctx, sec, "default", "interval", 900);
+        tObject.LoggingType = ucix_get_option_int(ctx, sec, "default", "type", LOGGING_TYPE_POLLED);
+        tObject.Source.deviceIdentifier.instance = ucix_get_option_int(ctx, sec, "default", "device_id",
+            Device_Object_Instance_Number());
+        tObject.cov_data.covSubscribeToProperty = ucix_get_option_int(ctx, sec, "default", "subscribetoproperty", 0);
+        tObject.cov_data.lifetime = ucix_get_option_int(ctx, sec, "default", "lifetime", 300);
+        itr_m.section = sec;
+        itr_m.ctx = ctx;
+        itr_m.Object = tObject;
+        ucix_for_each_section_type(ctx, sec, type,
+            (void (*)(const char *, void *))uci_list, &itr_m);
         ucix_cleanup(ctx);
+    }
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
+    return;
 }
 
 /*
@@ -391,6 +444,50 @@ bool Trend_Log_Object_Name(
     return status;
 }
 
+#if 0
+/**
+ * @brief Get the total record count for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return total record count
+ */
+uint32_t Trend_Log_Total_Record_Count(uint32_t object_instance)
+{
+    uint32_t total_records = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        total_records = LogInfo[object_instance].ulTotalRecordCount;
+    }
+    return total_records;
+}
+
+/**
+ * @brief Get the record count for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return record count
+ */
+uint32_t Trend_Log_Record_Count(uint32_t object_instance)
+{
+    uint32_t record_count = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        record_count = LogInfo[object_instance].ulRecordCount;
+    }
+    return record_count;
+}
+
+/**
+ * @brief Get the buffer size for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return buffer size
+ */
+uint32_t Trend_Log_Buffer_Size(uint32_t object_instance)
+{
+    uint32_t buffer_size = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        buffer_size = TL_MAX_ENTRIES;
+    }
+    return buffer_size;
+}
+
+#endif
 /**
  * For a given object instance-number, sets the object-name
  * Note that the object name must be unique within this device.
@@ -400,15 +497,17 @@ bool Trend_Log_Object_Name(
  *
  * @return  true if object-name was set
  */
-bool Trend_Log_Name_Set(uint32_t object_instance, char *new_name)
+bool Trend_Log_Name_Set(
+    struct object_data *pObject,
+    const char *new_name,
+    BACNET_OBJECT_TYPE Object_Type,
+    uint32_t object_instance)
 {
     bool status = false; /* return value */
     BACNET_CHARACTER_STRING object_name;
     BACNET_OBJECT_TYPE found_type = 0;
     uint32_t found_instance = 0;
-    struct object_data *pObject;
 
-    pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && new_name) {
         /* All the object names in a device must be unique */
         characterstring_init_ansi(&object_name, new_name);
@@ -451,48 +550,45 @@ const char *Trend_Log_Description(uint32_t object_instance)
 }
 
 /**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, handles the ReadProperty service
+ * @param  rpdata Property requested, see for BACNET_READ_PROPERTY_DATA details.
+ * @return apdu len, or BACNET_STATUS_ERROR on error
+ * export
  */
-bool Trend_Log_Description_Set(uint32_t object_instance, char *new_name)
-{
-    bool status = false; /* return value */
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject && new_name) {
-        status = true;
-        pObject->Description = new_name;
-    }
-
-    return status;
-}
-
-/* return the length of the apdu encoded or BACNET_STATUS_ERROR for error or
-   BACNET_STATUS_ABORT for abort message */
 int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int apdu_len = 0; /* return value */
     int len = 0; /* apdu len intermediate value */
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
-    struct object_data *pObject;
     uint8_t *apdu = NULL;
 
+    struct object_data *pObject;
+
+    /* Valid data? */
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
     }
-    apdu = rpdata->application_data;
-    /* Pin down which log to look at */
     pObject = Keylist_Data(Object_List, rpdata->object_instance);
     if (!pObject) {
-        rpdata->error_class = ERROR_CLASS_OBJECT;
-        rpdata->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+        rpdata->error_class = ERROR_CLASS_PROPERTY;
+        rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+        apdu_len = BACNET_STATUS_ERROR;
+        return apdu_len;
+    }
+    if (!property_lists_member(
+            Properties_Required,
+            Properties_Optional,
+            Properties_Proprietary,
+            rpdata->object_property)) {
+        rpdata->error_class = ERROR_CLASS_PROPERTY;
+        rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
         return BACNET_STATUS_ERROR;
     }
+
+    apdu = rpdata->application_data;
+
     switch (rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -500,8 +596,9 @@ int Trend_Log_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_DESCRIPTION:
-            characterstring_init_ansi(&char_string,
-                Trend_Log_Description(rpdata->object_instance));
+            characterstring_init_ansi(
+                &char_string,
+                pObject->Description);
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
@@ -643,7 +740,6 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false; /* return value */
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
-    struct object_data *pObject;
     BACNET_DATE start_date, stop_date;
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE TempSource;
     bool bEffectiveEnable;
@@ -652,42 +748,51 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *idx_c = NULL;
     int idx_c_len = 0;
 
-    /* Pin down which log to look at */
-    log_index = wp_data->object_instance;
-    pObject = Keylist_Data(Object_List, log_index);
-    if (!pObject) {
-        wp_data->error_class = ERROR_CLASS_OBJECT;
-        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    struct object_data *pObject;
+    /* Valid data? */
+    if (wp_data == NULL) {
         return false;
     }
-
-    /* decode the some of the request */
+    if (wp_data->application_data_len == 0) {
+        return false;
+    }
+    /* decode some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
-    /* FIXME: len < application_data_len: more data? */
     if (len < 0) {
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
         return false;
     }
-
+    pObject = Keylist_Data(Object_List, wp_data->object_instance);
+    if (!pObject) {
+        return false;
+    }
     ctxw = ucix_init(sec);
-    if (!ctxw)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctxw) {
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Failed to load config file %s\n",sec);
+        return false;
+    }
+    /* Pin down which log to look at */
+    log_index = Trend_Log_Instance_To_Index(wp_data->object_instance);
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
-
     switch (wp_data->object_property) {
         case PROP_OBJECT_NAME:
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
                 if (Trend_Log_Name_Set(
-                    wp_data->object_instance, value.type.Character_String.value)) {
+                    pObject,
+                    value.type.Character_String.value,
+                    Object_Type,
+                    wp_data->object_instance)) {
                     ucix_add_option(ctxw, sec, idx_c, "name",
-                        strndup(value.type.Character_String.value, value.type.Character_String.length));
+                        strndup(value.type.Character_String.value,value.type.Character_String.length));
                     ucix_commit(ctxw,sec);
                 }
             }
@@ -1034,12 +1139,10 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                if (Trend_Log_Description_Set(
-                    wp_data->object_instance, value.type.Character_String.value)) {
-                    ucix_add_option(ctxw, sec, idx_c, "description",
-                        Trend_Log_Description(wp_data->object_instance));
-                    ucix_commit(ctxw, sec);
-                }
+                pObject->Description = value.type.Character_String.value;
+                ucix_add_option(ctxw, sec, idx_c, "description",
+                    pObject->Description);
+                ucix_commit(ctxw, sec);
             }
             break;
         default:
@@ -1049,7 +1152,7 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     }
     if (ctxw)
         ucix_cleanup(ctxw);
-
+    free(idx_c);
     return status;
 }
 
@@ -1142,56 +1245,67 @@ bool TL_Is_Enabled(int iLog)
     pObject = Keylist_Data(Object_List, iLog);
     if (!pObject)
         return false;
-#if 0
-        debug_printf("Trendlog[%i]: Enable %i Flags - %u, Start - %u, Stop - %u\n",
+    
+    debug_log_fprintf(
+        DEBUG_LOG_DEBUG, stderr,
+        "Trendlog[%i]: Enable %i Flags - %u, Start - %u, Stop - %u\n",
         (unsigned int) iLog,
         (unsigned int) pObject->bEnable,
         (unsigned int) pObject->ucTimeFlags,
         (unsigned int) pObject->tStartTime,
         (unsigned int) pObject->tStopTime);
-#endif
     if (pObject->bEnable == false) {
         /* Not enabled so time is irrelevant */
-        debug_printf("Trendlog[%i]: Disbaled by Enable = false\n",(unsigned int) iLog);
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Trendlog[%i]: Disbaled by Enable = false\n",(unsigned int) iLog);
         bStatus = false;
     } else if (
         (pObject->ucTimeFlags == 0) &&
         (pObject->tStopTime < pObject->tStartTime)) {
         /* Start time was after stop time as per 12.25.6 and 12.25.7 */
-        debug_printf("Trendlog[%i]: Disbaled Start time was after stop time\n",(unsigned int) iLog);
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Trendlog[%i]: Disbaled Start time was after stop time\n",(unsigned int) iLog);
         bStatus = false;
     } else if (pObject->ucTimeFlags != (TL_T_START_WILD | TL_T_STOP_WILD)) {
         /* enabled and either 1 wild card or none */
         tNow = Trend_Log_Epoch_Seconds_Now();
-#if 0
-        debug_printf("Flags - %u, Current - %u, Start - %u, Stop - %u\n",
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Flags - %u, Current - %u, Start - %u, Stop - %u\n",
             (unsigned int) pObject->ucTimeFlags, (unsigned int) tNow,
             (unsigned int) pObject->tStartTime,
             (unsigned int) pObject->tStopTime);
-#endif
         if ((pObject->ucTimeFlags & TL_T_START_WILD) != 0) {
             /* wild card start time */
             if (tNow > pObject->tStopTime) {
-                debug_printf("Trendlog[%i]: Disbaled Stop time is in the past\n",(unsigned int) iLog);
+                debug_log_fprintf(
+                    DEBUG_LOG_INFO, stderr,
+                    "Trendlog[%i]: Disbaled Stop time is in the past\n",(unsigned int) iLog);
                 bStatus = false;
             }
         } else if ((pObject->ucTimeFlags & TL_T_STOP_WILD) != 0) {
             /* wild card stop time */
             if (tNow < pObject->tStartTime) {
-                debug_printf("Trendlog[%i]: Disbaled Start time is in the future\n",(unsigned int) iLog);
+                debug_log_fprintf(
+                    DEBUG_LOG_INFO, stderr,
+                    "Trendlog[%i]: Disbaled Start time is in the future\n",(unsigned int) iLog);
                 bStatus = false;
             }
         } else {
-#if 0
-            debug_printf("Trendlog[%i]: Current - %u, Start - %u, Stop - %u\n",
+            debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Trendlog[%i]: Current - %u, Start - %u, Stop - %u\n",
                 (unsigned int) iLog, (unsigned int) tNow,
                 (unsigned int) pObject->tStartTime,
                 (unsigned int) pObject->tStopTime);
-#endif
             /* No wildcards so use both times */
             if ((tNow < pObject->tStartTime) ||
                 (tNow > pObject->tStopTime)) {
-                debug_printf("Trendlog[%i]: Disbaled Start time is in the future or Stop time is in the past\n",(unsigned int) iLog);
+                debug_log_fprintf(
+                    DEBUG_LOG_INFO, stderr,
+                    "Trendlog[%i]: Disbaled Start time is in the future or Stop time is in the past\n",(unsigned int) iLog);
                 bStatus = false;
             }
         }
@@ -1415,7 +1529,8 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     uint32_t uiSequence = 0; /* Tracking sequence number when encoding */
     uint32_t uiRemaining = 0; /* Amount of unused space in packet */
     uint32_t uiFirstSeq = 0; /* Sequence number for 1st record in log */
-
+    uint32_t total_entries = 0;
+    uint32_t max_fit = 0;
     uint32_t uiBegin = 0; /* Starting Sequence number for request */
     uint32_t uiEnd = 0; /* Ending Sequence number for request */
     bool bWrapReq = false; /* Has request sequence range spanned the max for
@@ -1506,7 +1621,22 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
             }
         }
     }
-
+    if (pRequest->Count < 0) {
+        /* adjust uiBegin when Count < 0 and total requested
+           items exceed the maximum encodable items (max_fit).*/
+        if (uiEnd >= uiBegin) {
+            total_entries = uiEnd - uiBegin + 1;
+            max_fit = uiRemaining / TL_MAX_ENC;
+            if ((max_fit > 0) && (total_entries > max_fit)) {
+                /* Adjust beginning index so returned items match z = max_fit */
+                uiBegin = uiEnd - max_fit + 1;
+                /* MORE_ITEMS must be set because
+                   request range not fully delivered */
+                bitstring_set_bit(
+                    &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
+            }
+        }
+    }
     /* We now have a range that lies completely within the log buffer
      * and we need to figure out where that starts in the buffer.
      */
@@ -1900,7 +2030,9 @@ static void TL_fetch_property(int iLog)
         ValueBuf, StatusBuf, &pObject->Source, &error_class, &error_code);
     if (iLen < 0) {
         /* Insert error code into log */
-        debug_printf("Trendlog[%i]: Error local_read_property error_class %i error_code %i\n",
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Trendlog[%i]: Error local_read_property error_class %i error_code %i\n",
             (unsigned int) iLog, (unsigned int) error_class, (unsigned int) error_code);
         write_error_to_rec(error_class, error_code, iLog);
     } else {
@@ -1910,7 +2042,9 @@ static void TL_fetch_property(int iLog)
         value.tag = tag.number;
         switch (tag.number) {
             case BACNET_APPLICATION_TAG_NULL:
-                debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
+                debug_log_fprintf(
+                    DEBUG_LOG_ERROR, stderr,
+                    "Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
                     (unsigned int) iLog);
                 break;
 
@@ -1955,7 +2089,9 @@ static void TL_fetch_property(int iLog)
                 TempRec.Datum.Error.usCode = ERROR_CODE_DATATYPE_NOT_SUPPORTED;
                 TempRec.ucRecType = TL_TYPE_ERROR;
 #endif
-                debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG error_class %i error_code %i\n",
+                debug_log_fprintf(
+                    DEBUG_LOG_ERROR, stderr,
+                    "Trendlog[%i]: Error BACNET_APPLICATION_TAG error_class %i error_code %i\n",
                     (unsigned int) iLog, (unsigned int) error_class, (unsigned int) error_code);
                 write_error_to_rec(error_class, error_code, iLog);
                 break;
@@ -2168,7 +2304,9 @@ static void write_property_to_rec(BACNET_APPLICATION_DATA_VALUE value,
     pObject = Keylist_Data_Index(Object_List, iCount);
     switch (value.tag) {
     case BACNET_APPLICATION_TAG_NULL:
-        debug_printf("Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Trendlog[%i]: Error BACNET_APPLICATION_TAG NULL\n",
             (unsigned int) iCount);
         TempRec.ucRecType = TL_TYPE_NULL;
         break;
@@ -2453,5 +2591,3 @@ void trend_log_confirmed_cov_notification_handler(uint8_t *service_request,
         }
     }
 }
-
-

@@ -47,7 +47,7 @@ extern "C" {
     * This is a different struct from BACNET_DAILY_SCHEDULE used in prop value
     * encoding! The number of entries is different.
     */
-typedef struct schedule {
+typedef struct object_data {
     /* Effective Period: Start and End Date */
     BACNET_DATE Start_Date;
     BACNET_DATE End_Date;

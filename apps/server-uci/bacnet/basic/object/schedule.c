@@ -19,19 +19,25 @@
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
-#include "bacnet/basic/object/device.h" /* me! */
+#include "bacnet/basic/object/device.h"
+/* me! */
 #include "bacnet/basic/object/schedule.h"
 
 static const char *sec = "bacnet_sc";
 static const char *type = "sc";
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_SCHEDULE;
 
 
-static const int32_t Schedule_Properties_Required[] = {
+static const int32_t Properties_Required[] = {
     /* list of required properties */
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
@@ -47,7 +53,7 @@ static const int32_t Schedule_Properties_Required[] = {
     -1
 };
 
-static const int32_t Schedule_Properties_Optional[] = {
+static const int32_t Properties_Optional[] = {
     /* list of optional properties */
     PROP_WEEKLY_SCHEDULE,
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
@@ -56,7 +62,27 @@ static const int32_t Schedule_Properties_Optional[] = {
     -1
 };
 
-static const int32_t Schedule_Properties_Proprietary[] = { -1 };
+static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_OUT_OF_SERVICE,
+    PROP_OBJECT_NAME,
+    PROP_WEEKLY_SCHEDULE,
+    PROP_SCHEDULE_DEFAULT,
+    PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES,
+    PROP_EFFECTIVE_PERIOD,
+    PROP_PRIORITY_FOR_WRITING,
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+    PROP_EXCEPTION_SCHEDULE,
+#endif
+    PROP_DESCRIPTION,
+    -1
+};
 
 void Schedule_Property_Lists(
     const int32_t **pRequired,
@@ -64,13 +90,28 @@ void Schedule_Property_Lists(
     const int32_t **pProprietary)
 {
     if (pRequired) {
-        *pRequired = Schedule_Properties_Required;
+        *pRequired = Properties_Required;
     }
     if (pOptional) {
-        *pOptional = Schedule_Properties_Optional;
+        *pOptional = Properties_Optional;
     }
     if (pProprietary) {
-        *pProprietary = Schedule_Properties_Proprietary;
+        *pProprietary = Properties_Proprietary;
+    }
+}
+
+
+/**
+ * @brief Get the list of writable properties for a Schedule object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Schedule_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
     }
 }
 
@@ -254,7 +295,7 @@ static void uci_list(const char *sec_idx,
 void Schedule_Init(void)
 {
     struct uci_context *ctx;
-    SCHEDULE_DESCR_T tObject = { 0 }; 
+    SCHEDULE_DESCR_T tObject = { 0 };
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str = { 0 };
     struct itr_ctx itr_m;
@@ -263,21 +304,25 @@ void Schedule_Init(void)
         Object_List = Keylist_Create();
     }
     ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n", sec);
+    if (!ctx) {
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Failed to load config file %s\n",sec);
+    } else {
 
-    option = ucix_get_option(ctx, sec, "default", "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Description = strndup(option, option_str.length);
-    else
-        tObject.Description = "Schedule";
-    tObject.Priority_For_Writing = ucix_get_option_int(ctx, sec, "default", "prio", 16);
-	itr_m.section = sec;
-	itr_m.ctx = ctx;
-	itr_m.Object = tObject;
-    ucix_for_each_section_type(ctx, sec, type,
-        (void (*)(const char *, void *))uci_list, &itr_m);
-    ucix_cleanup(ctx);
+        option = ucix_get_option(ctx, sec, "default", "description");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Description = strndup(option, option_str.length);
+        else
+            tObject.Description = "Schedule";
+        tObject.Priority_For_Writing = ucix_get_option_int(ctx, sec, "default", "prio", 16);
+        itr_m.section = sec;
+        itr_m.ctx = ctx;
+        itr_m.Object = tObject;
+        ucix_for_each_section_type(ctx, sec, type,
+            (void (*)(const char *, void *))uci_list, &itr_m);
+        ucix_cleanup(ctx);
+    }
 }
 
 /**
@@ -368,15 +413,17 @@ bool Schedule_Object_Name(
  *
  * @return  true if object-name was set
  */
-bool Schedule_Name_Set(uint32_t object_instance, char *new_name)
+bool Schedule_Name_Set(
+    struct object_data *pObject,
+    const char *new_name,
+    BACNET_OBJECT_TYPE Object_Type,
+    uint32_t object_instance)
 {
     bool status = false; /* return value */
     BACNET_CHARACTER_STRING object_name;
     BACNET_OBJECT_TYPE found_type = 0;
     uint32_t found_instance = 0;
-    SCHEDULE_DESCR *pObject;
 
-    pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && new_name) {
         /* All the object names in a device must be unique */
         characterstring_init_ansi(&object_name, new_name);
@@ -411,7 +458,7 @@ bool Schedule_Name_Set(uint32_t object_instance, char *new_name)
 bool Schedule_Out_Of_Service(uint32_t object_instance)
 {
     bool value = false;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -428,7 +475,7 @@ bool Schedule_Out_Of_Service(uint32_t object_instance)
  */
 void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -448,7 +495,7 @@ void Schedule_Out_Of_Service_Set(uint32_t object_instance, bool value)
 BACNET_DAILY_SCHEDULE *
 Schedule_Weekly_Schedule(uint32_t object_instance, unsigned array_index)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && (array_index < BACNET_WEEKLY_SCHEDULE_SIZE)) {
@@ -470,7 +517,7 @@ bool Schedule_Weekly_Schedule_Set(
     unsigned array_index,
     const BACNET_DAILY_SCHEDULE *value)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && (array_index < BACNET_WEEKLY_SCHEDULE_SIZE)) {
@@ -488,12 +535,9 @@ bool Schedule_Weekly_Schedule_Set(
  * @param  object_instance - object-instance number of the object
  * @return description text or NULL if not found
  */
-const char *Schedule_Description(uint32_t object_instance)
+const char *Schedule_Description(struct object_data *pObject)
 {
     char *name = NULL;
-    SCHEDULE_DESCR *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
         name = pObject->Description;
     }
@@ -510,7 +554,7 @@ const char *Schedule_Description(uint32_t object_instance)
 bool Schedule_Description_Set(uint32_t object_instance, const char *new_name)
 {
     bool status = false; /* return value */
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && new_name) {
@@ -537,7 +581,7 @@ static int Schedule_Weekly_Schedule_Encode(
     uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu)
 {
     int apdu_len = 0, len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
     int day, i;
 
     if (array_index >= BACNET_WEEKLY_SCHEDULE_SIZE) {
@@ -579,7 +623,7 @@ static int Schedule_Weekly_Schedule_Encode(
 BACNET_SPECIAL_EVENT *
 Schedule_Exception_Schedule(uint32_t object_instance, unsigned array_index)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject && (array_index < BACNET_EXCEPTION_SCHEDULE_SIZE)) {
@@ -602,7 +646,7 @@ bool Schedule_Exception_Schedule_Set(
     unsigned array_index,
     const BACNET_SPECIAL_EVENT *value)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject && (array_index < BACNET_EXCEPTION_SCHEDULE_SIZE)) {
@@ -629,7 +673,7 @@ static int Schedule_Exception_Schedule_Encode(
     uint32_t object_instance, BACNET_ARRAY_INDEX array_index, uint8_t *apdu)
 {
     int apdu_len;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     if (array_index >= BACNET_EXCEPTION_SCHEDULE_SIZE) {
         return BACNET_STATUS_ERROR;
@@ -657,7 +701,7 @@ bool Schedule_Effective_Period_Set(
     const BACNET_DATE *start_date,
     const BACNET_DATE *end_date)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -679,7 +723,7 @@ bool Schedule_Effective_Period_Set(
 bool Schedule_Effective_Period(
     uint32_t object_instance, BACNET_DATE *start_date, BACNET_DATE *end_date)
 {
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject) {
@@ -699,7 +743,7 @@ bool Schedule_Effective_Period(
  * @return true if set, false if not set
  */
 static bool List_Of_Object_Property_References_Set(
-    SCHEDULE_DESCR *pObject,
+    struct object_data *pObject,
     unsigned index,
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember)
 {
@@ -727,7 +771,7 @@ bool Schedule_List_Of_Object_Property_References_Set(
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember)
 {
     bool status = false;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     status = List_Of_Object_Property_References_Set(pObject, index, pMember);
@@ -748,7 +792,7 @@ bool Schedule_List_Of_Object_Property_References(
     BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember)
 {
     bool status = false;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Keylist_Data(Object_List, object_instance);
     if (pObject && (index < BACNET_SCHEDULE_OBJ_PROP_REF_SIZE)) {
@@ -781,14 +825,16 @@ Schedule_List_Of_Object_Property_References_Capacity(uint32_t object_instance)
 int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 {
     int apdu_len = 0;
-    SCHEDULE_DESCR *pObject;
     uint8_t *apdu = NULL;
-    uint16_t apdu_max = 0;
+    uint16_t apdu_size = 0;
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
     int i;
     bool state = false;
 
+    struct object_data *pObject;
+
+    /* Valid data? */
     if ((rpdata == NULL) || (rpdata->application_data == NULL) ||
         (rpdata->application_data_len == 0)) {
         return 0;
@@ -800,8 +846,18 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
         apdu_len = BACNET_STATUS_ERROR;
         return apdu_len;
     }
+    if (!property_lists_member(
+            Properties_Required,
+            Properties_Optional,
+            Properties_Proprietary,
+            rpdata->object_property)) {
+        rpdata->error_class = ERROR_CLASS_PROPERTY;
+        rpdata->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+        return BACNET_STATUS_ERROR;
+    }
+
     apdu = rpdata->application_data;
-    apdu_max = rpdata->application_data_len;
+    apdu_size = rpdata->application_data_len;
     switch ((int)rpdata->object_property) {
         case PROP_OBJECT_IDENTIFIER:
             apdu_len = encode_application_object_id(
@@ -828,7 +884,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = bacnet_array_encode(
                 rpdata->object_instance, rpdata->array_index,
                 Schedule_Weekly_Schedule_Encode, BACNET_WEEKLY_SCHEDULE_SIZE,
-                apdu, apdu_max);
+                apdu, apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
                 rpdata->error_code =
                     ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
@@ -842,7 +898,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             apdu_len = bacnet_array_encode(
                 rpdata->object_instance, rpdata->array_index,
                 Schedule_Exception_Schedule_Encode,
-                BACNET_EXCEPTION_SCHEDULE_SIZE, apdu, apdu_max);
+                BACNET_EXCEPTION_SCHEDULE_SIZE, apdu, apdu_size);
             if (apdu_len == BACNET_STATUS_ABORT) {
                 rpdata->error_code =
                     ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
@@ -880,12 +936,13 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
 
         case PROP_OUT_OF_SERVICE:
-            state = Schedule_Out_Of_Service(rpdata->object_instance);
+            state = pObject->Out_Of_Service;
             apdu_len = encode_application_boolean(&apdu[0], state);
             break;
         case PROP_DESCRIPTION:
-            characterstring_init_ansi(&char_string,
-                Schedule_Description(rpdata->object_instance));
+            characterstring_init_ansi(
+                &char_string,
+                pObject->Description);
             apdu_len =
                 encode_application_character_string(&apdu[0], &char_string);
             break;
@@ -922,7 +979,7 @@ static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
     BACNET_DAILY_SCHEDULE daily_schedule = { 0 };
     size_t tv, tv_size;
     int len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -970,7 +1027,7 @@ static int Schedule_Weekly_Schedule_Element_Length(
 {
     BACNET_DAILY_SCHEDULE daily_schedule = { 0 };
     int len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -1002,7 +1059,7 @@ static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
     BACNET_ERROR_CODE error_code = ERROR_CODE_UNKNOWN_OBJECT;
     BACNET_SPECIAL_EVENT special_event = { 0 };
     int len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -1041,7 +1098,7 @@ static int Schedule_Exception_Schedule_Element_Length(
 {
     BACNET_SPECIAL_EVENT special_event = { 0 };
     int len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -1074,7 +1131,7 @@ static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     int len = 0;
     bool status;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -1126,7 +1183,7 @@ static int Schedule_List_Of_Object_Property_References_Length(
 {
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     int len = 0;
-    SCHEDULE_DESCR *pObject;
+    struct object_data *pObject;
 
     pObject = Schedule_Object(object_instance);
     if (pObject) {
@@ -1235,7 +1292,6 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false; /* return value */
     int iOffset;
     uint8_t idx;
-    SCHEDULE_DESCR *pObject;
     int len;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     BACNET_TIME_VALUE time_value;
@@ -1253,7 +1309,14 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *value_c = NULL;
     int value_c_len = 0;
 
-
+    struct object_data *pObject;
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
+    if (wp_data->application_data_len == 0) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -1265,12 +1328,16 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     pObject = Keylist_Data(Object_List, wp_data->object_instance);
-    if (!pObject)
-        return status;
-
+    if (!pObject) {
+        return false;
+    }
     ctxw = ucix_init(sec);
-    if (!ctxw)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctxw) {
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Failed to load config file %s\n",sec);
+        return false;
+    }
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
@@ -1292,9 +1359,12 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
                 if (Schedule_Name_Set(
-                    wp_data->object_instance, value.type.Character_String.value)) {
+                    pObject,
+                    value.type.Character_String.value,
+                    Object_Type,
+                    wp_data->object_instance)) {
                     ucix_add_option(ctxw, sec, idx_c, "name",
-                        strndup(value.type.Character_String.value, value.type.Character_String.length));
+                        strndup(value.type.Character_String.value,value.type.Character_String.length));
                     ucix_commit(ctxw,sec);
                 }
             }
@@ -1523,18 +1593,16 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                if (Schedule_Description_Set(
-                    wp_data->object_instance, value.type.Character_String.value)) {
-                    ucix_add_option(ctxw, sec, idx_c, "description",
-                        Schedule_Description(wp_data->object_instance));
-                    ucix_commit(ctxw, sec);
-                }
+                pObject->Description = value.type.Character_String.value;
+                ucix_add_option(ctxw, sec, idx_c, "description",
+                    Schedule_Description(pObject));
+                ucix_commit(ctxw,sec);
             }
             break;
         default:
             if (property_lists_member(
-                    Schedule_Properties_Required, Schedule_Properties_Optional,
-                    Schedule_Properties_Proprietary,
+                    Properties_Required, Properties_Optional,
+                    Properties_Proprietary,
                     wp_data->object_property)) {
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
@@ -1755,7 +1823,9 @@ void Schedule_Recalculate_PV(
         for (m = 0 ; m < pObject->obj_prop_ref_cnt; m++) {
             pMember = &pObject->Object_Property_References[m];
             if (pMember->deviceIdentifier.type == 65535) {
-                debug_printf("Schedule_Recalculate_PV: writing local new value\n");
+                debug_log_fprintf(
+                    DEBUG_LOG_INFO, stderr,
+                    "Schedule_Recalculate_PV: writing local new value\n");
                 wpdata.object_type = pMember->objectIdentifier.type;
                 wpdata.object_instance = pMember->objectIdentifier.instance;
                 wpdata.object_property = pMember->propertyIdentifier;
@@ -1771,12 +1841,16 @@ void Schedule_Recalculate_PV(
                     }
                 }
             } else if (pMember->deviceIdentifier.type == OBJECT_DEVICE) {
-                debug_printf("Schedule_Recalculate_PV: writing remote new value\n");
+                debug_log_fprintf(
+                    DEBUG_LOG_INFO, stderr,
+                    "Schedule_Recalculate_PV: writing remote new value\n");
                 /* try to bind with the device */
                 found = address_bind_request(
                     pMember->deviceIdentifier.instance, &max_apdu, &Target_Address);
                 if (!found) {
-                    debug_printf("Schedule_Recalculate_PV: remote not found. send WhoIs for %i\n",
+                    debug_log_fprintf(
+                        DEBUG_LOG_ERROR, stderr,
+                        "Schedule_Recalculate_PV: remote not found. send WhoIs for %i\n",
                         pMember->deviceIdentifier.instance);
                     Send_WhoIs(
                         pMember->deviceIdentifier.instance, pMember->deviceIdentifier.instance);
@@ -1794,7 +1868,9 @@ void Schedule_Recalculate_PV(
                         pMember->arrayIndex);
                 } else {
                     change = true;
-                    debug_printf("Schedule_Recalculate_PV: remote still not found. skip writing\n");
+                    debug_log_fprintf(
+                        DEBUG_LOG_ERROR, stderr,
+                        "Schedule_Recalculate_PV: remote still not found. skip writing\n");
                 }
             }
         }

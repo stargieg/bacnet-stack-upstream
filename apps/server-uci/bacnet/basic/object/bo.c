@@ -106,6 +106,23 @@ static const int32_t Properties_Proprietary[] = { -1 };
    that is always writable.  */
 static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
+    PROP_PRESENT_VALUE,
+    PROP_OUT_OF_SERVICE,
+    PROP_OBJECT_NAME,
+    PROP_ACTIVE_TEXT,
+    PROP_INACTIVE_TEXT,
+    PROP_POLARITY,
+    PROP_RELIABILITY,
+    PROP_RELINQUISH_DEFAULT,
+    PROP_DESCRIPTION,
+#if defined(INTRINSIC_REPORTING)
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_ALARM_VALUE,
+    PROP_EVENT_ENABLE,
+    PROP_NOTIFY_TYPE,
+    PROP_EVENT_DETECTION_ENABLE,
+#endif
     -1
 };
 
@@ -189,7 +206,7 @@ bool Binary_Output_Valid_Instance(uint32_t object_instance)
  */
 unsigned Binary_Output_Count(void)
 {
-    return Keylist_Count(Object_List)-1;
+    return Keylist_Count(Object_List);
 }
 
 /**
@@ -394,9 +411,11 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #endif
         case PROP_STATUS_FLAGS:
             bitstring_init(&bit_string);
+#if defined(INTRINSIC_REPORTING)
             bitstring_set_bit(
                 &bit_string, STATUS_FLAG_IN_ALARM,
                 pObject->Event_State != EVENT_STATE_NORMAL);
+#endif
             state = Binary_Object_Fault(pObject);
             bitstring_set_bit(
                 &bit_string, STATUS_FLAG_FAULT, state);
@@ -507,6 +526,11 @@ int Binary_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                              : false);
 
             apdu_len = encode_application_bitstring(&apdu[0], &bit_string);
+            break;
+
+        case PROP_EVENT_DETECTION_ENABLE:
+            apdu_len = encode_application_boolean(
+                &apdu[0], pObject->Event_Detection_Enable);
             break;
 
         case PROP_ACKED_TRANSITIONS:
@@ -621,8 +645,12 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     ctxw = ucix_init(sec);
-    if (!ctxw)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctxw) {
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Failed to load config file %s\n",sec);
+        return false;
+    }
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
@@ -835,7 +863,9 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
     }
-
+    if (ctxw)
+        ucix_cleanup(ctxw);
+    free(idx_c);
     return status;
 }
 
@@ -1161,50 +1191,51 @@ void Binary_Output_Init(void)
     struct object_data_t tObject = { 0 };
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
-    struct object_data *pObject = NULL;
     struct itr_ctx itr_m;
     if (!Object_List) {
         Object_List = Keylist_Create();
     }
+
     ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctx) {
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Failed to load config file %s\n",sec);
+    } else {
 
-    /* add to list */
-    Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
-
-    option = ucix_get_option(ctx, sec, "default", "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Description = strndup(option,option_str.length);
-    else
-        tObject.Description = "Binary Ouput";
-    option = ucix_get_option(ctx, sec, "default", "active_text");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Active_Text = strndup(option,option_str.length);
-    else
-        tObject.Active_Text = "Active";
-    option = ucix_get_option(ctx, sec, "default", "inactive_text");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Inactive_Text = strndup(option,option_str.length);
-    else
-        tObject.Inactive_Text = "Inactive";
+        option = ucix_get_option(ctx, sec, "default", "description");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Description = strndup(option,option_str.length);
+        else
+            tObject.Description = "Binary Ouput";
+        option = ucix_get_option(ctx, sec, "default", "active_text");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Active_Text = strndup(option,option_str.length);
+        else
+            tObject.Active_Text = "Active";
+        option = ucix_get_option(ctx, sec, "default", "inactive_text");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Inactive_Text = strndup(option,option_str.length);
+        else
+            tObject.Inactive_Text = "Inactive";
 #if defined(INTRINSIC_REPORTING)
-    tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
-    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
-    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
-    option = ucix_get_option(ctx, sec, "default", "alarm_value");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Alarm_Value = strndup(option,option_str.length);
-    else
-        tObject.Alarm_Value = "0";
+        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
+        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
+        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
+        option = ucix_get_option(ctx, sec, "default", "alarm_value");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Alarm_Value = strndup(option,option_str.length);
+        else
+            tObject.Alarm_Value = "0";
 #endif
-    itr_m.section = sec;
-    itr_m.ctx = ctx;
-    itr_m.Object = tObject;
-    ucix_for_each_section_type(ctx, sec, type,
-        (void (*)(const char *, void *))uci_list, &itr_m);
-    ucix_cleanup(ctx);
+        itr_m.section = sec;
+        itr_m.ctx = ctx;
+        itr_m.Object = tObject;
+        ucix_for_each_section_type(ctx, sec, type,
+            (void (*)(const char *, void *))uci_list, &itr_m);
+        ucix_cleanup(ctx);
+    }
 #if defined(INTRINSIC_REPORTING)
     /* Set handler for GetEventInformation function */
     handler_get_event_information_set(Object_Type,

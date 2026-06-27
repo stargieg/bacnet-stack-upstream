@@ -99,6 +99,28 @@ static const int32_t Properties_Proprietary[] = { -1 };
    that is always writable.  */
 static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
+    PROP_PRESENT_VALUE,
+    PROP_OUT_OF_SERVICE,
+    PROP_UNITS,
+    PROP_COV_INCREMENT,
+    PROP_OBJECT_NAME,
+    PROP_RELIABILITY,
+    PROP_RELINQUISH_DEFAULT,
+    PROP_MAX_PRES_VALUE,
+    PROP_MIN_PRES_VALUE,
+    PROP_RESOLUTION,
+    PROP_DESCRIPTION,
+#if defined(INTRINSIC_REPORTING)
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT,
+    PROP_DEADBAND,
+    PROP_LIMIT_ENABLE,
+    PROP_EVENT_ENABLE,
+    PROP_NOTIFY_TYPE,
+    PROP_EVENT_DETECTION_ENABLE,
+#endif
     -1
 };
 
@@ -201,7 +223,7 @@ bool Analog_Input_Valid_Instance(uint32_t object_instance)
  */
 unsigned Analog_Input_Count(void)
 {
-    return Keylist_Count(Object_List)-1;
+    return Keylist_Count(Object_List);
 }
 
 /**
@@ -386,10 +408,12 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
             break;
         case PROP_STATUS_FLAGS:
             bitstring_init(&bit_string);
+#if defined(INTRINSIC_REPORTING)
             bitstring_set_bit(
                 &bit_string, STATUS_FLAG_IN_ALARM,
                 pObject->Event_State != EVENT_STATE_NORMAL);
-            state = Analog_Object_Fault(pObject);
+#endif
+                state = Analog_Object_Fault(pObject);
             bitstring_set_bit(
                 &bit_string, STATUS_FLAG_FAULT, state);
             state = pObject->Overridden;
@@ -626,8 +650,12 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     ctxw = ucix_init(sec);
-    if (!ctxw)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctxw) {
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Failed to load config file %s\n",sec);
+        return false;
+    }
     idx_c_len = snprintf(NULL, 0, "%d", wp_data->object_instance);
     idx_c = malloc(idx_c_len + 1);
     snprintf(idx_c,idx_c_len + 1,"%d",wp_data->object_instance);
@@ -966,6 +994,7 @@ void Analog_Input_Intrinsic_Reporting(
  * @param  getevent_data - data for the Event Information
  * @return 1 if an active event is found, 0 if no active event, -1 if
  * end of list
+ * handler
  */
 int Analog_Input_Event_Information(
     unsigned index,
@@ -986,6 +1015,7 @@ int Analog_Input_Event_Information(
  * @param alarmack_data - data for the Event Acknowledgement
  * @param error_code - error code for the Event Acknowledgement
  * @return 1 if successful, -1 if error, -2 if request is out-of-range
+ * handler
  */
 int Analog_Input_Alarm_Ack(
     BACNET_ALARM_ACK_DATA * alarmack_data,
@@ -1007,6 +1037,7 @@ int Analog_Input_Alarm_Ack(
  * @param  getalarm_data - data for the Alarm Summary
  * @return 1 if an active alarm is found, 0 if no active alarm, -1 if
  * end of list
+ * handler
  */
 int Analog_Input_Alarm_Summary(
     unsigned index,
@@ -1306,72 +1337,74 @@ void Analog_Input_Init(void)
     const char *option = NULL;
     BACNET_CHARACTER_STRING option_str;
 
-    struct object_data *pObject = NULL;
     struct itr_ctx itr_m;
     if (!Object_List) {
         Object_List = Keylist_Create();
     }
-    ctx = ucix_init(sec);
-    if (!ctx)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
-    /* add to list */
-    Keylist_Data_Add(Object_List, BACNET_MAX_INSTANCE, pObject);
 
-    option = ucix_get_option(ctx, sec, "default", "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Description = strndup(option,option_str.length);
-    else
-        tObject.Description = "Analog Input";
-    option = ucix_get_option(ctx, sec, "default", "cov_increment");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.COV_Increment = strndup(option,option_str.length);
-    else
-        tObject.COV_Increment = "0.1";
-    option = ucix_get_option(ctx, sec, "default", "resolution");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Resolution = strndup(option,option_str.length);
-    else
-        tObject.Resolution = "0.1";
-    tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
-    option = ucix_get_option(ctx, sec, "default", "min_value");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Min_Pres_Value = strndup(option,option_str.length);
-    else
-        tObject.Min_Pres_Value = "0.0";
-    option = ucix_get_option(ctx, sec, "default", "max_value");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Max_Pres_Value = strndup(option,option_str.length);
-    else
-        tObject.Max_Pres_Value = "100.0";
+    ctx = ucix_init(sec);
+    if (!ctx) {
+        debug_log_fprintf(
+            DEBUG_LOG_ERROR, stderr,
+            "Failed to load config file %s\n",sec);
+    } else {
+
+        option = ucix_get_option(ctx, sec, "default", "description");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Description = strndup(option,option_str.length);
+        else
+            tObject.Description = "Analog Input";
+        option = ucix_get_option(ctx, sec, "default", "cov_increment");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.COV_Increment = strndup(option,option_str.length);
+        else
+            tObject.COV_Increment = "0.1";
+        option = ucix_get_option(ctx, sec, "default", "resolution");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Resolution = strndup(option,option_str.length);
+        else
+            tObject.Resolution = "0.1";
+        tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
+        option = ucix_get_option(ctx, sec, "default", "min_value");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Min_Pres_Value = strndup(option,option_str.length);
+        else
+            tObject.Min_Pres_Value = "0.0";
+        option = ucix_get_option(ctx, sec, "default", "max_value");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Max_Pres_Value = strndup(option,option_str.length);
+        else
+            tObject.Max_Pres_Value = "100.0";
 #if defined(INTRINSIC_REPORTING)
-    tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-    tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
-    tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
-    tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
-    tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0);
-    option = ucix_get_option(ctx, sec, "default", "high_limit");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.High_Limit = strndup(option,option_str.length);
-    else
-        tObject.High_Limit = "100.0";
-    option = ucix_get_option(ctx, sec, "default", "low_limit");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Low_Limit = strndup(option,option_str.length);
-    else
-        tObject.Low_Limit = "0.0";
-    option = ucix_get_option(ctx, sec, "default", "dead_limit");
-    if (option && characterstring_init_ansi(&option_str, option))
-        tObject.Deadband = strndup(option,option_str.length);
-    else
-        tObject.Deadband = "0.0";
-    tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0);
+        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
+        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
+        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
+        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
+        tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0);
+        option = ucix_get_option(ctx, sec, "default", "high_limit");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.High_Limit = strndup(option,option_str.length);
+        else
+            tObject.High_Limit = "100.0";
+        option = ucix_get_option(ctx, sec, "default", "low_limit");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Low_Limit = strndup(option,option_str.length);
+        else
+            tObject.Low_Limit = "0.0";
+        option = ucix_get_option(ctx, sec, "default", "dead_limit");
+        if (option && characterstring_init_ansi(&option_str, option))
+            tObject.Deadband = strndup(option,option_str.length);
+        else
+            tObject.Deadband = "0.0";
+        tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0);
 #endif
-	itr_m.section = sec;
-	itr_m.ctx = ctx;
-	itr_m.Object = tObject;
-    ucix_for_each_section_type(ctx, sec, type,
-        (void (*)(const char *, void *))uci_list, &itr_m);
-    ucix_cleanup(ctx);
+        itr_m.section = sec;
+        itr_m.ctx = ctx;
+        itr_m.Object = tObject;
+        ucix_for_each_section_type(ctx, sec, type,
+            (void (*)(const char *, void *))uci_list, &itr_m);
+        ucix_cleanup(ctx);
+    }
 #if defined(INTRINSIC_REPORTING)
     /* Set handler for GetEventInformation function */
     handler_get_event_information_set(Object_Type,

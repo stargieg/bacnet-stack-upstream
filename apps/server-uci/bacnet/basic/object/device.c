@@ -3388,6 +3388,13 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
     uint32_t minutes = 0;
 #endif
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
+    if (wp_data->application_data_len == 0) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -3401,8 +3408,12 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
     /* FIXME: len < application_data_len: more data? */
 
     ctxw = ucix_init(sec);
-    if (!ctxw)
-        fprintf(stderr, "Failed to load config file %s\n",sec);
+    if (!ctxw) {
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Failed to load config file %s\n",sec);
+        return false;
+    }
 
     switch (wp_data->object_property) {
         case PROP_OBJECT_IDENTIFIER:
@@ -3648,6 +3659,7 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
 
     if (ctxw)
         ucix_cleanup(ctxw);
+    free(idx_c);
 
     return status;
 }
@@ -4311,8 +4323,17 @@ void Device_Init(object_functions_t *object_table)
     const char *sec_idx = "0";
     struct uci_context *ctx;
     ctx = ucix_init(sec);
-    if (!ctx)
+    if (!ctx){
         fprintf(stderr, "Failed to load config file bacnet_dev\n");
+        exit(1);
+    }
+/*
+ * debug.h
+ * Severity values MUST be in the range of 0 to 7 inclusive,
+ * or a special value of -1 to indicate that logging is disabled.
+ */
+    i = ucix_get_option_int(ctx, sec, sec_idx, "debug", -1);
+    debug_log_severity_set(i);
     option = ucix_get_option(ctx, sec, sec_idx, "Name");
     if (!(option && characterstring_init_ansi(&My_Object_Name, option)))
         characterstring_init_ansi(&My_Object_Name, "SimpleServer");

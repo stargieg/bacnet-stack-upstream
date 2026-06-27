@@ -10,6 +10,7 @@
 
 #include <uci_config.h>
 #include <uci.h>
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
 /*#include "log.h" */
 
@@ -35,19 +36,23 @@ struct uci_context *ucix_init(const char *config_file)
     struct uci_context *ctx = NULL;
     ctx = uci_alloc_context();
 	if (!ctx) {
-		fprintf(stderr, "Out of memory\n");
+		debug_log_fprintf(
+            DEBUG_LOG_EMERGENCY, stderr,
+            "Out of memory\n");
 		return NULL;
 	}
 #ifdef BAC_UCI_CONFDIR
-    fprintf(
-        stderr, "uci config dir %s\n", BAC_UCI_CONFDIR);
+    debug_log_fprintf(
+        DEBUG_LOG_INFO, stderr,
+        "uci config dir %s\n", BAC_UCI_CONFDIR);
     uci_set_confdir(ctx, BAC_UCI_CONFDIR);
 #endif
     /*      uci_add_history_path(ctx, "/var/state"); */
     uci_add_delta_path(ctx, "/var/state");
     if (uci_load(ctx, config_file, NULL) != UCI_OK) {
-        fprintf(
-            stderr, "%s/%s is missing or corrupt\n", ctx->confdir, config_file);
+        debug_log_fprintf(
+            DEBUG_LOG_EMERGENCY, stderr,
+            "%s/%s is missing or corrupt\n", ctx->confdir, config_file);
         uci_free_context(ctx);
         return NULL;
     }
@@ -61,8 +66,9 @@ struct uci_context *ucix_init_path(const char *path, const char *config_file)
         uci_set_confdir(ctx, path);
     }
     if (uci_load(ctx, config_file, NULL) != UCI_OK) {
-        fprintf(
-            stderr, "%s/%s is missing or corrupt\n", ctx->savedir, config_file);
+        debug_log_fprintf(
+            DEBUG_LOG_EMERGENCY, stderr,
+            "%s/%s is missing or corrupt\n", ctx->savedir, config_file);
         return NULL;
     }
     return ctx;

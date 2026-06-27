@@ -1413,6 +1413,8 @@ if(SERVER_UCI)
     apps/server-uci/bacnet/basic/object/bv.h
     apps/server-uci/bacnet/basic/object/bi.c
     apps/server-uci/bacnet/basic/object/bi.h
+    apps/server-uci/bacnet/basic/object/ms.c
+    apps/server-uci/bacnet/basic/object/ms.h
     apps/server-uci/bacnet/basic/object/mso.c
     apps/server-uci/bacnet/basic/object/mso.h
     apps/server-uci/bacnet/basic/object/msv.c
