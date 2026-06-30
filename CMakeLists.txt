@@ -1089,6 +1089,8 @@ if(SERVER_UCI)
     $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/vmac.h>
     $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/bzllvmac.c>
     $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/bzllvmac.h>
+    $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/h_bzll.c>
+    $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/h_bzll.h>
     $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.c>
     $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.h>
     $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-socket.c>
@@ -1431,7 +1433,6 @@ if(SERVER_UCI)
     ${BACNET_PORT_DIRECTORY_PATH}/datetime-init.c
     $<$<BOOL:${BACDL_BIP}>:${BACNET_PORT_DIRECTORY_PATH}/bip-init.c>
     $<$<BOOL:${BACDL_BIP6}>:${BACNET_PORT_DIRECTORY_PATH}/bip6.c>
-    $<$<BOOL:${BACDL_ZIGBEE}>:${BACNET_PORT_DIRECTORY_PATH}/bzll-init.c>
     $<$<BOOL:${BACDL_ARCNET}>:${BACNET_PORT_DIRECTORY_PATH}/arcnet.c>
     $<$<BOOL:${BACDL_MSTP}>:${BACNET_PORT_DIRECTORY_PATH}/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:${BACNET_PORT_DIRECTORY_PATH}/rs485.h>
