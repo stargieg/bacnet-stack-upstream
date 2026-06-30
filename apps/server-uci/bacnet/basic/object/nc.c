@@ -29,8 +29,6 @@
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
-#include "bacnet/basic/tsm/tsm.h"
-#include "bacnet/datalink/datalink.h"
 /* me! */
 #include "bacnet/basic/object/nc.h"
 

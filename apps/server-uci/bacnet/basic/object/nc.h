@@ -72,6 +72,16 @@ void Notification_Class_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+int Notification_Class_Add_List_Element(BACNET_LIST_ELEMENT_DATA *list_element);
+
+BACNET_STACK_EXPORT
+int Notification_Class_Remove_List_Element(
+    BACNET_LIST_ELEMENT_DATA *list_element);
+
+BACNET_STACK_EXPORT
+void Notification_Class_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 /* Default_Object_Table End */
 
 
@@ -80,13 +90,6 @@ BACNET_STACK_EXPORT
 const char *Notification_Class_Event_Message_Text(
     const uint32_t object_instance,
     const enum BACnetEventTransitionBits transition);
-
-BACNET_STACK_EXPORT
-int Notification_Class_Add_List_Element(BACNET_LIST_ELEMENT_DATA *list_element);
-
-BACNET_STACK_EXPORT
-int Notification_Class_Remove_List_Element(
-    BACNET_LIST_ELEMENT_DATA *list_element);
 
 BACNET_STACK_EXPORT
 void Notification_Class_Get_Priorities(

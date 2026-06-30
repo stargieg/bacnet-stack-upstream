@@ -10,18 +10,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 #include <string.h>
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/apdu.h"
-#include "bacnet/bacdcode.h"
-#include "bacnet/bactext.h"
 #include "bacnet/dcc.h"
-#include "bacnet/getevent.h"
-#include "bacnet/iam.h"
-#include "bacnet/npdu.h"
 #include "bacnet/version.h"
 /* some demo stuff needed */
 #include "bacnet/basic/binding/address.h"
@@ -55,6 +48,7 @@
 #if defined(INTRINSIC_REPORTING)
 #include "bacnet/basic/object/nc.h"
 #endif /* defined(INTRINSIC_REPORTING) */
+#if 0
 #if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h"
 #if defined BACNET_BACKUP_RESTORE
@@ -64,6 +58,7 @@
 #if defined(BAC_UCI)
 #include "bacnet/basic/ucix/ucix.h"
 #endif /* defined(BAC_UCI) */
+#endif
 
 
 static enum {
@@ -660,7 +655,6 @@ int main(int argc, char *argv[])
             dlenv_maintenance_timer(elapsed_seconds);
             handler_cov_timer_seconds(elapsed_seconds);
             trend_log_timer(elapsed_seconds);
-            schedule_timer(elapsed_seconds);
 #if defined(INTRINSIC_REPORTING)
             Device_local_reporting();
 #endif

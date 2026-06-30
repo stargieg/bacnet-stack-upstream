@@ -10,18 +10,18 @@
 #include "bacnet/bacdef.h"
 #include "bacnet/datalink/datalink.h"
 #include "bacnet/bacstr.h"
-#ifndef BACDL_NONE 
+#ifndef BACDL_NONE
 #if defined(BACDL_ETHERNET)
 #include "bacnet/datalink/ethernet.h"
 #endif
 #if defined(BACDL_BIP)
 #include "bacnet/datalink/bip.h"
-#include "bacnet/datalink/bvlc.h"
+// #include "bacnet/datalink/bvlc.h"
 #include "bacnet/basic/bbmd/h_bbmd.h"
 #endif
 #if defined(BACDL_BIP6)
 #include "bacnet/datalink/bip6.h"
-#include "bacnet/datalink/bvlc6.h"
+// #include "bacnet/datalink/bvlc6.h"
 #include "bacnet/basic/bbmd6/h_bbmd6.h"
 #endif
 #if defined(BACDL_ARCNET)

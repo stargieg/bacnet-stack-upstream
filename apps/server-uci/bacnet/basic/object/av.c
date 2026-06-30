@@ -18,10 +18,8 @@
 /* BACnet Stack API */
 #include "bacnet/bacapp.h"
 #include "bacnet/bacdcode.h"
-#include "bacnet/bactext.h"
 #include "bacnet/datetime.h"
 #include "bacnet/proplist.h"
-#include "bacnet/timestamp.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/sys/keylist.h"
@@ -171,10 +169,10 @@ void Analog_Value_Writable_Property_List(
 /**
 * Analog_Value_Object() replaced by
 * Keylist_Data(Object_List, object_instance)
-* 
+*
 * Analog_Value_Object_Index() replaced by
 * Keylist_Data(Object_List, Analog_Value_Index_To_Instance(index)
-* 
+*
 */
 /**
  * @brief Gets an object from the list using an instance number as the key
@@ -436,7 +434,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #endif
             break;
         case PROP_RELIABILITY:
-            apdu_len = 
+            apdu_len =
                 encode_application_enumerated(&apdu[0], pObject->Reliability);
             break;
         case PROP_OUT_OF_SERVICE:
@@ -475,7 +473,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 encode_application_character_string(&apdu[0], &char_string);
             break;
         case PROP_COV_INCREMENT:
-            apdu_len = 
+            apdu_len =
                 encode_application_real(&apdu[0], pObject->COV_Increment);
             break;
         case PROP_RESOLUTION:
@@ -495,7 +493,7 @@ int Analog_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 #if defined(INTRINSIC_REPORTING)
         case PROP_TIME_DELAY:
             i = pObject->Time_Delay;
-            apdu_len = 
+            apdu_len =
                 encode_application_unsigned(&apdu[0], i);
             break;
         case PROP_NOTIFICATION_CLASS:
@@ -1178,18 +1176,30 @@ bool Analog_Value_Delete(uint32_t object_instance)
 void Analog_Value_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-                Device_Inc_Database_Revision();
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /* structure to hold tuple-list and uci context during iteration */
@@ -1338,9 +1348,23 @@ void Analog_Value_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     struct itr_ctx itr_m;
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif 
 
     ctx = ucix_init(sec);
     if (!ctx) {

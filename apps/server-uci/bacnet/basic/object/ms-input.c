@@ -14,7 +14,6 @@
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/bactext.h"
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/rp.h"
@@ -161,10 +160,10 @@ void Multistate_Input_Writable_Property_List(
 /**
 * Multistate_Input_Object() replaced by
 * Keylist_Data(Object_List, object_instance)
-* 
+*
 * Multistate_Input_Object_Index() replaced by
 * Keylist_Data(Object_List, Multistate_Input_Index_To_Instance(index)
-* 
+*
 */
 
 /**
@@ -1077,18 +1076,30 @@ bool Multistate_Input_Delete(uint32_t object_instance)
 void Multistate_Input_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-                Device_Inc_Database_Revision();
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /* structure to hold tuple-list and uci context during iteration */
@@ -1219,9 +1230,23 @@ void Multistate_Input_Init(void)
 #endif
 
     struct itr_ctx itr_m;
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif 
 
     ctx = ucix_init(sec);
     if (!ctx) {

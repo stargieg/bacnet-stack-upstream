@@ -33,6 +33,11 @@
 #define BACNET_SCHEDULE_OBJ_PROP_REF_SIZE 4
 #endif
 
+#ifndef BACNET_SCHEDULE_OBJ_PROP_REF_RECONECT
+/* Reconect time of obj prop references in seconds*/
+#define BACNET_SCHEDULE_OBJ_PROP_REF_RECONECT 10
+#endif
+
 #ifndef BACNET_EXCEPTION_SCHEDULE_SIZE
 /* Maximum number of special events */
 #define BACNET_EXCEPTION_SCHEDULE_SIZE 8
@@ -41,6 +46,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+typedef struct BACnetDeviceObjectPropertyReferenceSend {
+    /* number type first to avoid enum cast warning on = { 0 } */
+    // BACNET_UNSIGNED_INTEGER arrayIndex;
+    // BACNET_OBJECT_ID objectIdentifier;
+    // BACNET_PROPERTY_ID propertyIdentifier;
+    // BACNET_OBJECT_ID deviceIdentifier;
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
+        Object_Property_References;
+    uint32_t last;
+} BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE_SEND;
 
    /*
     * Note:
@@ -64,8 +80,10 @@ typedef struct object_data {
      * Must be set to a valid value. Default is Schedule_Default.
      */
     BACNET_APPLICATION_DATA_VALUE Present_Value;
-    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
-    Object_Property_References[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
+    // BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE
+    // Object_Property_References[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
+    BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE_SEND
+    Object_Property_References_Send[BACNET_SCHEDULE_OBJ_PROP_REF_SIZE];
     uint8_t obj_prop_ref_cnt; /* actual number of obj_prop references */
     uint8_t Priority_For_Writing; /* (1..16) */
     bool Out_Of_Service;
@@ -85,6 +103,9 @@ void Schedule_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void Schedule_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 
 BACNET_STACK_EXPORT
 bool Schedule_Valid_Instance(uint32_t object_instance);
@@ -121,11 +142,6 @@ bool Schedule_Exception_Schedule_Set(
     const BACNET_SPECIAL_EVENT *value);
 
 BACNET_STACK_EXPORT
-bool Schedule_List_Of_Object_Property_References_Set(
-    uint32_t object_instance,
-    unsigned index,
-    const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember);
-BACNET_STACK_EXPORT
 bool Schedule_List_Of_Object_Property_References(
     uint32_t object_instance,
     unsigned index,
@@ -161,8 +177,9 @@ bool Schedule_In_Effective_Period(
 BACNET_STACK_EXPORT
 void Schedule_Recalculate_PV(
     SCHEDULE_DESCR *pObject, BACNET_WEEKDAY wday, const BACNET_TIME *time);
+
 BACNET_STACK_EXPORT
-void schedule_timer(uint16_t uSeconds);
+void Schedule_Timer(uint32_t object_instance, uint16_t milliseconds);
 
 #ifdef __cplusplus
 }

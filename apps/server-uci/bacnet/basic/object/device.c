@@ -16,7 +16,6 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/datetime.h"
-#include "bacnet/apdu.h"
 #include "bacnet/wp.h" /* WriteProperty handling */
 #include "bacnet/rp.h" /* ReadProperty handling */
 #include "bacnet/dcc.h" /* DeviceCommunicationControl handling */
@@ -132,7 +131,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Device_Writable_Property_List },
 #if (BACNET_PROTOCOL_REVISION >= 17)
     { OBJECT_NETWORK_PORT,
       Network_Port_Init,
@@ -154,7 +153,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Network_Port_Writable_Property_List },
 #endif
 #if 0
     { OBJECT_TIMER,
@@ -199,7 +198,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Analog_Input_Writable_Property_List },
     { OBJECT_ANALOG_OUTPUT,
       Analog_Output_Init,
       Analog_Output_Count,
@@ -220,7 +219,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Analog_Output_Writable_Property_List },
     { OBJECT_ANALOG_VALUE,
       Analog_Value_Init,
       Analog_Value_Count,
@@ -241,7 +240,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Analog_Value_Writable_Property_List },
     { OBJECT_BINARY_INPUT,
       Binary_Input_Init,
       Binary_Input_Count,
@@ -262,7 +261,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Binary_Input_Writable_Property_List },
     { OBJECT_BINARY_OUTPUT,
       Binary_Output_Init,
       Binary_Output_Count,
@@ -283,7 +282,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Binary_Output_Writable_Property_List },
     { OBJECT_BINARY_VALUE,
       Binary_Value_Init,
       Binary_Value_Count,
@@ -304,7 +303,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Binary_Value_Writable_Property_List },
 #if 0
     { OBJECT_CALENDAR,
       Calendar_Init,
@@ -493,12 +492,12 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* COV */,
       NULL /* COV Clear */,
       NULL /* Intrinsic Reporting */,
-      NULL /* Add_List_Element */,
-      NULL /* Remove_List_Element */,
+      Notification_Class_Add_List_Element,
+      Notification_Class_Remove_List_Element,
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Notification_Class_Writable_Property_List },
 #endif
 #if 0
     { OBJECT_LIFE_SAFETY_POINT,
@@ -585,7 +584,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Multistate_Input_Writable_Property_List },
     { OBJECT_MULTI_STATE_OUTPUT,
       Multistate_Output_Init,
       Multistate_Output_Count,
@@ -606,7 +605,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Multistate_Output_Writable_Property_List },
     { OBJECT_MULTI_STATE_VALUE,
       Multistate_Value_Init,
       Multistate_Value_Count,
@@ -627,7 +626,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Multistate_Value_Writable_Property_List },
     { OBJECT_TRENDLOG,
       Trend_Log_Init,
       Trend_Log_Count,
@@ -648,7 +647,7 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Create */,
       NULL /* Delete */,
       NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Trend_Log_Writable_Property_List },
 #if 0
 #if (BACNET_PROTOCOL_REVISION >= 14)
     { OBJECT_LIGHTING_OUTPUT,
@@ -804,8 +803,8 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Remove_List_Element */,
       NULL /* Create */,
       NULL /* Delete */,
-      NULL /* Timer */,
-      NULL /* Writable Property List */ },
+      Schedule_Timer /* Timer */,
+      Schedule_Writable_Property_List },
 #if 0
     { OBJECT_STRUCTURED_VIEW,
       Structured_View_Init,
@@ -3016,7 +3015,7 @@ void Device_Backup_Failure_Timeout_Restart(void)
  *  WritePropertyMultiple, CreateObject, or AtomicReadFile request
  *  that directly accesses a configuration File object.
  */
-void Device_Backup_Failure_Timeout_Countdown(uint32_t milliseconds) 
+void Device_Backup_Failure_Timeout_Countdown(uint32_t milliseconds)
 {
 #if defined(BACNET_BACKUP_RESTORE)
     BACNET_BACKUP_STATE *backup_state = Device_Backup_State_Value();

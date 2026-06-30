@@ -16,11 +16,9 @@
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacenum.h"
-#include "bacnet/bactext.h"
 #include "bacnet/bacapp.h"
 #include "bacnet/wp.h"
 #include "bacnet/rp.h"
-#include "bacnet/cov.h"
 #include "bacnet/proplist.h"
 /* basic objects and services */
 #include "bacnet/basic/services.h"
@@ -484,7 +482,7 @@ int Binary_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                                                 : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_FAULT,
-                (i & EVENT_ENABLE_TO_FAULT) ? true 
+                (i & EVENT_ENABLE_TO_FAULT) ? true
                                             : false);
             bitstring_set_bit(
                 &bit_string, TRANSITION_TO_NORMAL,
@@ -955,18 +953,30 @@ uint32_t Binary_Value_Create(uint32_t object_instance)
 void Binary_Value_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-                Device_Inc_Database_Revision();
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -1092,9 +1102,23 @@ void Binary_Value_Init(void)
     BACNET_CHARACTER_STRING option_str;
 
     struct itr_ctx itr_m;
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif 
 
     ctx = ucix_init(sec);
     if (!ctx) {

@@ -62,11 +62,19 @@ typedef struct tl_bits {
 #define TL_TYPE_DELTA 9
 #define TL_TYPE_ANY 10 /* We don't support this particular can of worms! */
 
+#ifndef BACNET_TRENDLOG_OBJ_PROP_REF_RECONECT
+/* Reconect time of obj prop references in seconds*/
+#define BACNET_TRENDLOG_OBJ_PROP_REF_RECONECT 10
+#endif
+
 BACNET_STACK_EXPORT
 void Trend_Log_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void Trend_Log_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 
 BACNET_STACK_EXPORT
 bool Trend_Log_Valid_Instance(uint32_t object_instance);
@@ -93,9 +101,6 @@ void Trend_Log_Init(void);
 
 BACNET_STACK_EXPORT
 void TL_Insert_Status_Rec(int iLog, BACNET_LOG_STATUS eStatus, bool bState);
-
-BACNET_STACK_EXPORT
-bool TL_Is_Enabled(int iLog);
 
 BACNET_STACK_EXPORT
 bacnet_time_t TL_BAC_Time_To_Local(const BACNET_DATE_TIME *SourceTime);

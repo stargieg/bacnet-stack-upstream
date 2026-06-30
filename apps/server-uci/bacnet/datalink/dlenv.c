@@ -14,8 +14,7 @@
 /* BACnet Stack defines - first */
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
-#include "bacnet/apdu.h"
-#include "bacnet/basic/services.h"
+#include "bacnet/basic/service/h_apdu.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/tsm/tsm.h"
 #if defined(BACDL_BIP)
@@ -24,16 +23,16 @@
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
-#if defined(BACDL_ARCNET)
-#include "bacnet/datalink/arcnet.h"
-#endif
+// #if defined(BACDL_ARCNET)
+// #include "bacnet/datalink/arcnet.h"
+// #endif
 #if defined(BACDL_BIP6)
 #include "bacnet/datalink/bip6.h"
-#include "bacnet/basic/bbmd6/h_bbmd6.h"
+// #include "bacnet/basic/bbmd6/h_bbmd6.h"
 #endif
-#if defined(BACDL_ETHERNET)
-#include "bacnet/datalink/ethernet.h"
-#endif
+// #if defined(BACDL_ETHERNET)
+// #include "bacnet/datalink/ethernet.h"
+// #endif
 #if defined(BACDL_BSC)
 #include "bacnet/basic/object/bacfile.h"
 #include "bacnet/basic/object/sc_netport.h"
@@ -43,7 +42,7 @@
 #endif
 #if defined(BACDL_BSC)
 #include "bacnet/datalink/bsc/bvlc-sc.h"
-#include "bacnet/datalink/bsc/bsc-util.h"
+// #include "bacnet/datalink/bsc/bsc-util.h"
 #include "bacnet/datalink/bsc/bsc-datalink.h"
 #include "bacnet/datalink/bsc/bsc-event.h"
 #endif
@@ -58,9 +57,9 @@
 #if defined(BACDL_MSTP)
 #include "bacnet/datalink/dlmstp.h"
 #endif
-#if defined(BACDL_BSC)
-#include "bacfile-posix.h"
-#endif
+//#if defined(BACDL_BSC)
+//#include "bacfile-posix.h"
+//#endif
 
 #include "bacnet/basic/ucix/ucix.h"
 
@@ -1220,7 +1219,7 @@ int dlenv_init(void)
     char *hub_binding = NULL;
     char *direct_connect_initiate = NULL;
     char *direct_connect_accept_urls = NULL;
-    char option_chr[16];
+    char bacdl_chr[16];
     char ifname[32];
 
     ctx = ucix_init("bacnet_dev");
@@ -1238,16 +1237,16 @@ int dlenv_init(void)
     option = ucix_get_option(ctx,
         "bacnet_dev", "0", "bacdl");
     if (option != 0) {
-        snprintf(option_chr,sizeof(option_chr),"%s",option);
+        snprintf(bacdl_chr,sizeof(bacdl_chr),"%s",option);
     } else {
-        printf(option_chr,"bip",NULL);
+        printf(bacdl_chr,"bip",NULL);
     }
-    datalink_set(option_chr);
+    datalink_set(bacdl_chr);
     Datalink_Transport = datalink_get();
 
     debug_log_fprintf(
         DEBUG_LOG_INFO, stderr,
-        "BACnet Data link: %i\n", Datalink_Transport);
+        "BACnet Data link: %s %i\n", bacdl_chr, Datalink_Transport);
     switch (Datalink_Transport) {
     case DATALINK_BIP6:
         port_type = PORT_TYPE_BIP6;
@@ -1351,6 +1350,9 @@ int dlenv_init(void)
             "BACnet Data link init: %s\n", ifname);
         /* === Initialize the Datalink Here === */
         if (!datalink_init(ifname)) {
+            debug_log_fprintf(
+                DEBUG_LOG_EMERGENCY, stderr,
+                "BACnet Data link init: %s %s:%i no support\n", ifname, bacdl_chr, Datalink_Transport);
             if (ctx)
                 ucix_cleanup(ctx);
             exit(1);
