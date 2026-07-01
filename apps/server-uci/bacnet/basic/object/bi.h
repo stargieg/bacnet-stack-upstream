@@ -105,6 +105,9 @@ int Binary_Input_Alarm_Summary(
 /* event handler end */
 #endif
 BACNET_STACK_EXPORT
+void Binary_Input_Write_Present_Value_Callback_Set(
+    binary_input_write_present_value_callback cb);
+BACNET_STACK_EXPORT
 void *Binary_Input_Context_Get(uint32_t object_instance);
 BACNET_STACK_EXPORT
 void Binary_Input_Context_Set(uint32_t object_instance, void *context);

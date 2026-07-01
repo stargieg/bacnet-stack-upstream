@@ -25,6 +25,15 @@
 #include "bacnet/get_alarm_sum.h"
 #endif
 
+/**
+ * @brief Callback for gateway write present value request
+ * @param  object_instance - object-instance number of the object
+ * @param  old_value - floating point analog value prior to write
+ * @param  value - floating point analog value of the write
+ */
+typedef void (*analog_output_write_present_value_callback)(
+    uint32_t object_instance, float old_value, float value);
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -92,6 +101,8 @@ int Analog_Output_Alarm_Summary(
     unsigned index, BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
 /* event handler end */
 #endif
+void Analog_Output_Write_Present_Value_Callback_Set(
+    analog_output_write_present_value_callback cb);
 BACNET_STACK_EXPORT
 void *Analog_Output_Context_Get(uint32_t object_instance);
 BACNET_STACK_EXPORT

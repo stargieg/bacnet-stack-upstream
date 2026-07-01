@@ -103,6 +103,8 @@ int Binary_Value_Alarm_Summary(
     unsigned index, BACNET_GET_ALARM_SUMMARY_DATA *getalarm_data);
 /* event handler end */
 #endif
+void Binary_Value_Write_Present_Value_Callback_Set(
+    binary_value_write_present_value_callback cb);
 BACNET_STACK_EXPORT
 void *Binary_Value_Context_Get(uint32_t object_instance);
 BACNET_STACK_EXPORT

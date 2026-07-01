@@ -128,7 +128,7 @@ int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f
     int prec = 0;
     if (resolution < 1) {
         prec = (int)log10((double)roundf(1 / resolution));
-        ret = snprintf(value_c, value_c_len, "%.*f", prec, value_f);
+        ret = snprintf(value_c, value_c_len, "%.*f", prec, (double)value_f);
     } else {
         ret = snprintf(value_c, value_c_len, "%i", (int)value_f);
     }

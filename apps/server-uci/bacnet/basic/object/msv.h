@@ -101,6 +101,9 @@ int Multistate_Value_Alarm_Summary(
 /* event handler end */
 #endif
 BACNET_STACK_EXPORT
+void Multistate_Value_Write_Present_Value_Callback_Set(
+    multistate_value_write_present_value_callback cb);
+BACNET_STACK_EXPORT
 void *Multistate_Value_Context_Get(uint32_t object_instance);
 BACNET_STACK_EXPORT
 void Multistate_Value_Context_Set(uint32_t object_instance, void *context);

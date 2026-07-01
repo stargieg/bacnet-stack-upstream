@@ -225,7 +225,7 @@ uint32_t Binary_Output_Index_To_Instance(unsigned index)
  * @param  object_instance - object-instance number of the object
  * @return  feedback-value of the object
  */
-BACNET_BINARY_PV Binary_Output_Feedback_Value(uint32_t object_instance)
+static BACNET_BINARY_PV Binary_Output_Feedback_Value(uint32_t object_instance)
 {
     BACNET_BINARY_PV value = false;
     struct object_data *pObject;
@@ -730,7 +730,7 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data, &value, BACNET_APPLICATION_TAG_ENUMERATED);
             if (status) {
                 pObject->Polarity = (BACNET_POLARITY)value.type.Enumerated;
-                ucix_add_option(ctxw, sec, idx_c, "polarity",
+                ucix_add_option_int(ctxw, sec, idx_c, "polarity",
                     pObject->Polarity);
                 ucix_commit(ctxw,sec);
             }
@@ -799,7 +799,6 @@ bool Binary_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 value_b = pObject->Alarm_Value;
                 ucix_add_option_int(ctxw, sec, idx_c, "alarm_value", value_b);
                 ucix_commit(ctxw,sec);
-                free(value_b);
             }
             break;
 

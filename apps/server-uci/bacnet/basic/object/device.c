@@ -3658,7 +3658,6 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
 
     if (ctxw)
         ucix_cleanup(ctxw);
-    free(idx_c);
 
     return status;
 }

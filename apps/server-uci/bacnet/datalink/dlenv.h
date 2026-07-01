@@ -88,6 +88,9 @@ BACNET_STACK_EXPORT
 void dlenv_network_port_init_mstp(uint32_t Network_Port_Instance);
 
 BACNET_STACK_EXPORT
+void dlenv_network_port_init_zigbee(uint32_t Network_Port_Instance);
+
+BACNET_STACK_EXPORT
 void dlenv_network_port_init_bsc(
     uint32_t instance,
     char *primary_hub_uri,

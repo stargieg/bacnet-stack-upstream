@@ -46,6 +46,9 @@ static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
 #endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ANALOG_OUTPUT;
+/* callback for present value writes */
+static analog_output_write_present_value_callback
+    Analog_Output_Write_Present_Value_Callback;
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Properties_Required[] = {
@@ -629,7 +632,7 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *idx_c = NULL;
     int idx_c_len = 0;
     float value_f = 0.0;
-    float resolution = 0.1;
+    float resolution = 0.1f;
     char *value_c = NULL;
     int value_c_len = 0;
 
@@ -793,7 +796,7 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_REAL);
             if (status) {
-                if (Analog_Min_Pres_Value_Set(wp_data->object_instance,
+                if (Analog_Min_Pres_Value_Set(pObject,
                     value.type.Real)) {
                     value_f = pObject->Min_Pres_Value;
                     value_c_len = snprintf_res(NULL, 0, resolution, value_f);
@@ -1054,6 +1057,16 @@ int Analog_Output_Alarm_Summary(
     return Analog_Alarm_Summary(pObject, Object_Type, instance, getalarm_data);
 }
 #endif /* defined(INTRINSIC_REPORTING) */
+
+/**
+ * @brief Sets a callback used when present-value is written from BACnet
+ * @param cb - callback used to provide indications
+ */
+void Analog_Output_Write_Present_Value_Callback_Set(
+    analog_output_write_present_value_callback cb)
+{
+    Analog_Output_Write_Present_Value_Callback = cb;
+}
 
 /**
  * @brief Set the context used with a specific object instance

@@ -119,7 +119,7 @@ void Schedule_Writable_Property_List(
  * @param  object_instance - object-instance number of the object
  * @return object found in the list, or NULL if not found
  */
-SCHEDULE_DESCR *Schedule_Object(uint32_t object_instance)
+static SCHEDULE_DESCR *Schedule_Object(uint32_t object_instance)
 {
     return Keylist_Data(Object_List, object_instance);
 }
@@ -182,7 +182,7 @@ static void uci_list(const char *sec_idx,
             break;
         case BACNET_APPLICATION_TAG_REAL:
             uci_ptr = strtok(NULL, ",");
-            pObject->Schedule_Default.type.Real = atof(uci_ptr);
+            pObject->Schedule_Default.type.Real = (float)atof(uci_ptr);
             break;
         case BACNET_APPLICATION_TAG_ENUMERATED:
             uci_ptr = strtok(NULL, ",");
@@ -226,7 +226,7 @@ static void uci_list(const char *sec_idx,
                 break;
             case BACNET_APPLICATION_TAG_REAL:
                 uci_ptr = strtok(NULL, ",");
-                pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Real = atof(uci_ptr);
+                pObject->Weekly_Schedule[j].Time_Values[k].Value.type.Real = (float)atof(uci_ptr);
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
                 uci_ptr = strtok(NULL, ",");
@@ -429,7 +429,7 @@ bool Schedule_Object_Name(
  *
  * @return  true if object-name was set
  */
-bool Schedule_Name_Set(
+static bool Schedule_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
@@ -523,21 +523,6 @@ bool Schedule_Weekly_Schedule_Set(
     }
 
     return false;
-}
-
-/**
- * @brief For a given object instance-number, returns the description
- * @param  object_instance - object-instance number of the object
- * @return description text or NULL if not found
- */
-const char *Schedule_Description(struct object_data *pObject)
-{
-    char *name = NULL;
-    if (pObject) {
-        name = pObject->Description;
-    }
-
-    return name;
 }
 
 /**
@@ -1152,7 +1137,7 @@ static int Schedule_List_Of_Object_Property_References_Length(
  * @param max_apdu [in] Max length of the APDU buffer.
  * @return BACNET_ERROR_CODE value
  */
-BACNET_ERROR_CODE bacnet_array_write_idx(
+static BACNET_ERROR_CODE bacnet_array_write_idx(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
     bacnet_array_property_element_decode_function decode_function,
@@ -1346,10 +1331,10 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         time_value = pObject->Weekly_Schedule[idx].Time_Values[k];
                         value_c_len = snprintf(NULL, 0, "%i,%i,%i,%i,%f",
                         time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                        BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                        BACNET_APPLICATION_TAG_REAL, (double)time_value.Value.type.Real);
                         snprintf(uci_list_values[k],value_c_len + 1, "%i,%i,%i,%i,%f",
                         time_value.Time.hour, time_value.Time.min, time_value.Time.sec,
-                        BACNET_APPLICATION_TAG_REAL, time_value.Value.type.Real);
+                        BACNET_APPLICATION_TAG_REAL, (double)time_value.Value.type.Real);
                         break;
                     case BACNET_APPLICATION_TAG_ENUMERATED:
                         time_value = pObject->Weekly_Schedule[idx].Time_Values[k];
@@ -1414,9 +1399,9 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 status = true;
                 break;
             case BACNET_APPLICATION_TAG_REAL:
-                value_c_len = snprintf(NULL, 0, "%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
+                value_c_len = snprintf(NULL, 0, "%i,%f", BACNET_APPLICATION_TAG_REAL, (double)value.type.Real);
                 value_c = malloc(value_c_len + 1);
-                snprintf(value_c,value_c_len + 1,"%i,%f", BACNET_APPLICATION_TAG_REAL, value.type.Real);
+                snprintf(value_c,value_c_len + 1,"%i,%f", BACNET_APPLICATION_TAG_REAL, (double)value.type.Real);
                 status = true;
                 break;
             case BACNET_APPLICATION_TAG_ENUMERATED:
@@ -1535,7 +1520,7 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 pObject->Description = value.type.Character_String.value;
                 ucix_add_option(ctxw, sec, idx_c, "description",
-                    Schedule_Description(pObject));
+                    pObject->Description);
                 ucix_commit(ctxw,sec);
             }
             break;

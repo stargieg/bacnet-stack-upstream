@@ -862,10 +862,10 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else if (wp_data->array_index == BACNET_ARRAY_ALL) {
                 element_len = len;
-                for (idx = 1; idx <= 255; idx++ ) {
-                    pObject->Alarm_State[idx-1] = false;
+                for (idx = 0; idx < 254; idx++ ) {
+                    pObject->Alarm_State[idx] = false;
                 }
-                for (idx = 0; idx < 255; idx++ ) {
+                for (idx = 0; idx < 254; idx++ ) {
                     status = write_property_type_valid(wp_data, &value,
                         BACNET_APPLICATION_TAG_UNSIGNED_INT);
                     if (!status) {

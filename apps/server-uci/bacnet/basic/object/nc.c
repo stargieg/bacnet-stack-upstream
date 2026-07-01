@@ -191,7 +191,7 @@ uint32_t Notification_Class_Index_To_Instance(unsigned index)
 
     return instance;
 }
-
+#if 0
 /* we simply have 0-n object instances.  Yours might be */
 /* more complex, and then you need to return the index */
 /* that correlates to the correct instance number */
@@ -199,7 +199,7 @@ unsigned Notification_Class_Instance_To_Index(uint32_t object_instance)
 {
     return Keylist_Index(Object_List, object_instance);
 }
-
+#endif
 bool Notification_Class_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
@@ -231,7 +231,7 @@ bool Notification_Class_Object_Name(
  *
  * @return  true if object-name was set
  */
-bool Notification_Class_Name_Set(
+static bool Notification_Class_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
@@ -263,23 +263,6 @@ bool Notification_Class_Name_Set(
     }
 
     return status;
-}
-/**
- * @brief For a given object instance-number, returns the description
- * @param  object_instance - object-instance number of the object
- * @return description text or NULL if not found
- */
-const char *Notification_Class_Description(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = (const char *)pObject->Description;
-    }
-
-    return name;
 }
 
 /* This function tries to find the addresses of the defined devices. */
@@ -975,7 +958,7 @@ bool Notification_Class_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 pObject->Description = value.type.Character_String.value;
                 ucix_add_option(ctxw, sec, idx_c, "description",
-                    Notification_Class_Description(wp_data->object_instance));
+                    pObject->Description);
                 ucix_commit(ctxw,sec);
             }
             break;
@@ -1019,40 +1002,6 @@ void Notification_Class_Get_Priorities(
     for (i = 0; i < 3; i++) {
         pPriorityArray[i] = pObject->Priority[i];
     }
-}
-
-BACNET_DESTINATION * Notification_Class_Get_Recipient(uint32_t Object_Instance, uint8_t b)
-{
-    struct object_data *pObject;
-    BACNET_DESTINATION *value;
-    pObject = Keylist_Data(Object_List, Object_Instance);
-    if (pObject) {
-        value = &pObject->Recipient_List[b];
-        return value;
-    } else {
-        return NULL;
-    }
-}
-
-
-
-bool Notification_Class_Get_Recipient_List(
-    uint32_t Object_Instance, BACNET_DESTINATION *pRecipientList)
-{
-    struct object_data *pObject;
-    pObject = Keylist_Data(Object_List, Object_Instance);
-    if (pObject) {
-        int i;
-
-        for (i = 0; i < NC_MAX_RECIPIENTS; i++) {
-            pRecipientList[i] = pObject->Recipient_List[i];
-        }
-    } else {
-        (void)pRecipientList;
-        return false; /* unknown object */
-    }
-
-    return true;
 }
 
 static bool

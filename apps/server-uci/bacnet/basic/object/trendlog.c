@@ -789,7 +789,7 @@ uint32_t Trend_Log_Buffer_Size(uint32_t object_instance)
  *
  * @return  true if object-name was set
  */
-bool Trend_Log_Name_Set(
+static bool Trend_Log_Name_Set(
     struct object_data *pObject,
     const char *new_name,
     BACNET_OBJECT_TYPE Object_Type,
@@ -821,24 +821,6 @@ bool Trend_Log_Name_Set(
     }
 
     return status;
-}
-
-/**
- * @brief For a given object instance-number, returns the description
- * @param  object_instance - object-instance number of the object
- * @return description text or NULL if not found
- */
-const char *Trend_Log_Description(uint32_t object_instance)
-{
-    char *name = NULL;
-    struct object_data *pObject;
-
-    pObject = Keylist_Data(Object_List, object_instance);
-    if (pObject) {
-        name = pObject->Description;
-    }
-
-    return name;
 }
 
 /**
