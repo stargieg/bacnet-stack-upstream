@@ -633,8 +633,6 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int idx_c_len = 0;
     float value_f = 0.0;
     float resolution = 0.1f;
-    char *value_c = NULL;
-    int value_c_len = 0;
 
     struct object_data *pObject;
     /* Valid data? */
@@ -678,12 +676,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     value.type.Real, wp_data->priority,
                     &wp_data->error_class, &wp_data->error_code)) {
                     value_f = Analog_Present_Value(pObject);
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "value", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "value",
+                        value_f, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             } else {
                 status = write_property_type_valid(wp_data, &value,
@@ -693,12 +688,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         pObject, wp_data->priority,
                         &wp_data->error_class, &wp_data->error_code)) {
                         value_f = Analog_Present_Value(pObject);
-                        value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                        value_c = malloc(value_c_len + 1);
-                        snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                        ucix_add_option(ctxw, sec, idx_c, "value", value_c);
+                        ucix_add_option_float(ctxw, sec, idx_c, "value",
+                            value_f, resolution);
                         ucix_commit(ctxw,sec);
-                        free(value_c);
                     }
                 }
             }
@@ -727,13 +719,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 Analog_COV_Increment_Set(pObject,
                 value.type.Real);
-                value_f = pObject->COV_Increment;
-                value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                value_c = malloc(value_c_len + 1);
-                snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                ucix_add_option(ctxw, sec, idx_c, "cov_increment", value_c);
+                ucix_add_option_float(ctxw, sec, idx_c, "cov_increment",
+                    pObject->COV_Increment, resolution);
                 ucix_commit(ctxw,sec);
-                free(value_c);
             }
             break;
         case PROP_OBJECT_IDENTIFIER:
@@ -746,9 +734,10 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
                 if (Analog_Name_Set(
-                    pObject, value.type.Character_String.value, Object_Type, wp_data->object_instance)) {
+                    pObject, value.type.Character_String.value,
+                    Object_Type, wp_data->object_instance)) {
                     ucix_add_option(ctxw, sec, idx_c, "name",
-                        strndup(value.type.Character_String.value,value.type.Character_String.length));
+                        characterstring_value_const(&value.type.Character_String));
                     ucix_commit(ctxw,sec);
                 }
             }
@@ -782,13 +771,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 if (Analog_Max_Pres_Value_Set(pObject,
                     value.type.Real)) {
-                    value_f = pObject->Max_Pres_Value;
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "max_value", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "max_value",
+                        pObject->Max_Pres_Value, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             }
             break;
@@ -798,13 +783,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 if (Analog_Min_Pres_Value_Set(pObject,
                     value.type.Real)) {
-                    value_f = pObject->Min_Pres_Value;
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "min_value", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "min_value",
+                        pObject->Min_Pres_Value, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             }
             break;
@@ -813,13 +794,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 BACNET_APPLICATION_TAG_REAL);
             if (status) {
                 pObject->Resolution = value.type.Real;
-                value_f = pObject->Resolution;
-                value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                value_c = malloc(value_c_len + 1);
-                snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                ucix_add_option(ctxw, sec, idx_c, "resolution", value_c);
+                ucix_add_option_float(ctxw, sec, idx_c, "resolution",
+                    pObject->Resolution, 0);
                 ucix_commit(ctxw,sec);
-                free(value_c);
             }
             break;
         case PROP_DESCRIPTION:
@@ -866,12 +843,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Analog_High_Limit_Set(pObject,
                     value.type.Real)) {
                     value_f = pObject->High_Limit;
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "high_limit", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "high_limit",
+                        pObject->High_Limit, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             }
             break;
@@ -881,13 +855,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 if (Analog_Low_Limit_Set(pObject,
                     value.type.Real)) {
-                    value_f = pObject->Low_Limit;
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "low_limit", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "low_limit",
+                        pObject->Low_Limit, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             }
             break;
@@ -897,13 +867,9 @@ bool Analog_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 if (Analog_Deadband_Set(pObject,
                     value.type.Real)) {
-                    value_f = pObject->Deadband;
-                    value_c_len = snprintf_res(NULL, 0, resolution, value_f);
-                    value_c = malloc(value_c_len + 1);
-                    snprintf_res(value_c, value_c_len + 1, resolution, value_f);
-                    ucix_add_option(ctxw, sec, idx_c, "dead_limit", value_c);
+                    ucix_add_option_float(ctxw, sec, idx_c, "dead_limit",
+                        pObject->Deadband, resolution);
                     ucix_commit(ctxw,sec);
-                    free(value_c);
                 }
             }
             break;

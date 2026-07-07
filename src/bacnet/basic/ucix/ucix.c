@@ -267,6 +267,32 @@ void ucix_add_option_int(
     ucix_add_option(ctx, p, s, o, tmp);
 }
 
+/**
+ * @brief snprintf with resolution / precision
+ * @param ctx - uci context
+ * @param p - uci file
+ * @param s - uci section
+ * @param o - uci option
+ * @param t - Real Value
+ * @param r - Resolution 0 = Float, 1=Integer, betwen 0 and 1 = Places after the decimal point
+ * @return void
+ */
+void ucix_add_option_float(
+    struct uci_context *ctx, const char *p, const char *s, const char *o, float t, float r)
+{
+    char tmp[64];
+    int prec = 0;
+    if (r < 1 && r > 0) {
+        prec = (int)log10((double)roundf(1 / r));
+        snprintf(tmp, 64, "%.*f", prec, (double)t);
+    } else if (r > 0) {
+        snprintf(tmp, 64, "%i", (int)t);
+    } else {
+        snprintf(tmp, 64, "%f", (double)t);
+    }
+    ucix_add_option(ctx, p, s, o, tmp);
+}
+
 void ucix_del(
     struct uci_context *ctx, const char *p, const char *s, const char *o)
 {

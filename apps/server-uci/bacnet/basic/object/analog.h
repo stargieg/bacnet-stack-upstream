@@ -121,8 +121,6 @@ int bacnet_array_encode_analog(
 BACNET_STACK_EXPORT
 float limit_value_by_resolution(float value_f, float resolution);
 BACNET_STACK_EXPORT
-int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f);
-BACNET_STACK_EXPORT
 bool Analog_Object_Name(
     const struct object_data *pObject, BACNET_CHARACTER_STRING *object_name);
 BACNET_STACK_EXPORT

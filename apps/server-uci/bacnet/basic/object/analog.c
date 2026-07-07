@@ -98,39 +98,21 @@ int bacnet_array_encode_analog(
 /**
  * @brief Set zero depends on resolution / precision
  * @param value_f - Value
- * @param resolution - Resolution
+ * @param resolution - Resolution 0 = Float, 1=Integer, betwen 0 and 1 = Places after the decimal point
  * @return rounded value
  */
 float limit_value_by_resolution(float value_f, float resolution) {
     float ret = 0.0;
     float prec = 0.0;
-    if (resolution < 1) {
+    if (resolution < 1 && resolution > 0) {
         prec = roundf(1 / resolution);
         ret = roundf(value_f * prec);
         ret = ret / prec;
-    } else {
+    } else if (resolution > 0) {
         ret = roundf(value_f / resolution);
         ret = ret * resolution;
-    }
-    return ret;
-}
-
-/**
- * @brief snprintf with resolution / precision
- * @param value_c - Value
- * @param value_c_len - Value Len
- * @param resolution - Resolution
- * @param value_f - Real Value
- * @return rounded value
- */
-int snprintf_res(char *value_c, int value_c_len, float resolution, float value_f) {
-    int ret = 0;
-    int prec = 0;
-    if (resolution < 1) {
-        prec = (int)log10((double)roundf(1 / resolution));
-        ret = snprintf(value_c, value_c_len, "%.*f", prec, (double)value_f);
     } else {
-        ret = snprintf(value_c, value_c_len, "%i", (int)value_f);
+        ret = value_f;
     }
     return ret;
 }
