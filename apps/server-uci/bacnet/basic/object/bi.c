@@ -664,7 +664,7 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (Binary_Name_Set(
                     pObject, value.type.Character_String.value, Object_Type, wp_data->object_instance)) {
                     ucix_add_option(ctxw, sec, idx_c, "name",
-                        strndup(value.type.Character_String.value,value.type.Character_String.length));
+                        characterstring_value_const(&value.type.Character_String));
                     ucix_commit(ctxw,sec);
                 }
             }

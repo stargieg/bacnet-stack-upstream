@@ -3497,7 +3497,7 @@ bool Device_Write_Property_Local(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 } else {
                     if (Device_Set_Object_Name(&value.type.Character_String)) {
                         ucix_add_option(ctxw, sec, idx_c, "Name",
-                            strndup(value.type.Character_String.value,value.type.Character_String.length));
+                            characterstring_value_const(&value.type.Character_String));
                         ucix_commit(ctxw,sec);
                     }
                 }
