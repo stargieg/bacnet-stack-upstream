@@ -796,7 +796,9 @@ bool Analog_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                pObject->Description = value.type.Character_String.value;
+                pObject->Description = bacnet_strndup(
+                    value.type.Character_String.value,
+                    value.type.Character_String.length);
                 ucix_add_option(ctxw, sec, idx_c, "description",
                     Analog_Description(pObject));
                 ucix_commit(ctxw,sec);
@@ -1196,8 +1198,7 @@ static void uci_list(const char *sec_idx,
     struct object_data *pObject = NULL;
     int index = 0;
     unsigned priority = 0;
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    char options[64];
     float value_f = 0.0;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
@@ -1211,16 +1212,13 @@ static void uci_list(const char *sec_idx,
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
     }
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Object_Name = strndup(option,option_str.length);
+    pObject->Object_Name = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "name");
+    if (!pObject->Object_Name) {
+        snprintf(options, sizeof(options), "Analog Value %i", idx);
+        pObject->Object_Name = strndup(options, sizeof(options));
+    }
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Description = strndup(option,option_str.length);
-    else
-        pObject->Description = strdup(ictx->Object.Description);
-
+    pObject->Description = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "description");
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
     pObject->Overridden = false;
     for (priority = 0; priority < BACNET_MAX_PRIORITY; priority++) {
@@ -1228,73 +1226,57 @@ static void uci_list(const char *sec_idx,
         pObject->Priority_Array[priority] = 0.0;
     }
     pObject->Relinquish_Default = 0.0;
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "cov_increment");
-    if (!option)
-        option = ictx->Object.COV_Increment;
-    pObject->COV_Increment = strtof(option,(char **) NULL);
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "resolution");
-    if (!option)
-        option = ictx->Object.Resolution;
-    value_f = strtof(option,(char **) NULL);
-    if (!(value_f > 0)) value_f = 1;
-    pObject->Resolution = value_f;
-    pObject->Units = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "si_unit", ictx->Object.Units);
-    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
+    pObject->COV_Increment = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "cov_increment", ictx->Object.COV_Increment);
+    pObject->Resolution = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "resolution", ictx->Object.Resolution);
+    pObject->Units = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "si_unit", ictx->Object.Units);
+    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "Out_Of_Service", false);
     pObject->Changed = false;
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "min_value");
-    if (!option)
-        option = ictx->Object.Min_Pres_Value;
-    value_f = strtof(option,(char **) NULL);
-    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-    pObject->Min_Pres_Value = value_f;
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "max_value");
-    if (!option)
-        option = ictx->Object.Max_Pres_Value;
-    value_f = strtof(option,(char **) NULL);
-    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-    pObject->Max_Pres_Value = value_f;
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "value");
-    if (option) {
-        value_f = strtof(option,(char **) NULL);
-        value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_f;
-        pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
-        pObject->Prior_Value = value_f;
-    } else {
-        pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = 0.0;
-        pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
-        pObject->Prior_Value = 0.0;
-    }
+    pObject->Min_Pres_Value = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "min_value", ictx->Object.Min_Pres_Value);
+    pObject->Max_Pres_Value = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "max_value", ictx->Object.Max_Pres_Value);
+    value_f = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "value", 0);
+    pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_f;
+    pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
+    pObject->Prior_Value = value_f;
 #if defined(INTRINSIC_REPORTING)
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
-    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
-    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
-    pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "limit", ictx->Object.Limit_Enable);
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "high_limit");
-    if (!option)
-        option = ictx->Object.High_Limit;
-    value_f = strtof(option,(char **) NULL);
-    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-    pObject->High_Limit = value_f;
-
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "low_limit");
-    if (!option)
-        option = ictx->Object.Low_Limit;
-    value_f = strtof(option,(char **) NULL);
-    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-    pObject->Low_Limit = value_f;
-
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "dead_limit");
-    if (!option)
-        option = ictx->Object.Deadband;
-    value_f = strtof(option,(char **) NULL);
-    value_f = limit_value_by_resolution(value_f, pObject->Resolution);
-    pObject->Deadband = value_f;
-
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
+    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "nc", ictx->Object.Notification_Class);
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event_detection", ictx->Object.Event_Detection_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "time_delay", ictx->Object.Time_Delay);
+    pObject->Limit_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "limit", ictx->Object.Limit_Enable);
+    pObject->High_Limit = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "high_limit", ictx->Object.High_Limit);
+    pObject->Low_Limit = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "low_limit", ictx->Object.Low_Limit);
+    pObject->Deadband = ucix_get_option_float(ictx->ctx, ictx->section, sec_idx,
+        "dead_limit", ictx->Object.Deadband);
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "notify_type", ictx->Object.Notify_Type);
+    pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_offnormal");
+    pObject->Event_Message_Texts[TRANSITION_TO_FAULT] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
+    pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
+    for (j = 0; priority < MAX_BACNET_EVENT_TRANSITION; j++) {
+        if (!pObject->Event_Message_Texts[j] &&
+            ictx->Object.Event_Message_Texts[j])
+            pObject->Event_Message_Texts[j] =
+            ictx->Object.Event_Message_Texts[j];
+    }
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -1321,8 +1303,6 @@ void Analog_Value_Init(void)
 {
     struct uci_context *ctx;
     struct object_data_t tObject = { 0 };
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
 
     struct itr_ctx itr_m;
     uint16_t dev_id;
@@ -1350,54 +1330,41 @@ void Analog_Value_Init(void)
             "Failed to load config file %s\n",sec);
     } else {
 
-        option = ucix_get_option(ctx, sec, "default", "description");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
-        else
-            tObject.Description = "Analog Value";
-        option = ucix_get_option(ctx, sec, "default", "cov_increment");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.COV_Increment = strndup(option,option_str.length);
-        else
-            tObject.COV_Increment = "0.1";
-        option = ucix_get_option(ctx, sec, "default", "resolution");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Resolution = strndup(option,option_str.length);
-        else
-            tObject.Resolution = "0.1";
-        tObject.Units = ucix_get_option_int(ctx, sec, "default", "si_unit", 0);
-        option = ucix_get_option(ctx, sec, "default", "min_value");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Min_Pres_Value = strndup(option,option_str.length);
-        else
-            tObject.Min_Pres_Value = "0.0";
-        option = ucix_get_option(ctx, sec, "default", "max_value");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Max_Pres_Value = strndup(option,option_str.length);
-        else
-            tObject.Max_Pres_Value = "100.0";
+        tObject.COV_Increment = ucix_get_option_float(ctx, sec, "default",
+            "cov_increment", 0);
+        tObject.Resolution = ucix_get_option_float(ctx, sec, "default",
+            "resolution", 0);
+        tObject.Units = ucix_get_option_int(ctx, sec, "default",
+            "si_unit", 0);
+        tObject.Min_Pres_Value = ucix_get_option_float(ctx, sec, "default",
+            "min_value", 0);
+        tObject.Max_Pres_Value = ucix_get_option_float(ctx, sec, "default",
+            "max_value", 0);
 #if defined(INTRINSIC_REPORTING)
-        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
-        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
-        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
-        tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default", "limit", 0);
-        option = ucix_get_option(ctx, sec, "default", "high_limit");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.High_Limit = strndup(option,option_str.length);
-        else
-            tObject.High_Limit = "100.0";
-        option = ucix_get_option(ctx, sec, "default", "low_limit");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Low_Limit = strndup(option,option_str.length);
-        else
-            tObject.Low_Limit = "0.0";
-        option = ucix_get_option(ctx, sec, "default", "dead_limit");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Deadband = strndup(option,option_str.length);
-        else
-            tObject.Deadband = "0.0";
-        tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default", "notify_type", 0);
+        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default",
+            "nc", BACNET_MAX_INSTANCE);
+        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event", 0);
+        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event_detection", 0);
+        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default",
+            "time_delay", 0);
+        tObject.Limit_Enable = ucix_get_option_int(ctx, sec, "default",
+            "limit", 0);
+        tObject.High_Limit = ucix_get_option_float(ctx, sec, "default",
+            "high_limit", 100);
+        tObject.Low_Limit = ucix_get_option_float(ctx, sec, "default",
+            "low_limit", 0);
+        tObject.Deadband = ucix_get_option_float(ctx, sec, "default",
+            "dead_limit", 0);
+        tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default",
+            "notify_type", 0);
+        tObject.Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_offnormal");
+        tObject.Event_Message_Texts[TRANSITION_TO_FAULT] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_fault");
+        tObject.Event_Message_Texts[TRANSITION_TO_NORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_normal");
 #endif
         itr_m.section = sec;
         itr_m.ctx = ctx;

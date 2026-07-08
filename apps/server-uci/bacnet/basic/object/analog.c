@@ -1336,7 +1336,8 @@ bool Analog_Name_Set(
             }
         } else {
             status = true;
-            pObject->Object_Name = new_name;
+            pObject->Object_Name = bacnet_strndup(
+                object_name.value, object_name.length);
             Device_Inc_Database_Revision();
         }
     }

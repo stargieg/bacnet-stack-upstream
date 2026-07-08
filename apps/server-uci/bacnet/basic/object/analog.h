@@ -72,7 +72,6 @@ typedef struct object_data {
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
     const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
-    const char *Event_Message_Texts_Custom[MAX_BACNET_EVENT_TRANSITION];
     /* time to generate event notification */
     uint32_t Remaining_Time_Delay;
     /* AckNotification informations */
@@ -83,29 +82,26 @@ typedef struct object_data {
 
 typedef struct object_data_t {
     bool Out_Of_Service : 1;
-    const char *COV_Increment;
-    const char *Prior_Value;
-    const char *Relinquish_Default;
-    const char *Min_Pres_Value;
-    const char *Max_Pres_Value;
-    const char *Resolution;
+    float COV_Increment;
+    float Prior_Value;
+    float Relinquish_Default;
+    float Min_Pres_Value;
+    float Max_Pres_Value;
+    float Resolution;
     BACNET_ENGINEERING_UNITS Units;
     uint8_t Reliability;
-    const char *Object_Name;
-    const char *Description;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State : 3;
     uint32_t Time_Delay;
     uint32_t Notification_Class;
-    const char *High_Limit;
-    const char *Low_Limit;
-    const char *Deadband;
+    float High_Limit;
+    float Low_Limit;
+    float Deadband;
     unsigned Limit_Enable : 2;
     unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
-    const char *Event_Message_Texts;
-    const char *Event_Message_Texts_Custom;
+    const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
 #endif /* INTRINSIC_REPORTING */
 } OBJECT_DATA_ANALOG_T;
 
