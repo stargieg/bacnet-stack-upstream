@@ -41,6 +41,13 @@ int ucix_get_option_int(
     const char *o,
     int def);
 BACNET_STACK_EXPORT
+float ucix_get_option_float(
+    struct uci_context *ctx,
+    const char *p,
+    const char *s,
+    const char *o,
+    float def);
+BACNET_STACK_EXPORT
 void ucix_add_section(
     struct uci_context *ctx, const char *p, const char *s, const char *t);
 BACNET_STACK_EXPORT

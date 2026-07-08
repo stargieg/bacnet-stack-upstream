@@ -131,6 +131,7 @@ char *ucix_get_option_char(
 {
     struct uci_element *e = NULL;
     char *value = NULL;
+    size_t len;
     if (ucix_get_ptr(ctx, p, s, o, NULL)) {
         return NULL;
     }
@@ -145,7 +146,9 @@ char *ucix_get_option_char(
         case UCI_TYPE_OPTION:
             switch (ptr.o->type) {
                 case UCI_TYPE_STRING:
-                    value = ptr.o->v.string;
+                    len = strlen(ptr.o->v.string);
+                    value = malloc(len);
+                    strncpy(value, ptr.o->v.string, len);
                     break;
                 default:
                     value = NULL;
@@ -210,6 +213,22 @@ int ucix_get_option_int(
 
     if (tmp) {
         ret = atoi(tmp);
+    }
+    return ret;
+}
+
+float ucix_get_option_float(
+    struct uci_context *ctx,
+    const char *p,
+    const char *s,
+    const char *o,
+    float def)
+{
+    const char *tmp = ucix_get_option(ctx, p, s, o);
+    float ret = def;
+
+    if (tmp) {
+        ret = strtof(tmp,(char **) NULL);
     }
     return ret;
 }
