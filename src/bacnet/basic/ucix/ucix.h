@@ -78,7 +78,7 @@ void ucix_set_plist(
     const char *p,
     const char *s,
     const char *o,
-    char *value[254],
+    const char **value,
     int l);
 BACNET_STACK_EXPORT
 void ucix_add_option_int(

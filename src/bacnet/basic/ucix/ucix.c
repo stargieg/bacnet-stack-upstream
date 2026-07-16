@@ -326,7 +326,7 @@ void ucix_set_plist(
     const char *p,
     const char *s,
     const char *o,
-    char *value[254],
+    const char **value,
     int l)
 {
     int i;
