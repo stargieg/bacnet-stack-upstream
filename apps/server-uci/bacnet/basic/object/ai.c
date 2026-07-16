@@ -1215,7 +1215,8 @@ static void uci_list(const char *sec_idx,
     if (!pObject) {
         pObject = calloc(1, sizeof(struct object_data));
     }
-    pObject->Object_Name = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "name");
+    pObject->Object_Name = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "name");
     if (!pObject->Object_Name) {
         snprintf(options, sizeof(options), "Analog Input %i", idx);
         pObject->Object_Name = strndup(options, sizeof(options));
@@ -1274,7 +1275,7 @@ static void uci_list(const char *sec_idx,
         ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
     pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
         ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
-    for (j = 0; priority < MAX_BACNET_EVENT_TRANSITION; j++) {
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
         if (!pObject->Event_Message_Texts[j] &&
             ictx->Object.Event_Message_Texts[j])
             pObject->Event_Message_Texts[j] =

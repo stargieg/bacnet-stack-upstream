@@ -68,7 +68,7 @@ typedef struct object_data {
     unsigned Limit_Enable : 2;
     unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
-    unsigned Notify_Type:1;
+    unsigned Notify_Type : 1;
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
     const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];

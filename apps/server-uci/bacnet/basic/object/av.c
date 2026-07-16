@@ -1271,7 +1271,7 @@ static void uci_list(const char *sec_idx,
         ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
     pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
         ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
-    for (j = 0; priority < MAX_BACNET_EVENT_TRANSITION; j++) {
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
         if (!pObject->Event_Message_Texts[j] &&
             ictx->Object.Event_Message_Texts[j])
             pObject->Event_Message_Texts[j] =
