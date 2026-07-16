@@ -430,41 +430,17 @@ int Multistate_Output_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 &apdu[apdu_len], pObject->State_Count);
             break;
         case PROP_STATE_TEXT:
-            max_states = pObject->State_Count;
-            if (rpdata->array_index == 0) {
-                /* Array element zero is the number of elements in the array */
-                apdu_len = encode_application_unsigned(&apdu[0], max_states);
-            } else if (rpdata->array_index == BACNET_ARRAY_ALL) {
-                /* if no index was specified, then try to encode the entire list
-                 */
-                /* into one packet. */
-                for (i = 1; i <= max_states; i++) {
-                    characterstring_init_ansi(&char_string,
-                        Multistate_State_Text(pObject, i));
-                    /* FIXME: this might go beyond MAX_APDU length! */
-                    len = encode_application_character_string(
-                        &apdu[apdu_len], &char_string);
-                    /* add it if we have room */
-                    if ((apdu_len + len) < apdu_size) {
-                        apdu_len += len;
-                    } else {
-                        rpdata->error_class = ERROR_CLASS_SERVICES;
-                        rpdata->error_code = ERROR_CODE_NO_SPACE_FOR_OBJECT;
-                        apdu_len = BACNET_STATUS_ERROR;
-                        break;
-                    }
-                }
-            } else {
-                if (rpdata->array_index <= max_states) {
-                    characterstring_init_ansi(&char_string,
-                        Multistate_State_Text(pObject, rpdata->array_index));
-                    apdu_len = encode_application_character_string(
-                        &apdu[0], &char_string);
-                } else {
-                    rpdata->error_class = ERROR_CLASS_PROPERTY;
-                    rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
-                    apdu_len = BACNET_STATUS_ERROR;
-                }
+            apdu_len = bacnet_array_encode_multistate(
+                Multistate_Output_Object,
+                rpdata->object_instance, rpdata->array_index,
+                Multistate_State_Texts_Encode,
+                pObject->State_Count, apdu, apdu_size);
+            if (apdu_len == BACNET_STATUS_ABORT) {
+                rpdata->error_code =
+                    ERROR_CODE_ABORT_SEGMENTATION_NOT_SUPPORTED;
+            } else if (apdu_len == BACNET_STATUS_ERROR) {
+                rpdata->error_class = ERROR_CLASS_PROPERTY;
+                rpdata->error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
             }
             break;
         case PROP_PRIORITY_ARRAY:
@@ -638,10 +614,8 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     char *idx_c = NULL;
     int idx_c_len = 0;
     uint32_t value_i = false;
-    char *value_c = NULL;
     const char *pName = NULL;
-    BACNET_CHARACTER_STRING char_string = { 0 };
-    char stats[254][64];
+    const char **pstats;
     uint32_t stats_n = 0;
     uint32_t k = 0;
 
@@ -686,7 +660,6 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         value_i = Multistate_Present_Value(pObject);
                         ucix_add_option_int(ctxw, sec, idx_c, "value", value_i);
                         ucix_commit(ctxw,sec);
-                        free(value_c);
                         status = true;
                     };
                 } else {
@@ -703,7 +676,6 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                         value_i = Multistate_Present_Value(pObject);
                         ucix_add_option_int(ctxw, sec, idx_c, "value", value_i);
                         ucix_commit(ctxw,sec);
-                        free(value_c);
                     };
                 }
             }
@@ -743,16 +715,16 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
             } else if (wp_data->array_index == BACNET_ARRAY_ALL) {
                 element_len = len;
-                for (idx = 1; idx <= 255; idx++ ) {
+                for (idx = 0; idx < 255; idx++ ) {
                     status = write_property_type_valid(wp_data, &value,
                         BACNET_APPLICATION_TAG_CHARACTER_STRING);
                     if (!status) {
                         break;
                     }
                     if (element_len) {
-                        status = Multistate_State_Text_Set(
-                            pObject, idx,
-                            &value.type.Character_String);
+                        pObject->State_Text[idx] = bacnet_strndup(
+                            value.type.Character_String.value,
+                            value.type.Character_String.length);
                     }
                     element_len = bacapp_decode_application_data(
                         &wp_data->application_data[len],
@@ -762,6 +734,7 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     }
                     len += element_len;
                 }
+                idx++;
                 if (idx != pObject->State_Count) {
                     pObject->State_Count = idx;
                 }
@@ -769,22 +742,22 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 status = write_property_type_valid(wp_data, &value,
                     BACNET_APPLICATION_TAG_CHARACTER_STRING);
                 if (status) {
-                    status = Multistate_State_Text_Set(
-                        pObject, wp_data->array_index,
-                        &value.type.Character_String);
+                    pObject->State_Text[wp_data->array_index--] = bacnet_strndup(
+                        value.type.Character_String.value,
+                        value.type.Character_String.length);
                 }
             }
             if (status) {
                 stats_n = pObject->State_Count;
+                pstats = malloc (sizeof (int*) * stats_n);
                 for (k = 0 ; k < stats_n; k++) {
                     pName = Multistate_State_Text(pObject, k+1);
                     if (pName) {
-                        characterstring_init_ansi(&char_string, pName);
-                        sprintf(stats[k], "%s", char_string.value);
+                        pstats[k] = strdup(pName);
                     }
                 }
-                ucix_set_list(ctxw, sec, idx_c, "state",
-                stats, stats_n);
+                ucix_set_plist(ctxw, sec, idx_c,
+                    "state", pstats, stats_n);
                 ucix_commit(ctxw,sec);
             }
             break;
@@ -820,7 +793,9 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                pObject->Description = value.type.Character_String.value;
+                pObject->Description = bacnet_strndup(
+                    value.type.Character_String.value,
+                    value.type.Character_String.length);
                 ucix_add_option(ctxw, sec, idx_c, "description",
                     Multistate_Description(pObject));
                 ucix_commit(ctxw,sec);
@@ -892,13 +867,15 @@ bool Multistate_Output_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             if (status) {
                 stats_n = pObject->State_Count;
                 k = 0;
-                for (idx = 1 ; idx <= stats_n; idx++) {
-                    if (pObject->Alarm_State[idx-1]) {
-                        sprintf(stats[k], "%i", idx);
+                pstats = malloc (sizeof (int*) * stats_n);
+                for (idx = 0 ; idx < stats_n; idx++) {
+                    if (pObject->Alarm_State[idx]) {
+                        pstats[k] = malloc(10);
+                        sprintf(pstats[k], "%i", idx+1);
                         k++;
                     }
                 }
-                ucix_set_list(ctxw, sec, idx_c, "alarm", stats, k);
+                ucix_set_plist(ctxw, sec, idx_c, "alarm", pstats, k);
                 ucix_commit(ctxw, sec);
             }
             break;
@@ -1117,38 +1094,37 @@ static void uci_list(const char *sec_idx,
 	struct itr_ctx *ictx)
 {
 	int disable,idx;
-    char *stats[254];
+    char **stats;
     uint32_t stats_n = 0;
     uint32_t k = 0;
 #if defined(INTRINSIC_REPORTING)
-    uint32_t l = 0;
+    unsigned *almstats = NULL;
+    uint32_t almstats_n = 0;
     unsigned j;
 #endif
     struct object_data *pObject = NULL;
     int index = 0;
     uint8_t priority = 0;
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    char options[64] = "";
     uint32_t value_i = 1;
-	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
-	"disable", 0);
-	if (strcmp(sec_idx, "default") == 0)
-		return;
-	if (disable)
-		return;
+    disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "disable", 0);
+    if (strcmp(sec_idx, "default") == 0)
+        return;
+    if (disable)
+        return;
     idx = atoi(sec_idx);
     pObject = calloc(1, sizeof(struct object_data));
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Object_Name = strndup(option,option_str.length);
+    pObject->Object_Name = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "name");
+    if (!pObject->Object_Name) {
+        snprintf(options, sizeof(options), "Multistate Output %i", idx);
+        pObject->Object_Name = strndup(options, sizeof(options));
+    }
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Description = strndup(option,option_str.length);
-    else
-        pObject->Description = strdup(ictx->Object.Description);
-
+    pObject->Description = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "description");
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
     pObject->Overridden = false;
     for (priority = 0; priority < BACNET_MAX_PRIORITY; priority++) {
@@ -1156,12 +1132,15 @@ static void uci_list(const char *sec_idx,
         pObject->Priority_Array[priority] = false;
     }
     pObject->Relinquish_Default = false;
-    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
+    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "Out_Of_Service", false);
     pObject->Changed = false;
-    value_i = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "value", 0);
+    value_i = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "value", 0);
     pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_i;
     pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
     pObject->Prior_Value = value_i;
+    stats = malloc (sizeof (int*) * 254);
     stats_n = ucix_get_list(stats, ictx->ctx, ictx->section, sec_idx,
         "state");
     if (stats_n) {
@@ -1171,7 +1150,7 @@ static void uci_list(const char *sec_idx,
         pObject->State_Count = stats_n;
     } else {
         for (k = 0 ; k < ictx->Object.State_Count; k++) {
-            pObject->State_Text[k] = strdup(ictx->Object.State_Text[k]);
+            pObject->State_Text[k] = ictx->Object.State_Text[k];
         }
         pObject->State_Count = ictx->Object.State_Count;
     }
@@ -1182,19 +1161,22 @@ static void uci_list(const char *sec_idx,
 #if defined(INTRINSIC_REPORTING)
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
-    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
-    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
-    stats_n = ucix_get_list(stats, ictx->ctx, ictx->section, sec_idx, "alarm");
-    if (stats_n) {
-        for (l = 0 ; l < pObject->State_Count; l++) {
-            pObject->Alarm_State[l] = false;
-        }
-        for (k = 0 ; k < stats_n; k++) {
-            l = atoi(stats[k]);
-            l--;
-            pObject->Alarm_State[l] = true;
+    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "nc", ictx->Object.Notification_Class);
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event_detection", ictx->Object.Event_Detection_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "time_delay", ictx->Object.Time_Delay);
+    almstats = malloc (sizeof (int) * 254);
+    almstats_n = ucix_get_list_int(almstats, ictx->ctx, ictx->section, sec_idx,
+        "alarm");
+    if (almstats_n) {
+        for (k = 0 ; k < almstats_n; k++) {
+            if (almstats[k] && almstats[k] <= pObject->State_Count){
+                pObject->Alarm_State[almstats[k]-1] = true;
+            }
         }
     } else {
         for (k = 0 ; k < pObject->State_Count; k++) {
@@ -1202,7 +1184,21 @@ static void uci_list(const char *sec_idx,
         }
     }
 
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "notify_type", ictx->Object.Notify_Type);
+    pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_offnormal");
+    pObject->Event_Message_Texts[TRANSITION_TO_FAULT] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
+    pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
+        if (!pObject->Event_Message_Texts[j] &&
+            ictx->Object.Event_Message_Texts[j]){
+            pObject->Event_Message_Texts[j] =
+            ictx->Object.Event_Message_Texts[j];
+            }
+    }
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -1228,13 +1224,11 @@ void Multistate_Output_Init(void)
 {
     struct uci_context *ctx;
     struct object_data_t tObject = { 0 };
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str = { 0 };
-    char *stats[254];
+    char **stats;
     uint32_t stats_n = 0;
     uint32_t k = 0;
 #if defined(INTRINSIC_REPORTING)
-    uint32_t l = 0;
+    unsigned *almstats = NULL;
 #endif
 
     struct itr_ctx itr_m;
@@ -1263,34 +1257,38 @@ void Multistate_Output_Init(void)
             "Failed to load config file %s\n",sec);
     } else {
 
-        option = ucix_get_option(ctx, sec, "default", "description");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
-        else
-            tObject.Description = "Multistate Ouput";
+        stats = malloc (sizeof (int*) * 254);
         stats_n = ucix_get_list(stats, ctx, sec, "default",
             "state");
-        if (stats_n) {
-            for (k = 0 ; k < stats_n; k++) {
-                tObject.State_Text[k] = strdup(stats[k]);
-            }
-            tObject.State_Count = stats_n;
+        for (k = 0 ; k < stats_n; k++) {
+            tObject.State_Text[k] = strdup(stats[k]);
         }
+        tObject.State_Count = stats_n;
 #if defined(INTRINSIC_REPORTING)
-        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
-        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
-        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
-        stats_n = ucix_get_list(stats, ctx, sec, "default", "alarm");
-        if (stats_n) {
-            for (k = 0 ; k < stats_n; k++) {
-                l = atoi(stats[k]);
-                l--;
-                if (l < tObject.State_Count) {
-                    tObject.Alarm_State[l] = true;
-                }
+        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default",
+            "nc", BACNET_MAX_INSTANCE);
+        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event", 0);
+        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event_detection", 0);
+        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default",
+            "time_delay", 0);
+        almstats = malloc (sizeof (int) * 254);
+        stats_n = ucix_get_list_int(almstats, ctx, sec, "default",
+            "alarm");
+        for (k = 0 ; k < stats_n; k++) {
+            if (almstats[k] && almstats[k] <= tObject.State_Count){
+                tObject.Alarm_State[almstats[k]-1] = true;
             }
         }
+        tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default",
+            "notify_type", 0);
+        tObject.Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_offnormal");
+        tObject.Event_Message_Texts[TRANSITION_TO_FAULT] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_fault");
+        tObject.Event_Message_Texts[TRANSITION_TO_NORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_normal");
 #endif
         itr_m.section = sec;
         itr_m.ctx = ctx;

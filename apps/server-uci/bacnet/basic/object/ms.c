@@ -23,6 +23,63 @@
 
 
 /**
+ * @brief For a given object instance-number and event transition, returns the
+ * event message text
+ * @param  object pointer - struct object_data
+ * @param  object_instance - object-instance number of the object
+ * @param  transition - transition type
+ * @return event message text or NULL if object not found or transition invalid
+ */
+const char *Multistate_State_Texts(
+    bacnet_get_pObject get_pObject,
+    const uint32_t object_instance,
+    BACNET_ARRAY_INDEX index)
+{
+    const char *text = NULL;
+    const struct object_data *pObject;
+
+    pObject = get_pObject(object_instance);
+    if (pObject && index < pObject->State_Count) {
+        text = pObject->State_Text[index];
+        if (!text) {
+            text = "";
+        }
+    }
+
+    return text;
+}
+
+/**
+ * @brief Encode a BACnetARRAY property element
+ * @param object pointer - struct object_data
+ * @param object_instance [in] object instance number
+ * @param index [in] array index requested:
+ *    0 to N for individual array members
+ * @param apdu [out] Buffer in which the APDU contents are built, or NULL to
+ * return the length of buffer if it had been built
+ * @return The length of the apdu encoded or
+ *   BACNET_STATUS_ERROR for ERROR_CODE_INVALID_ARRAY_INDEX
+ */
+int Multistate_State_Texts_Encode(
+    bacnet_get_pObject get_pObject,
+    uint32_t object_instance,
+    BACNET_ARRAY_INDEX index,
+    uint8_t *apdu)
+{
+    int apdu_len = BACNET_STATUS_ERROR;
+    const char *text = NULL; /* return value */
+    BACNET_CHARACTER_STRING char_string = { 0 };
+
+    text = Multistate_State_Texts(get_pObject, object_instance, index);
+    if (text) {
+        characterstring_init_ansi(&char_string, text);
+        apdu_len = encode_application_character_string(apdu, &char_string);
+    }
+
+    return apdu_len;
+}
+
+/**
  * @brief Encode a BACnetARRAY property value
  * @param get_pObject [in] function to get a pointer to Object_List
  * @param object_instance [in] BACnet network port object instance number
@@ -1215,34 +1272,10 @@ bool Multistate_Name_Set(
             }
         } else {
             status = true;
-            pObject->Object_Name = new_name;
+            pObject->Object_Name = bacnet_strndup(
+                object_name.value, object_name.length);
             Device_Inc_Database_Revision();
         }
-    }
-
-    return status;
-}
-
-/**
- * @brief For a given object instance-number, sets the state-text from
- * a C string.
- *
- * @param  object_instance - object-instance number of the object
- * @param  state_index - state index
- * @param  state_text - state text
- * @return true if the state text was set
- */
-bool Multistate_State_Text_Set(
-    struct object_data *pObject,
-    uint32_t state_index,
-    BACNET_CHARACTER_STRING *char_string)
-{
-    bool status = false;
-    if (pObject && state_index > 0 && char_string) {
-        if (state_index > pObject->State_Count) pObject->State_Count = state_index;
-        state_index--;
-        pObject->State_Text[state_index] = strdup(char_string->value);
-        status = true;
     }
 
     return status;

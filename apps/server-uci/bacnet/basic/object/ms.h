@@ -67,7 +67,6 @@ typedef struct object_data {
     ACKED_INFO Acked_Transitions[MAX_BACNET_EVENT_TRANSITION];
     BACNET_DATE_TIME Event_Time_Stamps[MAX_BACNET_EVENT_TRANSITION];
     const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
-    const char *Event_Message_Texts_Custom[MAX_BACNET_EVENT_TRANSITION];
     /* time to generate event notification */
     uint32_t Remaining_Time_Delay;
     /* AckNotification informations */
@@ -77,14 +76,8 @@ typedef struct object_data {
 } OBJECT_DATA_MULTI_STATE;
 
 typedef struct object_data_t {
-    bool Out_Of_Service : 1;
-    const char *Prior_Value;
-    const char *Relinquish_Default;
-    uint8_t Reliability;
     const char *State_Text[254];
     uint32_t State_Count;
-    const char *Object_Name;
-    const char *Description;
 #if defined(INTRINSIC_REPORTING)
     unsigned Event_State : 3;
     uint32_t Time_Delay;
@@ -93,9 +86,21 @@ typedef struct object_data_t {
     unsigned Event_Enable : 3;
     unsigned Event_Detection_Enable : 1;
     unsigned Notify_Type : 1;
+    const char *Event_Message_Texts[MAX_BACNET_EVENT_TRANSITION];
 #endif /* INTRINSIC_REPORTING */
 } OBJECT_DATA_MULTI_STATE_T;
 
+BACNET_STACK_EXPORT
+const char *Multistate_State_Texts(
+    bacnet_get_pObject get_pObject,
+    const uint32_t object_instance,
+    BACNET_ARRAY_INDEX index);
+BACNET_STACK_EXPORT
+int Multistate_State_Texts_Encode(
+    bacnet_get_pObject get_pObject,
+    uint32_t object_instance,
+    BACNET_ARRAY_INDEX index,
+    uint8_t *apdu);
 BACNET_STACK_EXPORT
 int bacnet_array_encode_multistate(
     bacnet_get_pObject get_pObject,
@@ -211,23 +216,12 @@ bool Multistate_Name_Set(
     BACNET_OBJECT_TYPE Object_Type,
     uint32_t object_instance);
 BACNET_STACK_EXPORT
-bool Multistate_State_Text_Set(
-    struct object_data *pObject,
-    uint32_t state_index,
-    BACNET_CHARACTER_STRING *char_string);
-BACNET_STACK_EXPORT
 bool Multistate_Reliability_Set(
     struct object_data *pObject, BACNET_RELIABILITY value);
-BACNET_STACK_EXPORT
-bool Multistate_Relinquish_Default_Set(
-    struct object_data *pObject, uint8_t value);
 BACNET_STACK_EXPORT
 void Multistate_Overridden_Set(
     struct object_data *pObject, bool value);
 #if defined(INTRINSIC_REPORTING)
-BACNET_STACK_EXPORT
-bool Multistate_High_Limit_Set(
-    struct object_data *pObject, uint8_t value);
 BACNET_STACK_EXPORT
 void Multistate_Reset_Event_Properties(
     struct object_data *pObject);
