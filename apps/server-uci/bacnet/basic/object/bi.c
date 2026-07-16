@@ -678,7 +678,9 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                pObject->Active_Text = value.type.Character_String.value;
+                pObject->Active_Text = bacnet_strndup(
+                    value.type.Character_String.value,
+                    value.type.Character_String.length);
                 ucix_add_option(ctxw, sec, idx_c, "active_text",
                     pObject->Active_Text);
                 ucix_commit(ctxw,sec);
@@ -688,7 +690,9 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                pObject->Inactive_Text = value.type.Character_String.value;
+                pObject->Inactive_Text = bacnet_strndup(
+                    value.type.Character_String.value,
+                    value.type.Character_String.length);
                 ucix_add_option(ctxw, sec, idx_c, "inactive_text",
                     pObject->Inactive_Text);
                 ucix_commit(ctxw,sec);
@@ -725,7 +729,9 @@ bool Binary_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(wp_data, &value,
                 BACNET_APPLICATION_TAG_CHARACTER_STRING);
             if (status) {
-                pObject->Description = value.type.Character_String.value;
+                pObject->Description = bacnet_strndup(
+                    value.type.Character_String.value,
+                    value.type.Character_String.length);
                 ucix_add_option(ctxw, sec, idx_c, "description",
                     Binary_Description(pObject));
                 ucix_commit(ctxw,sec);
@@ -1013,8 +1019,7 @@ static void uci_list(const char *sec_idx,
     struct object_data *pObject = NULL;
     int index = 0;
     unsigned priority = 0;
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
+    char options[64] = "";
     bool value_b = false;
 	disable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
 	"disable", 0);
@@ -1025,15 +1030,15 @@ static void uci_list(const char *sec_idx,
     idx = atoi(sec_idx);
     pObject = calloc(1, sizeof(struct object_data));
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "name");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Object_Name = strndup(option,option_str.length);
+    pObject->Object_Name = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "name");
+    if (!pObject->Object_Name) {
+        snprintf(options, sizeof(options), "Binary Input %i", idx);
+        pObject->Object_Name = strndup(options, sizeof(options));
+    }
 
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "description");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Description = strndup(option,option_str.length);
-    else
-        pObject->Description = strdup(ictx->Object.Description);
+    pObject->Description = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "description");
 
     pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
     pObject->Overridden = false;
@@ -1042,33 +1047,51 @@ static void uci_list(const char *sec_idx,
         pObject->Priority_Array[priority] = false;
     }
     pObject->Relinquish_Default = false;
-    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "Out_Of_Service", false);
+    pObject->Out_Of_Service = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "Out_Of_Service", false);
     pObject->Changed = false;
-    value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "value", 0);
+    value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "value", 0);
     pObject->Priority_Array[BACNET_MAX_PRIORITY-1] = value_b;
     pObject->Relinquished[BACNET_MAX_PRIORITY-1] = false;
     pObject->Prior_Value = value_b;
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "active_text");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Active_Text = strndup(option, option_str.length);
-    else
-        pObject->Active_Text = strdup(ictx->Object.Active_Text);
-    option = ucix_get_option(ictx->ctx, ictx->section, sec_idx, "inactive_text");
-    if (option && characterstring_init_ansi(&option_str, option))
-        pObject->Inactive_Text = strndup(option, option_str.length);
-    else
-        pObject->Inactive_Text = strdup(ictx->Object.Inactive_Text);
+    pObject->Active_Text = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "active_text");
+    if (!pObject->Active_Text)
+        pObject->Active_Text = ictx->Object.Active_Text;
+    pObject->Inactive_Text = ucix_get_option_char(ictx->ctx, ictx->section, sec_idx,
+        "inactive_text");
+    if (!pObject->Inactive_Text)
+        pObject->Inactive_Text = ictx->Object.Inactive_Text;
 #if defined(INTRINSIC_REPORTING)
     pObject->Event_State = EVENT_STATE_NORMAL;
     /* notification class not connected */
-    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "nc", ictx->Object.Notification_Class);
-    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event", ictx->Object.Event_Enable);
-    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "event_detection", ictx->Object.Event_Detection_Enable);
-    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "time_delay", ictx->Object.Time_Delay);
-    value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "alarm_value", 0);
+    pObject->Notification_Class = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "nc", ictx->Object.Notification_Class);
+    pObject->Event_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event", ictx->Object.Event_Enable);
+    pObject->Event_Detection_Enable = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "event_detection", ictx->Object.Event_Detection_Enable);
+    pObject->Time_Delay = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "time_delay", ictx->Object.Time_Delay);
+    value_b = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "alarm_value", 0);
     pObject->Alarm_Value = value_b;
 
-    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx, "notify_type", ictx->Object.Notify_Type);
+    pObject->Notify_Type = ucix_get_option_int(ictx->ctx, ictx->section, sec_idx,
+        "notify_type", ictx->Object.Notify_Type);
+    pObject->Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_offnormal");
+    pObject->Event_Message_Texts[TRANSITION_TO_FAULT] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_fault");
+    pObject->Event_Message_Texts[TRANSITION_TO_NORMAL] =
+        ucix_get_option_char(ictx->ctx, ictx->section, sec_idx, "evt_msg_normal");
+    for (j = 0; j < MAX_BACNET_EVENT_TRANSITION; j++) {
+        if (!pObject->Event_Message_Texts[j] &&
+            ictx->Object.Event_Message_Texts[j])
+            pObject->Event_Message_Texts[j] =
+            ictx->Object.Event_Message_Texts[j];
+    }
 
     /* initialize Event time stamps using wildcards
         and set Acked_transitions */
@@ -1094,8 +1117,6 @@ void Binary_Input_Init(void)
 {
     struct uci_context *ctx;
     struct object_data_t tObject = { 0 };
-    const char *option = NULL;
-    BACNET_CHARACTER_STRING option_str;
 
     struct itr_ctx itr_m;
     uint16_t dev_id;
@@ -1123,32 +1144,33 @@ void Binary_Input_Init(void)
             "Failed to load config file %s\n",sec);
     } else {
 
-        option = ucix_get_option(ctx, sec, "default", "description");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Description = strndup(option,option_str.length);
-        else
-            tObject.Description = "Binary Input";
-        option = ucix_get_option(ctx, sec, "default", "active_text");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Active_Text = strndup(option,option_str.length);
-        else
+        tObject.Active_Text = ucix_get_option_char(ctx, sec, "default",
+            "active_text");
+        if (!tObject.Active_Text)
             tObject.Active_Text = "Active";
-        option = ucix_get_option(ctx, sec, "default", "inactive_text");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Inactive_Text = strndup(option,option_str.length);
-        else
+        tObject.Inactive_Text = ucix_get_option_char(ctx, sec, "default",
+            "inactive_text");
+        if (!tObject.Inactive_Text)
             tObject.Inactive_Text = "Inactive";
 #if defined(INTRINSIC_REPORTING)
-        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default", "nc", BACNET_MAX_INSTANCE);
-        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default", "event", 0);
-        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default", "event_detection", 0);
-        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default", "time_delay", 0);
-        option = ucix_get_option(ctx, sec, "default", "alarm_value");
-        if (option && characterstring_init_ansi(&option_str, option))
-            tObject.Alarm_Value = strndup(option,option_str.length);
-        else
-            tObject.Alarm_Value = "0";
-        tObject.Event_Detection_Enable = true;
+        tObject.Notification_Class = ucix_get_option_int(ctx, sec, "default",
+            "nc", BACNET_MAX_INSTANCE);
+        tObject.Event_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event", 0);
+        tObject.Event_Detection_Enable = ucix_get_option_int(ctx, sec, "default",
+            "event_detection", 0);
+        tObject.Time_Delay = ucix_get_option_int(ctx, sec, "default",
+            "time_delay", 0);
+        tObject.Alarm_Value = ucix_get_option_int(ctx, sec, "default",
+            "alarm_value", 0);
+        tObject.Notify_Type = ucix_get_option_int(ctx, sec, "default",
+            "notify_type", 0);
+        tObject.Event_Message_Texts[TRANSITION_TO_OFFNORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_offnormal");
+        tObject.Event_Message_Texts[TRANSITION_TO_FAULT] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_fault");
+        tObject.Event_Message_Texts[TRANSITION_TO_NORMAL] =
+            ucix_get_option_char(ctx, sec, "default", "evt_msg_normal");
 #endif
         itr_m.section = sec;
         itr_m.ctx = ctx;
