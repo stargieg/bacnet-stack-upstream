@@ -147,8 +147,12 @@ char *ucix_get_option_char(
             switch (ptr.o->type) {
                 case UCI_TYPE_STRING:
                     len = strlen(ptr.o->v.string);
+                    len++;
                     value = malloc(len);
-                    strncpy(value, ptr.o->v.string, len);
+                    if (value != NULL) {
+                        strncpy(value, ptr.o->v.string, len);
+                        value[len-1] = '\0';
+                    }
                     break;
                 default:
                     value = NULL;
@@ -186,6 +190,45 @@ int ucix_get_list(
                     uci_foreach_element(&ptr.o->v.list, e)
                     {
                         value[n] = e->name;
+                        n++;
+                    }
+                    break;
+                default:
+                    n = 0;
+                    break;
+            }
+            break;
+        default:
+            return 0;
+    }
+
+    return n;
+}
+
+unsigned ucix_get_list_int(
+    unsigned *pvalue,
+    struct uci_context *ctx,
+    const char *p,
+    const char *s,
+    const char *o)
+{
+    struct uci_element *e = NULL;
+    int n;
+    if (ucix_get_ptr(ctx, p, s, o, NULL)) {
+        return 0;
+    }
+    if (!(ptr.flags & UCI_LOOKUP_COMPLETE)) {
+        return 0;
+    }
+    e = ptr.last;
+    switch (e->type) {
+        case UCI_TYPE_OPTION:
+            switch (ptr.o->type) {
+                case UCI_TYPE_LIST:
+                    n = 0;
+                    uci_foreach_element(&ptr.o->v.list, e)
+                    {
+                        pvalue[n] = atoi(e->name);
                         n++;
                     }
                     break;
@@ -261,6 +304,29 @@ void ucix_set_list(
     const char *s,
     const char *o,
     char value[254][64],
+    int l)
+{
+    int i;
+    ucix_get_ptr(ctx, p, s, o, NULL);
+    uci_delete(ctx, &ptr);
+    uci_save(ctx, NULL);
+    for (i = 0; i < l; i++) {
+        if (UCI_OK == ucix_get_ptr(ctx, p, s, o, value[i])) {
+            uci_add_list(ctx, &ptr);
+        } else {
+            if (UCI_OK == ucix_get_ptr(ctx, p, s, o, NULL)) {
+                uci_add_list(ctx, &ptr);
+            }
+        }
+    }
+}
+
+void ucix_set_plist(
+    struct uci_context *ctx,
+    const char *p,
+    const char *s,
+    const char *o,
+    char *value[254],
     int l)
 {
     int i;
