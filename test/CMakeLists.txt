@@ -95,6 +95,7 @@ list(APPEND testdirs
   bacnet/bacaddr
   bacnet/bacapp
   bacnet/bacaudit
+  bacnet/bacaction
   bacnet/bacdcode
   bacnet/bacdevobjpropref
   bacnet/bacdest
@@ -164,6 +165,7 @@ list(APPEND testdirs
   bacnet/basic/object/ai
   bacnet/basic/object/ao
   bacnet/basic/object/av
+  bacnet/basic/object/averaging
   bacnet/basic/object/auditlog
   bacnet/basic/object/bacfile
   bacnet/basic/object/bi

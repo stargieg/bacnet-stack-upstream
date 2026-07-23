@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 project(
   bacnet-stack
-  VERSION 1.6.0
+  VERSION 1.7.0
   LANGUAGES C)
 
 #
@@ -422,6 +422,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/object/ao.h
   src/bacnet/basic/object/av.c
   src/bacnet/basic/object/av.h
+  src/bacnet/basic/object/averaging.c
+  src/bacnet/basic/object/averaging.h
   src/bacnet/basic/object/bacfile.c
   src/bacnet/basic/object/bacfile.h
   src/bacnet/basic/object/bi.c

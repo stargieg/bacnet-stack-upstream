@@ -38,6 +38,7 @@
 #include "bacnet/basic/object/ai.h"
 #include "bacnet/basic/object/ao.h"
 #include "bacnet/basic/object/av.h"
+#include "bacnet/basic/object/averaging.h"
 #include "bacnet/basic/object/auditlog.h"
 #include "bacnet/basic/object/bi.h"
 #include "bacnet/basic/object/bo.h"
@@ -219,6 +220,27 @@ static object_functions_t Default_Object_Table[] = {
       Analog_Value_Delete,
       NULL /* Timer */,
       Analog_Value_Writable_Property_List },
+    { OBJECT_AVERAGING,
+      Averaging_Init,
+      Averaging_Count,
+      Averaging_Index_To_Instance,
+      Averaging_Valid_Instance,
+      Averaging_Object_Name,
+      Averaging_Read_Property,
+      Averaging_Write_Property,
+      Averaging_Property_Lists,
+      NULL /* ReadRangeInfo */,
+      NULL /* Iterator */,
+      NULL /* Value_Lists */,
+      NULL /* COV */,
+      NULL /* COV Clear */,
+      NULL /* Intrinsic Reporting */,
+      NULL /* Add_List_Element */,
+      NULL /* Remove_List_Element */,
+      Averaging_Create,
+      Averaging_Delete,
+      Averaging_Timer,
+      Averaging_Writable_Property_List },
     { OBJECT_BINARY_INPUT,
       Binary_Input_Init,
       Binary_Input_Count,
@@ -448,9 +470,9 @@ static object_functions_t Default_Object_Table[] = {
       NULL /* Intrinsic Reporting */,
       NULL /* Add_List_Element */,
       NULL /* Remove_List_Element */,
-      NULL /* Create */,
-      NULL /* Delete */,
-      NULL /* Timer */,
+      Command_Create,
+      Command_Delete,
+      Command_Timer,
       Command_Writable_Property_List },
 #if defined(INTRINSIC_REPORTING)
     { OBJECT_NOTIFICATION_CLASS,
@@ -4393,10 +4415,14 @@ void Device_Init(object_functions_t *object_table)
     /* link ReadProperty and WriteProperty to Loop object for references */
     Loop_Read_Property_Internal_Callback_Set(Device_Read_Property);
     Loop_Write_Property_Internal_Callback_Set(Device_Write_Property);
+    /* link ReadProperty to Averaging object for sampled references */
+    Averaging_Read_Property_Internal_Callback_Set(Device_Read_Property);
 #if (BACNET_PROTOCOL_REVISION >= 17)
     /* link WriteProperty to Timer object for references */
     Timer_Write_Property_Internal_Callback_Set(Device_Write_Property);
 #endif
+    /* link WriteProperty to Command object for action execution */
+    Command_Write_Property_Internal_Callback_Set(Device_Write_Property);
     Reinitialize_Data.State = BACNET_REINIT_IDLE;
     Reinitialize_Data.Password = "filister";
 }
