@@ -14,6 +14,7 @@
 #include "bacnet/bacdcode.h"
 #include "bacnet/proplist.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/compare.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/ucix/ucix.h"
@@ -916,7 +917,7 @@ static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
                 application_data, application_data_len, 0, &daily_schedule);
             if (len > 0) {
                 tv_size =
-                    min(daily_schedule.TV_Count,
+                    BACNET_MIN(daily_schedule.TV_Count,
                         BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE);
                 for (tv = 0; tv < tv_size; tv++) {
                     /* copy the time value */
