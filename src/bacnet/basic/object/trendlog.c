@@ -1620,6 +1620,11 @@ int rr_decode_trendlog_entries(
                     len = bacnet_bitstring_context_decode(
                         apdu, apdu_len, tag.number, &rec->value.type.Bit_String);
                     break;
+                case TL_TYPE_DELTA:
+                    rec->value.tag = BACNET_APPLICATION_TAG_NULL;
+                    len = bacnet_real_context_decode(
+                        apdu, apdu_len, tag.number, NULL);
+                    break;
                 default:
                     // anything to do here?
                     // skip over the value if we don't suppord decoding it
