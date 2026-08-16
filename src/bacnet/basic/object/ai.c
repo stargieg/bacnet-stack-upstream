@@ -22,11 +22,18 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/debug.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 /* me! */
 #include "bacnet/basic/object/ai.h"
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_ANALOG_INPUT;
 
@@ -62,6 +69,31 @@ static const int32_t Properties_Optional[] = {
 
 static const int32_t Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.
+   Properties that are only conditionally writable, for example,
+   a Present_Value property whose writability is conditionally
+   based on the Out_Of_Service property value, shall not be included. */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_OUT_OF_SERVICE,
+    PROP_UNITS,
+    PROP_COV_INCREMENT,
+#if defined(INTRINSIC_REPORTING)
+    PROP_TIME_DELAY,
+    PROP_NOTIFICATION_CLASS,
+    PROP_HIGH_LIMIT,
+    PROP_LOW_LIMIT,
+    PROP_DEADBAND,
+    PROP_LIMIT_ENABLE,
+    PROP_EVENT_ENABLE,
+    PROP_NOTIFY_TYPE,
+#endif
+    -1
+};
+
 /**
  * Initialize the pointers for the required, the optional and the properitary
  * value properties.
@@ -86,6 +118,20 @@ void Analog_Input_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for an Analog Input object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Analog_Input_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -970,7 +1016,7 @@ int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
     uint8_t *apdu = NULL;
     BACNET_BIT_STRING bit_string;
     BACNET_CHARACTER_STRING char_string;
-    float real_value = (float)1.414;
+    float real_value = 1.414f;
     bool state = false;
 #if defined(INTRINSIC_REPORTING)
     int apdu_size = 0;
@@ -1163,9 +1209,6 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
 
     /* Valid data? */
     if (wp_data == NULL) {
-        return false;
-    }
-    if (wp_data->application_data_len == 0) {
         return false;
     }
     /* decode the some of the request */
@@ -1379,7 +1422,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         CurrentAI->Ack_notify_data.bSendAckNotify = false;
         /* copy toState */
         ToState = CurrentAI->Ack_notify_data.EventState;
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Analog-Input[%d]: Send AckNotification.\n", object_instance);
         msgText = "AckNotification";
         /* Notify Type */
@@ -1563,7 +1607,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
                     ExceededLimit = 0;
                     break;
             } /* switch (ToState) */
-            debug_printf(
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr,
                 "Analog-Input[%d]: Event_State goes from %s to %s.\n",
                 object_instance, bactext_event_state_name(FromState),
                 bactext_event_state_name(ToState));
@@ -1715,7 +1760,8 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
             }
         }
         /* add data from notification class */
-        debug_printf(
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
             "Analog-Input[%d]: Notification Class[%d]-%s "
             "%u/%u/%u-%u:%u:%u.%u!\n",
             object_instance, event_data.notificationClass,
@@ -1731,7 +1777,9 @@ void Analog_Input_Intrinsic_Reporting(uint32_t object_instance)
         /* Ack required */
         if ((event_data.notifyType != NOTIFY_ACK_NOTIFICATION) &&
             (event_data.ackRequired == true)) {
-            debug_printf("Analog-Input[%d]: Ack Required!\n", object_instance);
+            debug_log_fprintf(
+                DEBUG_LOG_DEBUG, stderr, "Analog-Input[%d]: Ack Required!\n",
+                object_instance);
             switch (event_data.toState) {
                 case EVENT_STATE_OFFNORMAL:
                 case EVENT_STATE_HIGH_LIMIT:
@@ -2062,9 +2110,9 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
             pObject->Object_Name = NULL;
             pObject->Description = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
-            pObject->COV_Increment = 1.0;
+            pObject->COV_Increment = 1.0f;
             pObject->Present_Value = 0.0f;
-            pObject->Prior_Value = 0.0;
+            pObject->Prior_Value = 0.0f;
             pObject->Units = UNITS_PERCENT;
             pObject->Out_Of_Service = false;
             pObject->Changed = false;
@@ -2115,17 +2163,30 @@ bool Analog_Input_Delete(uint32_t object_instance)
 void Analog_Input_Cleanup(void)
 {
     struct analog_input_descr *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -2133,9 +2194,23 @@ void Analog_Input_Cleanup(void)
  */
 void Analog_Input_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 #if defined(INTRINSIC_REPORTING)
     /* Set handler for GetEventInformation function */
     handler_get_event_information_set(

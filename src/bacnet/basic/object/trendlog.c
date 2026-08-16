@@ -25,17 +25,26 @@
 #include "bacnet/basic/binding/address.h"
 #include "bacnet/basic/object/trendlog.h"
 #include "bacnet/datalink/datalink.h"
-#if defined(BACFILE)
-#include "bacnet/basic/object/bacfile.h" /* object list dependency */
-#endif
+#include "bacnet/basic/object/bacfile.h"
 
 /* number of demo objects */
 #ifndef MAX_TREND_LOGS
 #define MAX_TREND_LOGS 8
 #endif
 
-static TL_DATA_REC Logs[MAX_TREND_LOGS][TL_MAX_ENTRIES];
-static TL_LOG_INFO LogInfo[MAX_TREND_LOGS];
+static TL_DATA_REC Logs_Records[MAX_NUM_DEVICES][MAX_TREND_LOGS]
+                               [TL_MAX_ENTRIES];
+#ifdef BAC_ROUTING
+#define Logs (Logs_Records[Routed_Device_Object_Index()])
+#else
+#define Logs (Logs_Records[0])
+#endif
+static TL_LOG_INFO LogInfos[MAX_NUM_DEVICES][MAX_TREND_LOGS];
+#ifdef BAC_ROUTING
+#define LogInfo (LogInfos[Routed_Device_Object_Index()])
+#else
+#define LogInfo (LogInfos[0])
+#endif
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Trend_Log_Properties_Required[] = {
@@ -77,6 +86,36 @@ static const int32_t Trend_Log_Properties_Optional[] = {
 
 static const int32_t Trend_Log_Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_ENABLE,
+    PROP_STOP_WHEN_FULL,
+    PROP_RECORD_COUNT,
+    PROP_LOGGING_TYPE,
+    PROP_START_TIME,
+    PROP_STOP_TIME,
+    PROP_LOG_DEVICE_OBJECT_PROPERTY,
+    PROP_LOG_INTERVAL,
+    PROP_ALIGN_INTERVALS,
+    PROP_INTERVAL_OFFSET,
+    PROP_TRIGGER,
+    -1
+};
+
+/**
+ * @brief Returns the list of required, optional, and proprietary properties.
+ * Used by ReadPropertyMultiple service.
+ * @param pRequired - pointer to list of int terminated by -1, of
+ * BACnet required properties for this object.
+ * @param pOptional - pointer to list of int terminated by -1, of
+ * BACnet optional properties for this object.
+ * @param pProprietary - pointer to list of int terminated by -1, of
+ * BACnet proprietary properties for this object.
+ */
 void Trend_Log_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
@@ -93,6 +132,20 @@ void Trend_Log_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Trend Log object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Trend_Log_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /* we simply have 0-n object instances.  Yours might be */
@@ -155,85 +208,98 @@ static bacnet_time_t Trend_Log_Epoch_Seconds_Now(void)
 void Trend_Log_Init(void)
 {
     static bool initialized = false;
+    uint16_t dev_id;
     int iLog;
     int iEntry;
     BACNET_DATE_TIME bdatetime = { { 0 }, { 0 } };
     bacnet_time_t tClock;
     uint8_t month;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
     if (!initialized) {
         initialized = true;
 
         /* initialize all the values */
 
-        for (iLog = 0; iLog < MAX_TREND_LOGS; iLog++) {
-            /*
-             * Do we need to do anything here?
-             * Trend logs are usually assumed to survive over resets
-             * and are frequently implemented using Battery Backed RAM
-             * If they are implemented using Flash or SD cards or some
-             * such mechanism there may be some RAM based setup needed
-             * for log management purposes.
-             * We probably need to look at inserting LOG_INTERRUPTED
-             * entries into any active logs if the power down or reset
-             * may have caused us to miss readings.
-             */
+        for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+            Set_Routed_Device_Object_Index(dev_id);
+#endif
+            for (iLog = 0; iLog < MAX_TREND_LOGS; iLog++) {
+                /*
+                 * Do we need to do anything here?
+                 * Trend logs are usually assumed to survive over resets
+                 * and are frequently implemented using Battery Backed RAM
+                 * If they are implemented using Flash or SD cards or some
+                 * such mechanism there may be some RAM based setup needed
+                 * for log management purposes.
+                 * We probably need to look at inserting LOG_INTERRUPTED
+                 * entries into any active logs if the power down or reset
+                 * may have caused us to miss readings.
+                 */
 
-            /* We will just fill the logs with some entries for testing
-             * purposes.
-             */
-            /* Different month for each log */
-            month = iLog + 1;
-            datetime_set_values(&bdatetime, 2009, month, 1, 0, 0, 0, 0);
-            tClock = datetime_seconds_since_epoch(&bdatetime);
-            for (iEntry = 0; iEntry < TL_MAX_ENTRIES; iEntry++) {
-                Logs[iLog][iEntry].tTimeStamp = tClock;
-                Logs[iLog][iEntry].ucRecType = TL_TYPE_REAL;
-                Logs[iLog][iEntry].Datum.fReal =
-                    (float)(iEntry + (iLog * TL_MAX_ENTRIES));
-                /* Put status flags with every second log */
-                if ((iLog & 1) == 0) {
-                    Logs[iLog][iEntry].ucStatus = 128;
-                } else {
-                    Logs[iLog][iEntry].ucStatus = 0;
+                /* We will just fill the logs with some entries for testing
+                 * purposes.
+                 */
+                /* Different month for each log */
+                month = iLog + 1;
+                datetime_set_values(&bdatetime, 2009, month, 1, 0, 0, 0, 0);
+                tClock = datetime_seconds_since_epoch(&bdatetime);
+                for (iEntry = 0; iEntry < TL_MAX_ENTRIES; iEntry++) {
+                    Logs[iLog][iEntry].tTimeStamp = tClock;
+                    Logs[iLog][iEntry].ucRecType = TL_TYPE_REAL;
+                    Logs[iLog][iEntry].Datum.fReal =
+                        (float)(iEntry + (iLog * TL_MAX_ENTRIES));
+                    /* Put status flags with every second log */
+                    if ((iLog & 1) == 0) {
+                        Logs[iLog][iEntry].ucStatus = 128;
+                    } else {
+                        Logs[iLog][iEntry].ucStatus = 0;
+                    }
+                    /* advance 15 minutes, in seconds */
+                    tClock += 900;
                 }
-                /* advance 15 minutes, in seconds */
-                tClock += 900;
+
+                LogInfo[iLog].tLastDataTime = tClock - 900;
+                LogInfo[iLog].bAlignIntervals = true;
+                LogInfo[iLog].bEnable = true;
+                LogInfo[iLog].bStopWhenFull = false;
+                LogInfo[iLog].bTrigger = false;
+                LogInfo[iLog].LoggingType = LOGGING_TYPE_POLLED;
+                LogInfo[iLog].Source.arrayIndex = 0;
+                LogInfo[iLog].ucTimeFlags = 0;
+                LogInfo[iLog].ulIntervalOffset = 0;
+                LogInfo[iLog].iIndex = 0;
+                LogInfo[iLog].ulLogInterval = 900;
+                LogInfo[iLog].ulRecordCount = TL_MAX_ENTRIES;
+                LogInfo[iLog].ulTotalRecordCount = 10000;
+
+                LogInfo[iLog].Source.deviceIdentifier.instance =
+                    Device_Object_Instance_Number();
+                LogInfo[iLog].Source.deviceIdentifier.type = OBJECT_DEVICE;
+                LogInfo[iLog].Source.objectIdentifier.instance = iLog;
+                LogInfo[iLog].Source.objectIdentifier.type =
+                    OBJECT_ANALOG_INPUT;
+                LogInfo[iLog].Source.arrayIndex = BACNET_ARRAY_ALL;
+                LogInfo[iLog].Source.propertyIdentifier = PROP_PRESENT_VALUE;
+
+                datetime_set_values(
+                    &LogInfo[iLog].StartTime, 2009, 1, 1, 0, 0, 0, 0);
+                LogInfo[iLog].tStartTime =
+                    TL_BAC_Time_To_Local(&LogInfo[iLog].StartTime);
+                datetime_set_values(
+                    &LogInfo[iLog].StopTime, 2020, 12, 22, 23, 59, 59, 99);
+                LogInfo[iLog].tStopTime =
+                    TL_BAC_Time_To_Local(&LogInfo[iLog].StopTime);
             }
-
-            LogInfo[iLog].tLastDataTime = tClock - 900;
-            LogInfo[iLog].bAlignIntervals = true;
-            LogInfo[iLog].bEnable = true;
-            LogInfo[iLog].bStopWhenFull = false;
-            LogInfo[iLog].bTrigger = false;
-            LogInfo[iLog].LoggingType = LOGGING_TYPE_POLLED;
-            LogInfo[iLog].Source.arrayIndex = 0;
-            LogInfo[iLog].ucTimeFlags = 0;
-            LogInfo[iLog].ulIntervalOffset = 0;
-            LogInfo[iLog].iIndex = 0;
-            LogInfo[iLog].ulLogInterval = 900;
-            LogInfo[iLog].ulRecordCount = TL_MAX_ENTRIES;
-            LogInfo[iLog].ulTotalRecordCount = 10000;
-
-            LogInfo[iLog].Source.deviceIdentifier.instance =
-                Device_Object_Instance_Number();
-            LogInfo[iLog].Source.deviceIdentifier.type = OBJECT_DEVICE;
-            LogInfo[iLog].Source.objectIdentifier.instance = iLog;
-            LogInfo[iLog].Source.objectIdentifier.type = OBJECT_ANALOG_INPUT;
-            LogInfo[iLog].Source.arrayIndex = BACNET_ARRAY_ALL;
-            LogInfo[iLog].Source.propertyIdentifier = PROP_PRESENT_VALUE;
-
-            datetime_set_values(
-                &LogInfo[iLog].StartTime, 2009, 1, 1, 0, 0, 0, 0);
-            LogInfo[iLog].tStartTime =
-                TL_BAC_Time_To_Local(&LogInfo[iLog].StartTime);
-            datetime_set_values(
-                &LogInfo[iLog].StopTime, 2020, 12, 22, 23, 59, 59, 99);
-            LogInfo[iLog].tStopTime =
-                TL_BAC_Time_To_Local(&LogInfo[iLog].StopTime);
         }
     }
 
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
     return;
 }
 
@@ -256,6 +322,48 @@ bool Trend_Log_Object_Name(
     }
 
     return status;
+}
+
+/**
+ * @brief Get the total record count for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return total record count
+ */
+uint32_t Trend_Log_Total_Record_Count(uint32_t object_instance)
+{
+    uint32_t total_records = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        total_records = LogInfo[object_instance].ulTotalRecordCount;
+    }
+    return total_records;
+}
+
+/**
+ * @brief Get the record count for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return record count
+ */
+uint32_t Trend_Log_Record_Count(uint32_t object_instance)
+{
+    uint32_t record_count = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        record_count = LogInfo[object_instance].ulRecordCount;
+    }
+    return record_count;
+}
+
+/**
+ * @brief Get the buffer size for a Trend Log object
+ * @param object_instance - object-instance number of the object
+ * @return buffer size
+ */
+uint32_t Trend_Log_Buffer_Size(uint32_t object_instance)
+{
+    uint32_t buffer_size = 0;
+    if (object_instance < MAX_TREND_LOGS) {
+        buffer_size = TL_MAX_ENTRIES;
+    }
+    return buffer_size;
 }
 
 /* return the length of the apdu encoded or BACNET_STATUS_ERROR for error or
@@ -433,6 +541,10 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool bEffectiveEnable;
     int log_index;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* Pin down which log to look at */
     log_index = Trend_Log_Instance_To_Index(wp_data->object_instance);
     if (log_index >= MAX_TREND_LOGS) {
@@ -441,7 +553,6 @@ bool Trend_Log_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     CurrentLog = &LogInfo[log_index];
-
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);
@@ -1136,7 +1247,8 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     uint32_t uiSequence = 0; /* Tracking sequence number when encoding */
     uint32_t uiRemaining = 0; /* Amount of unused space in packet */
     uint32_t uiFirstSeq = 0; /* Sequence number for 1st record in log */
-
+    uint32_t total_entries = 0;
+    uint32_t max_fit = 0;
     uint32_t uiBegin = 0; /* Starting Sequence number for request */
     uint32_t uiEnd = 0; /* Ending Sequence number for request */
     bool bWrapReq = false; /* Has request sequence range spanned the max for
@@ -1227,7 +1339,22 @@ int TL_encode_by_sequence(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
             }
         }
     }
-
+    if (pRequest->Count < 0) {
+        /* adjust uiBegin when Count < 0 and total requested
+           items exceed the maximum encodable items (max_fit).*/
+        if (uiEnd >= uiBegin) {
+            total_entries = uiEnd - uiBegin + 1;
+            max_fit = uiRemaining / TL_MAX_ENC;
+            if ((max_fit > 0) && (total_entries > max_fit)) {
+                /* Adjust beginning index so returned items match z = max_fit */
+                uiBegin = uiEnd - max_fit + 1;
+                /* MORE_ITEMS must be set because
+                   request range not fully delivered */
+                bitstring_set_bit(
+                    &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
+            }
+        }
+    }
     /* We now have a range that lies completely within the log buffer
      * and we need to figure out where that starts in the buffer.
      */
@@ -1729,10 +1856,9 @@ static void TL_fetch_property(int iLog)
     uint8_t ucCount;
     TL_LOG_INFO *CurrentLog;
     TL_DATA_REC TempRec;
-    uint8_t tag_number = 0;
-    uint32_t len_value_type = 0;
     BACNET_BIT_STRING TempBits;
     BACNET_UNSIGNED_INTEGER unsigned_value = 0;
+    BACNET_TAG tag = { 0 };
 
     CurrentLog = &LogInfo[iLog];
 
@@ -1751,40 +1877,46 @@ static void TL_fetch_property(int iLog)
         TempRec.ucRecType = TL_TYPE_ERROR;
     } else {
         /* Decode data returned and see if we can fit it into the log */
-        iLen =
-            decode_tag_number_and_value(ValueBuf, &tag_number, &len_value_type);
-        switch (tag_number) {
+        iLen = bacnet_tag_decode(ValueBuf, sizeof(ValueBuf), &tag);
+    }
+    if ((iLen > 0) && (tag.application)) {
+        switch (tag.number) {
             case BACNET_APPLICATION_TAG_NULL:
                 TempRec.ucRecType = TL_TYPE_NULL;
                 break;
 
             case BACNET_APPLICATION_TAG_BOOLEAN:
                 TempRec.ucRecType = TL_TYPE_BOOL;
-                TempRec.Datum.ucBoolean = decode_boolean(len_value_type);
+                TempRec.Datum.ucBoolean = decode_boolean(tag.len_value_type);
                 break;
 
             case BACNET_APPLICATION_TAG_UNSIGNED_INT:
                 TempRec.ucRecType = TL_TYPE_UNSIGN;
-                decode_unsigned(
-                    &ValueBuf[iLen], len_value_type, &unsigned_value);
+                bacnet_unsigned_decode(
+                    &ValueBuf[iLen], sizeof(ValueBuf) - iLen,
+                    tag.len_value_type, &unsigned_value);
                 TempRec.Datum.ulUValue = unsigned_value;
                 break;
 
             case BACNET_APPLICATION_TAG_SIGNED_INT:
                 TempRec.ucRecType = TL_TYPE_SIGN;
-                decode_signed(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.lSValue);
+                bacnet_signed_decode(
+                    &ValueBuf[iLen], sizeof(ValueBuf) - iLen,
+                    tag.len_value_type, &TempRec.Datum.lSValue);
                 break;
 
             case BACNET_APPLICATION_TAG_REAL:
                 TempRec.ucRecType = TL_TYPE_REAL;
-                decode_real_safe(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.fReal);
+                bacnet_real_decode(
+                    &ValueBuf[iLen], sizeof(ValueBuf) - iLen,
+                    tag.len_value_type, &TempRec.Datum.fReal);
                 break;
 
             case BACNET_APPLICATION_TAG_BIT_STRING:
                 TempRec.ucRecType = TL_TYPE_BITS;
-                decode_bitstring(&ValueBuf[iLen], len_value_type, &TempBits);
+                bacnet_bitstring_decode(
+                    &ValueBuf[iLen], sizeof(ValueBuf) - iLen,
+                    tag.len_value_type, &TempBits);
                 /* We truncate any bitstrings at 32 bits to conserve space */
                 if (bitstring_bits_used(&TempBits) < 32) {
                     /* Store the bytes used and the bits free
@@ -1811,8 +1943,9 @@ static void TL_fetch_property(int iLog)
 
             case BACNET_APPLICATION_TAG_ENUMERATED:
                 TempRec.ucRecType = TL_TYPE_ENUM;
-                decode_enumerated(
-                    &ValueBuf[iLen], len_value_type, &TempRec.Datum.ulEnum);
+                bacnet_enumerated_decode(
+                    &ValueBuf[iLen], sizeof(ValueBuf) - iLen,
+                    tag.len_value_type, &TempRec.Datum.ulEnum);
                 break;
 
             default:
@@ -1823,12 +1956,22 @@ static void TL_fetch_property(int iLog)
                 break;
         }
         /* Finally insert the status flags into the record */
-        iLen = decode_tag_number_and_value(
-            StatusBuf, &tag_number, &len_value_type);
-        decode_bitstring(&StatusBuf[iLen], len_value_type, &TempBits);
-        TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
+        iLen = bacnet_bitstring_application_decode(
+            StatusBuf, sizeof(StatusBuf), &TempBits);
+        if (iLen > 0) {
+            TempRec.ucStatus = 128 | bitstring_octet(&TempBits, 0);
+        } else {
+            /* If we couldn't decode the status flags, just set the bit to
+             * say they are not present */
+            TempRec.ucStatus = 0;
+        }
+    } else {
+        /* We couldn't decode the value, so we will just log an error with
+         * the error code for the value read attempt */
+        TempRec.Datum.Error.usClass = ERROR_CLASS_SERVICES;
+        TempRec.Datum.Error.usCode = ERROR_CODE_OTHER;
+        TempRec.ucRecType = TL_TYPE_ERROR;
     }
-
     Logs[iLog][CurrentLog->iIndex++] = TempRec;
     if (CurrentLog->iIndex >= TL_MAX_ENTRIES) {
         CurrentLog->iIndex = 0;

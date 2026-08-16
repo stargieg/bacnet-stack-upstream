@@ -5,6 +5,14 @@
  * SPDX-License-Identifier: GPL-2.0-or-later WITH GCC-exception-2.0
  *
  *********************************************************************/
+/* IPv6 and the API (if_nametoindex) inherently requires
+   Vista or later, so ensure the _WIN32_WINNT is set appropriately */
+#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_WIN32)
+#if !defined(_WIN32_WINNT) || (_WIN32_WINNT < 0x0600)
+#undef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h> /* for standard integer types uint8_t etc. */
@@ -73,7 +81,7 @@ static LPSTR PrintError(int ErrorCode)
 }
 
 /* on Windows, ifname is the IPv6 address of the interface */
-void bip6_set_interface(char *ifname)
+void bip6_set_interface(const char *ifname)
 {
     int i, RetVal;
     struct addrinfo Hints, *AddrInfo, *AI;
@@ -561,7 +569,7 @@ void bip6_leave_group(void)
  * @return True if the socket is successfully opened for BACnet/IPv6,
  *         else False if the socket functions fail.
  */
-bool bip6_init(char *ifname)
+bool bip6_init(const char *ifname)
 {
     WSADATA wd;
     int RetVal;

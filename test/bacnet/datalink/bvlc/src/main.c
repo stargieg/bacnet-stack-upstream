@@ -85,6 +85,17 @@ static int test_BVLC_Header(
     return bytes_consumed;
 }
 
+static void test_BVLC_Header_BufferTooSmall(void)
+{
+    uint8_t pdu[4] = { 0 };
+    int len = 0;
+
+    len = bvlc_encode_header(pdu, 3, BVLC_RESULT, 6);
+    zassert_equal(len, 0, "BVLC header must reject 3-byte buffer");
+    len = bvlc_encode_header(pdu, 2, BVLC_RESULT, 6);
+    zassert_equal(len, 0, "BVLC header must reject 2-byte buffer");
+}
+
 static void test_BVLC_Result_Code(uint16_t result_code)
 {
     uint8_t pdu[50] = { 0 };
@@ -520,6 +531,9 @@ static void test_BVLC_Broadcast_Distribution_Table_Encode(void)
         status = bvlc_broadcast_distribution_table_entry_append(
             &bdt_list[0], &bdt_entry);
         zassert_true(status, NULL);
+        status = bvlc_broadcast_distribution_table_entry_insert(
+            &bdt_list[0], &bdt_entry, i);
+        zassert_true(status, NULL);
     }
     test_count = bvlc_broadcast_distribution_table_count(&bdt_list[0]);
     if (test_count != count) {
@@ -698,6 +712,7 @@ static int test_BVLC_Foreign_Device_Table_Setup(
     uint16_t ttl_seconds = 12345;
     bool status = false;
     BACNET_IP_ADDRESS dest_address = { 0 };
+    BACNET_IP_FOREIGN_DEVICE_TABLE_ENTRY test_entry = { 0 };
 
     status = bvlc_address_from_ascii(&dest_address, "192.168.0.1");
     zassert_true(status, NULL);
@@ -711,6 +726,12 @@ static int test_BVLC_Foreign_Device_Table_Setup(
         /* add again should only update TTL */
         status = bvlc_foreign_device_table_entry_add(
             fdt_list, &dest_address, ttl_seconds);
+        zassert_true(status, NULL);
+        bvlc_address_copy(&test_entry.dest_address, &dest_address);
+        test_entry.ttl_seconds = ttl_seconds;
+        test_entry.ttl_seconds_remaining = ttl_seconds + 30;
+        status =
+            bvlc_foreign_device_table_entry_insert(fdt_list, &test_entry, i);
         zassert_true(status, NULL);
     }
     test_count = bvlc_foreign_device_table_count(fdt_list);
@@ -733,6 +754,7 @@ static void test_BVLC_Read_Foreign_Device_Table_Ack(void)
     uint16_t count = 0;
     uint16_t test_count = 0;
     BACNET_IP_FOREIGN_DEVICE_TABLE_ENTRY fdt_list[5] = { 0 };
+    bool status = false;
 
     count = sizeof(fdt_list) / sizeof(fdt_list[0]);
     test_count = test_BVLC_Foreign_Device_Table_Setup(fdt_list, count);
@@ -744,6 +766,9 @@ static void test_BVLC_Read_Foreign_Device_Table_Ack(void)
     zassert_equal(test_count, count, NULL);
     test_BVLC_Read_Foreign_Device_Table_Ack_Message(fdt_list);
     /* cleanup */
+    status = bvlc_foreign_device_table_entry_delete(
+        fdt_list, &fdt_list[0].dest_address);
+    zassert_true(status, NULL);
     bvlc_foreign_device_table_valid_clear(&fdt_list[0]);
     test_count = bvlc_foreign_device_table_valid_count(fdt_list);
     zassert_equal(test_count, 0, NULL);
@@ -1013,7 +1038,8 @@ ZTEST_SUITE(bvlc_tests, NULL, NULL, NULL, NULL, NULL);
 void test_main(void)
 {
     ztest_test_suite(
-        bvlc_tests, ztest_unit_test(test_BVLC_Result),
+        bvlc_tests, ztest_unit_test(test_BVLC_Header_BufferTooSmall),
+        ztest_unit_test(test_BVLC_Result),
         ztest_unit_test(test_BVLC_Write_Broadcast_Distribution_Table),
         ztest_unit_test(test_BVLC_Read_Broadcast_Distribution_Table_Message),
         ztest_unit_test(test_BVLC_Forwarded_NPDU),

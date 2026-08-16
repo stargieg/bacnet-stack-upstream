@@ -53,7 +53,7 @@ static uint8_t Rx_Buf[MAX_MPDU] = { 0 };
 /** The list of DNETs that our router can reach.
  *  Only one entry since we don't support downstream routers.
  */
-int DNET_list[2] = {
+int32_t DNET_list[2] = {
     VIRTUAL_DNET, -1 /* Need -1 terminator */
 };
 
@@ -61,7 +61,7 @@ int DNET_list[2] = {
 static const char *BACnet_Version = BACNET_VERSION_TEXT;
 
 /* routed devices - I-Am on startup */
-static unsigned Routed_Device_Index;
+static unsigned Routed_Device_Index = 1;
 
 /** Initialize the Device Objects and each of the child Object instances.
  * @param first_object_instance Set the first (gateway) Device to this
@@ -106,7 +106,7 @@ static void Initialize_Device_Addresses(void)
     pDev = Get_Routed_Device_Object(i);
 
     /* we can't use datalink_get_my_address() since it is
-       mapped to routed_get_my_address() in this app
+       mapped to Routed_Device_Get_My_Address() in this app
        to get the parent device address */
 #if defined(BACDL_BIP)
     bip_get_my_address(&virtual_address);
@@ -171,7 +171,7 @@ static void Init_Service_Handlers(uint32_t first_object_instance)
         SERVICE_CONFIRMED_WRITE_PROPERTY, handler_write_property);
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_READ_RANGE, handler_read_range);
-#if defined(BACFILE)
+#if defined BACNET_BACKUP_RESTORE
     apdu_set_confirmed_handler(
         SERVICE_CONFIRMED_ATOMIC_READ_FILE, handler_atomic_read_file);
     apdu_set_confirmed_handler(
@@ -278,10 +278,10 @@ int main(int argc, char *argv[])
         }
         handler_cov_task();
         if (Routed_Device_Index < MAX_NUM_DEVICES) {
-            Routed_Device_Index++;
             Get_Routed_Device_Object(Routed_Device_Index);
             /* broadcast an I-Am for each routed Device now */
             Send_I_Am(&Handler_Transmit_Buffer[0]);
+            Routed_Device_Index++;
         }
     }
     /* Dummy return */

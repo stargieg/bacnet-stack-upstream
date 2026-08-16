@@ -97,7 +97,7 @@ static void AtomicReadFileAckHandler(
 {
     int len = 0;
     int result = 0;
-    BACNET_ATOMIC_READ_FILE_DATA data;
+    BACNET_ATOMIC_READ_FILE_DATA data = { 0 };
     FILE *pFile = NULL; /* stream pointer */
     size_t octets_written = 0;
     size_t octet_count = 0;
@@ -286,6 +286,10 @@ int main(int argc, char *argv[])
     /* decode the command line parameters */
     Target_Device_Object_Instance = strtol(argv[1], NULL, 0);
     Target_File_Object_Instance = strtol(argv[2], NULL, 0);
+    if (!filename_path_valid(argv[3])) {
+        fprintf(stderr, "Invalid file path: %s\n", argv[3]);
+        return 1;
+    }
     Local_File_Name = argv[3];
     if (Target_Device_Object_Instance > BACNET_MAX_INSTANCE) {
         fprintf(

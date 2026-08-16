@@ -63,7 +63,7 @@ static uint8_t Rx_Buf[MAX_MPDU] = { 0 };
 #define INTERVAL 5
 
 typedef struct {
-    char *binary_state;
+    const char *binary_state;
     float analog_value;
 } TestValue;
 
@@ -102,7 +102,8 @@ static object_functions_t My_Object_Table[] = {
       NULL,
       NULL,
       NULL,
-      NULL },
+      NULL,
+      Device_Writable_Property_List },
 
     /* Analog Value (Read-Only) */
     { OBJECT_ANALOG_VALUE,
@@ -124,7 +125,8 @@ static object_functions_t My_Object_Table[] = {
       NULL,
       Analog_Value_Create,
       Analog_Value_Delete,
-      NULL },
+      NULL,
+      Analog_Value_Writable_Property_List },
 
     /* Analog Output (Commandable) */
     { OBJECT_ANALOG_OUTPUT,
@@ -146,7 +148,8 @@ static object_functions_t My_Object_Table[] = {
       NULL,
       Analog_Output_Create,
       Analog_Output_Delete,
-      NULL },
+      NULL,
+      Analog_Output_Writable_Property_List },
 
     /* Binary Output (Commandable) */
     { OBJECT_BINARY_OUTPUT,
@@ -168,7 +171,8 @@ static object_functions_t My_Object_Table[] = {
       NULL,
       Binary_Output_Create,
       Binary_Output_Delete,
-      NULL },
+      NULL,
+      Binary_Output_Writable_Property_List },
 
     /* Binary Value (Read-Only) */
     { OBJECT_BINARY_VALUE,
@@ -190,9 +194,11 @@ static object_functions_t My_Object_Table[] = {
       NULL,
       Binary_Value_Create,
       Binary_Value_Delete,
-      NULL },
+      NULL,
+      Binary_Value_Writable_Property_List },
 
     { MAX_BACNET_OBJECT_TYPE,
+      NULL,
       NULL,
       NULL,
       NULL,
@@ -227,7 +233,7 @@ static void process_task(void)
     if (!Analog_Value_Out_Of_Service(av_instance)) {
         Analog_Value_Present_Value_Set(
             av_instance, next_value.analog_value, BACNET_NO_PRIORITY);
-        printf("AV-0 updated to: %.1f\n", next_value.analog_value);
+        printf("AV-0 updated to: %.1f\n", (double)next_value.analog_value);
     }
 
     if (!Binary_Value_Out_Of_Service(bv_instance)) {

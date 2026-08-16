@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 project(
   bacnet-stack
-  VERSION 1.5.0
+  VERSION 1.7.0
   LANGUAGES C)
 
 #
@@ -84,6 +84,11 @@ option(
   "compile with secure-connect support"
   OFF)
 
+option(
+  BACNET_SEGMENTATION_ENABLED
+  "enable segmentation"
+  ON)
+
 if(NOT (BACDL_ETHERNET OR
         BACDL_MSTP OR
         BACDL_ARCNET OR
@@ -100,7 +105,28 @@ option(
   "build with uci"
   OFF)
 
-set(BACNET_PROTOCOL_REVISION 24)
+option(
+  BACNET_BACKUP_RESTORE
+  "enable backup and restore support"
+  ON)
+
+option(
+  INTRINSIC_REPORTING
+  "enable intrinsic reporting"
+  OFF)
+
+set(
+  BACNET_DEFINES
+  ""
+  CACHE STRING
+  "Extra compile definitions (e.g. MAX_NUM_DEVICES=30;MAX_TREND_LOGS=30)"
+)
+
+if(BACNET_DEFINES)
+  add_compile_definitions(${BACNET_DEFINES})
+endif()
+
+set(BACNET_PROTOCOL_REVISION 28)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -144,14 +170,26 @@ if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "AppleCla
   # embedded
   add_compile_options(-Wno-sign-conversion -Wno-conversion)
   add_compile_options(-Wno-sign-compare)
-
+  add_compile_options(-Wno-implicit-fallthrough)
+  # common practice to intialize all local variables to zero or NULL
+  # even if they are not used before being set to something else.
+  add_compile_options(-Wno-unused-but-set-variable)
   if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "AppleClang")
     # Just noise from clang
     add_compile_options(-Wno-gnu-zero-variadic-macro-arguments)
 
+    # don't warn about ignored qualifiers often used for initializing C strings.
+    add_compile_options(-Wno-ignored-qualifiers)
+    add_compile_options(-Wno-incompatible-pointer-types-discards-qualifiers)
+
     # Clang does not like _Bool which is not C90. We could fix this at some
     # point.
     add_compile_options(-Wno-c99-extensions)
+  endif()
+
+  if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+    # don't warn about discarded qualifiers often used for initializing C strings.
+    add_compile_options(-Wno-discarded-qualifiers)
   endif()
 
   if (APPLE)
@@ -170,13 +208,6 @@ if (CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "AppleCla
     add_compile_options(-Wno-nullability-extension)
   endif()
 
-  # Should be fixed in a future.
-  add_compile_options(-Wno-cast-qual)
-  add_compile_options(-Wno-double-promotion)
-  add_compile_options(-Wno-float-conversion)
-  add_compile_options(-Wno-missing-declarations)
-  add_compile_options(-Wno-unused-but-set-variable)
-  add_compile_options(-Wno-write-strings)
 elseif(MSVC)
   add_compile_options(/Wall)
 
@@ -227,7 +258,10 @@ if(BACDL_BSC)
   find_package(PkgConfig)
   pkg_check_modules(LIB_WEBSOCKETS REQUIRED libwebsockets)
   #libwebsocket need C99 with variadic-macros
-  add_compile_options(-Wno-variadic-macros)
+  #MSVC has no such warning and rejects the option as an invalid argument
+  if(NOT MSVC)
+    add_compile_options(-Wno-variadic-macros)
+  endif()
   find_package(OpenSSL)
 endif()
 
@@ -259,9 +293,9 @@ add_library(${PROJECT_NAME}
   src/bacnet/assigned_access_rights.c
   src/bacnet/assigned_access_rights.h
   src/bacnet/authentication_factor.c
+  src/bacnet/authentication_factor.h
   src/bacnet/authentication_factor_format.c
   src/bacnet/authentication_factor_format.h
-  src/bacnet/authentication_factor.h
   src/bacnet/awf.c
   src/bacnet/awf.h
   src/bacnet/bacaddr.c
@@ -318,6 +352,8 @@ add_library(${PROJECT_NAME}
   $<$<BOOL:${BACDL_BIP6}>:src/bacnet/basic/bbmd6/vmac.h>
   $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/bzllvmac.c>
   $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/bzllvmac.h>
+  $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/h_bzll.c>
+  $<$<BOOL:${BACDL_ZIGBEE}>:src/bacnet/basic/bzll/h_bzll.h>
   $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.c>
   $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bvlc-sc.h>
   $<$<BOOL:${BACDL_BSC}>:src/bacnet/datalink/bsc/bsc-socket.c>
@@ -342,6 +378,14 @@ add_library(${PROJECT_NAME}
   $<$<BOOL:${BAC_ROUTING}>:src/bacnet/basic/npdu/h_routed_npdu.h>
   src/bacnet/basic/npdu/s_router.c
   src/bacnet/basic/npdu/s_router.h
+  src/bacnet/basic/client/bac-data.c
+  src/bacnet/basic/client/bac-data.h
+  src/bacnet/basic/client/bac-discover.c
+  src/bacnet/basic/client/bac-discover.h
+  src/bacnet/basic/client/bac-rw.c
+  src/bacnet/basic/client/bac-rw.h
+  src/bacnet/basic/client/bac-task.c
+  src/bacnet/basic/client/bac-task.h
   src/bacnet/basic/object/access_credential.c
   src/bacnet/basic/object/access_credential.h
   src/bacnet/basic/object/access_door.c
@@ -360,10 +404,14 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/object/auditlog.h
   src/bacnet/basic/object/ai.c
   src/bacnet/basic/object/ai.h
+  src/bacnet/basic/object/alert_enrollment.c
+  src/bacnet/basic/object/alert_enrollment.h
   src/bacnet/basic/object/ao.c
   src/bacnet/basic/object/ao.h
   src/bacnet/basic/object/av.c
   src/bacnet/basic/object/av.h
+  src/bacnet/basic/object/averaging.c
+  src/bacnet/basic/object/averaging.h
   src/bacnet/basic/object/bacfile.c
   src/bacnet/basic/object/bacfile.h
   src/bacnet/basic/object/bi.c
@@ -474,6 +522,10 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/service/h_list_element.h
   src/bacnet/basic/service/h_noserv.c
   src/bacnet/basic/service/h_noserv.h
+  src/bacnet/basic/service/h_pt.c
+  src/bacnet/basic/service/h_pt.h
+  src/bacnet/basic/service/h_pt_a.c
+  src/bacnet/basic/service/h_pt_a.h
   src/bacnet/basic/service/h_rd.c
   src/bacnet/basic/service/h_rd.h
   src/bacnet/basic/service/h_rp_a.c
@@ -542,6 +594,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/service/s_list_element.h
   src/bacnet/basic/service/s_lso.c
   src/bacnet/basic/service/s_lso.h
+  src/bacnet/basic/service/s_pt.c
+  src/bacnet/basic/service/s_pt.h
   src/bacnet/basic/service/s_rd.c
   src/bacnet/basic/service/s_rd.h
   src/bacnet/basic/service/s_readrange.c
@@ -602,6 +656,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/basic/sys/ringbuf.h
   src/bacnet/basic/sys/sbuf.c
   src/bacnet/basic/sys/sbuf.h
+  src/bacnet/basic/sys/state_name.c
+  src/bacnet/basic/sys/state_name.h
   src/bacnet/basic/tsm/tsm.c
   src/bacnet/basic/tsm/tsm.h
   src/bacnet/basic/sys/bits.h
@@ -634,10 +690,10 @@ add_library(${PROJECT_NAME}
   src/bacnet/datalink/dlenv.h
   src/bacnet/datalink/dlmstp.h
   src/bacnet/datalink/ethernet.h
-  src/bacnet/datalink/mstp.c
+  $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/mstp.c>
   src/bacnet/datalink/mstpdef.h
   src/bacnet/datalink/mstp.h
-  src/bacnet/datalink/mstptext.c
+  $<$<BOOL:${BACDL_MSTP}>:src/bacnet/datalink/mstptext.c>
   src/bacnet/datalink/mstptext.h
   src/bacnet/datetime.c
   src/bacnet/datetime.h
@@ -685,6 +741,8 @@ add_library(${PROJECT_NAME}
   src/bacnet/rp.h
   src/bacnet/rpm.c
   src/bacnet/rpm.h
+  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.c>
+  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:src/bacnet/segmentack.h>
   src/bacnet/shed_level.c
   src/bacnet/shed_level.h
   src/bacnet/timer_value.c
@@ -738,7 +796,10 @@ target_compile_definitions(
   $<$<BOOL:${BACDL_NONE}>:BACDL_NONE>
   $<$<BOOL:${BACNET_PROPERTY_LISTS}>:BACNET_PROPERTY_LISTS=1>
   $<$<BOOL:${BAC_ROUTING}>:BAC_ROUTING>
+  $<$<BOOL:${BACNET_SEGMENTATION_ENABLED}>:BACNET_SEGMENTATION_ENABLED=1>
+  $<$<BOOL:${BACNET_BACKUP_RESTORE}>:BACNET_BACKUP_RESTORE>
   $<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:BACNET_STACK_STATIC_DEFINE>
+  $<$<BOOL:${INTRINSIC_REPORTING}>:INTRINSIC_REPORTING>
   PRIVATE
   PRINT_ENABLED=1)
 
@@ -775,7 +836,6 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     ports/posix/bacfile-posix.h
     $<$<BOOL:${BACDL_BIP}>:ports/linux/bip-init.c>
     $<$<BOOL:${BACDL_BIP6}>:ports/linux/bip6.c>
-    $<$<BOOL:${BACDL_ZIGBEE}>:ports/linux/bzll-init.c>
     $<$<BOOL:${BACDL_ARCNET}>:ports/linux/arcnet.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/linux/rs485.h>
@@ -808,7 +868,6 @@ elseif(WIN32)
     ports/posix/bacfile-posix.h
     $<$<BOOL:${BACDL_BIP6}>:ports/win32/bip6.c>
     $<$<BOOL:${BACDL_BIP}>:ports/win32/bip-init.c>
-    $<$<BOOL:${BACDL_ZIGBEE}>:ports/win32/bzll-init.c>
     ports/win32/datetime-init.c
     $<$<BOOL:${BACDL_MSTP}>:ports/win32/dlmstp.c>
     #  ports/win32/dlmstp-mm.c
@@ -860,7 +919,6 @@ elseif(APPLE)
     ports/posix/bacfile-posix.c
     ports/posix/bacfile-posix.h
     $<$<BOOL:${BACDL_BIP}>:ports/bsd/bip-init.c>
-    $<$<BOOL:${BACDL_ZIGBEE}>:ports/bsd/bzll-init.c>
     $<$<BOOL:${BACDL_BIP6}>:ports/bsd/bip6.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/bsd/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/bsd/rs485.h>
@@ -916,7 +974,6 @@ elseif(${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
     ports/posix/bacfile-posix.c
     ports/posix/bacfile-posix.h
     $<$<BOOL:${BACDL_BIP}>:ports/bsd/bip-init.c>
-    $<$<BOOL:${BACDL_ZIGBEE}>:ports/bsd/bzll-init.c>
     $<$<BOOL:${BACDL_BIP6}>:ports/bsd/bip6.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/bsd/rs485.c>
     $<$<BOOL:${BACDL_MSTP}>:ports/bsd/rs485.h>
@@ -1000,6 +1057,15 @@ if(BACNET_STACK_BUILD_APPS)
     )
   endif()
 
+  if(BAC_ROUTING)
+    add_executable(gateway2 apps/gateway2/main.c apps/gateway2/gateway.h)
+    target_link_libraries(gateway2 PRIVATE ${PROJECT_NAME})
+    target_compile_options(gateway2 PRIVATE
+      # Unreachable code because we have endless loop.
+      $<$<C_COMPILER_ID:MSVC>:/wd4702>
+    )
+  endif()
+
   add_executable(getevent apps/getevent/main.c)
   target_link_libraries(getevent PRIVATE ${PROJECT_NAME})
 
@@ -1011,6 +1077,9 @@ if(BACNET_STACK_BUILD_APPS)
 
   add_executable(initrouter apps/initrouter/main.c)
   target_link_libraries(initrouter PRIVATE ${PROJECT_NAME})
+
+  add_executable(dmbrcap apps/dmbrcap/main.c)
+  target_link_libraries(dmbrcap PRIVATE ${PROJECT_NAME})
 
   if(BACDL_MSTP)
     add_executable(mstpcap apps/mstpcap/main.c)
@@ -1049,6 +1118,7 @@ if(BACNET_STACK_BUILD_APPS)
       src/bacnet/basic/server/bacnet_basic.c
       src/bacnet/basic/server/bacnet_device.c
       src/bacnet/basic/server/bacnet_port.c
+      src/bacnet/basic/server/bacnet_port_bzll.c
       src/bacnet/basic/server/bacnet_port_ipv4.c
       src/bacnet/basic/server/bacnet_port_ipv6.c
       src/bacnet/basic/server/bacnet_port_mstp.c
@@ -1165,6 +1235,21 @@ if(BACNET_STACK_BUILD_APPS)
     )
   endif()
 
+  # Modbus Gateway - POSIX only (uses serial port / Modbus RTU)
+  if(NOT WIN32)
+    add_executable(modbusgw
+      apps/modbus-gateway/main.c
+      apps/modbus-gateway/point_table.c
+      apps/modbus-gateway/modbus_rtu.c
+      src/bacnet/basic/sys/cJSON.c)
+    target_include_directories(modbusgw PRIVATE
+      apps/modbus-gateway
+      src/bacnet/basic/sys)
+    target_link_libraries(modbusgw PRIVATE ${PROJECT_NAME} m)
+  else()
+    message(STATUS "BACNET: modbusgw skipped (Windows/MinGW not supported)")
+  endif()
+
   if(BACDL_BIP AND BACDL_BIP6)
     add_executable(
       router-ipv6
@@ -1202,6 +1287,9 @@ if(BACNET_STACK_BUILD_APPS)
 
   add_executable(uptransfer apps/uptransfer/main.c)
   target_link_libraries(uptransfer PRIVATE ${PROJECT_NAME})
+
+  add_executable(ptransfer apps/ptransfer/main.c)
+  target_link_libraries(ptransfer PRIVATE ${PROJECT_NAME})
 
   add_executable(whoami apps/who-am-i/main.c)
   target_link_libraries(whoami PRIVATE ${PROJECT_NAME})
@@ -1304,3 +1392,5 @@ message(STATUS "BACNET: BACDL_ARCNET:...................\"${BACDL_ARCNET}\"")
 message(STATUS "BACNET: BACDL_MSTP:.....................\"${BACDL_MSTP}\"")
 message(STATUS "BACNET: BACDL_ZIGBEE:...................\"${BACDL_ZIGBEE}\"")
 message(STATUS "BACNET: BACDL_ETHERNET:.................\"${BACDL_ETHERNET}\"")
+message(STATUS "BACNET: BACNET_SEGMENTATION_ENABLED:....\"${BACNET_SEGMENTATION_ENABLED}\"")
+message(STATUS "BACNET: BACNET_BACKUP_RESTORE:..........\"${BACNET_BACKUP_RESTORE}\"")

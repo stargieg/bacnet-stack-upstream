@@ -66,6 +66,9 @@ void Analog_Input_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void Analog_Input_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 
 BACNET_STACK_EXPORT
 bool Analog_Input_Valid_Instance(uint32_t object_instance);
@@ -101,6 +104,9 @@ BACNET_STACK_EXPORT
 bool Analog_Input_Units_Set(uint32_t instance, BACNET_ENGINEERING_UNITS units);
 BACNET_STACK_EXPORT
 BACNET_ENGINEERING_UNITS Analog_Input_Units(uint32_t instance);
+
+BACNET_STACK_EXPORT
+unsigned Analog_Input_Event_State(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 int Analog_Input_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);

@@ -10,7 +10,7 @@
 #include "bacnet/bacdef.h"
 /* BACnet Stack API */
 #include "bacnet/bacdcode.h"
-#include "bacnet/whoami.h"
+#include "bacnet/youare.h"
 
 /**
  * @brief Encode a You-Are-Request APDU
@@ -64,7 +64,7 @@ int you_are_request_encode(
         apdu += len;
     }
     if (device_id < BACNET_MAX_INSTANCE) {
-        len = encode_application_unsigned(apdu, device_id);
+        len = encode_application_object_id(apdu, OBJECT_DEVICE, device_id);
         apdu_len += len;
         if (apdu) {
             apdu += len;
@@ -148,6 +148,8 @@ int you_are_request_decode(
 {
     int len = 0, apdu_len = 0;
     BACNET_UNSIGNED_INTEGER unsigned_value = 0;
+    BACNET_OBJECT_TYPE object_type;
+    uint32_t object_instance;
 
     if (!apdu) {
         return BACNET_STATUS_ERROR;
@@ -169,6 +171,7 @@ int you_are_request_decode(
         return BACNET_STATUS_ERROR;
     }
     apdu_len += len;
+    characterstring_init_ansi(model_name, "");
     len = bacnet_character_string_application_decode(
         &apdu[apdu_len], apdu_size - apdu_len, model_name);
     if (len > 0) {
@@ -176,6 +179,7 @@ int you_are_request_decode(
     } else {
         return BACNET_STATUS_ERROR;
     }
+    characterstring_init_ansi(serial_number, "");
     len = bacnet_character_string_application_decode(
         &apdu[apdu_len], apdu_size - apdu_len, serial_number);
     if (len > 0) {
@@ -183,16 +187,15 @@ int you_are_request_decode(
     } else {
         return BACNET_STATUS_ERROR;
     }
-    len = bacnet_unsigned_application_decode(
-        &apdu[apdu_len], apdu_size - apdu_len, &unsigned_value);
+    len = bacnet_object_id_application_decode(
+        &apdu[apdu_len], apdu_size - apdu_len, &object_type, &object_instance);
     if (len > 0) {
         apdu_len += len;
-        if (unsigned_value <= UINT32_MAX) {
-            if (device_id) {
-                *device_id = (uint32_t)unsigned_value;
-            }
-        } else {
+        if (object_type != OBJECT_DEVICE) {
             return BACNET_STATUS_ERROR;
+        }
+        if (device_id) {
+            *device_id = object_instance;
         }
     } else if (len == 0) {
         /* optional - skip apdu_len increment */
@@ -202,6 +205,7 @@ int you_are_request_decode(
     } else {
         return BACNET_STATUS_ERROR;
     }
+    octetstring_init(mac_address, NULL, 0);
     len = bacnet_octet_string_application_decode(
         &apdu[apdu_len], apdu_size - apdu_len, mac_address);
     if (len > 0) {

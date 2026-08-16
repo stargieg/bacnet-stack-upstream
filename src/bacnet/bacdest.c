@@ -126,6 +126,28 @@ void bacnet_recipient_address_set(
 }
 
 /**
+ * @brief Inspect the BACnetRecipient data structure for valid router address
+ * @param recipient - BACnetRecipient structure
+ * @return true if BACnetRecipient is a valid address
+ */
+bool bacnet_recipient_address_router_unknown(const BACNET_RECIPIENT *recipient)
+{
+    bool status = false;
+
+    if (recipient) {
+        if ((recipient->tag == BACNET_RECIPIENT_TAG_ADDRESS) &&
+            (recipient->type.address.net != 0) &&
+            (recipient->type.address.net != BACNET_BROADCAST_NETWORK) &&
+            (recipient->type.address.len != 0) &&
+            (recipient->type.address.mac_len == 0)) {
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
  * @brief Copy the BACnetRecipient complex data from src to dest
  * @param src - BACnetRecipient 1 structure
  * @param dest - BACnetRecipient 2 structure
@@ -537,6 +559,53 @@ int bacnet_recipient_encode(uint8_t *apdu, const BACNET_RECIPIENT *recipient)
 }
 
 /**
+ * @brief Encode a list of BACnetRecipient complex data types
+ * @param apdu  Pointer to the buffer for encoding.
+ * @param list_head  Pointer to the head of the linked list of BACnetRecipient
+ * @return bytes encoded or zero if nothing is encoded
+ */
+int bacnet_recipient_list_encode(
+    uint8_t *apdu, BACNET_RECIPIENT_LIST *list_head)
+{
+    int apdu_len = 0, len = 0;
+    BACNET_RECIPIENT_LIST *list_entry;
+
+    if (!list_head) {
+        /* encoded nothing */
+        return 0;
+    }
+    /* how big? */
+    list_entry = list_head;
+    while (list_entry != NULL) {
+        len = bacnet_recipient_encode(apdu, &list_entry->recipient);
+        apdu_len += len;
+        if (apdu) {
+            apdu += len;
+        }
+        list_entry = list_entry->next;
+    }
+
+    return apdu_len;
+}
+
+/**
+ * @brief Convert an array of BACnetRecipient to linked list
+ * @param array pointer to element zero of the array
+ * @param size number of elements in the array
+ */
+void bacnet_recipient_list_link_array(BACNET_RECIPIENT_LIST *array, size_t size)
+{
+    size_t i = 0;
+
+    for (i = 0; i < size; i++) {
+        if (i > 0) {
+            array[i - 1].next = &array[i];
+        }
+        array[i].next = NULL;
+    }
+}
+
+/**
  * @brief Encode a BACnetRecipient complex data type
  * @param apdu - the APDU buffer
  * @param tag_number - context tag number
@@ -662,6 +731,175 @@ int bacnet_recipient_context_decode(
     apdu_len += len;
 
     return apdu_len;
+}
+
+/**
+ * @brief Encode the BACnetRecipientProcess complex data
+ *
+ * BACnetRecipientProcess ::= SEQUENCE {
+ *      recipient[0] BACnetRecipient,
+ *      process-identifier[1] Unsigned32
+ * }
+ *
+ * @param apdu  Pointer to the buffer for encoding.
+ * @param recipient_process  Pointer to the property data to be encoded.
+ *
+ * @return bytes encoded or #BACNET_STATUS_REJECT on error.
+ */
+int bacnet_recipient_process_encode(
+    uint8_t *apdu, const BACNET_RECIPIENT_PROCESS *recipient_process)
+{
+    int apdu_len = 0, len = 0;
+
+    if (recipient_process) {
+        len = bacnet_recipient_context_encode(
+            apdu, 0, &recipient_process->recipient);
+        apdu_len += len;
+        if (apdu) {
+            apdu += len;
+        }
+        /* Process Identifier - Unsigned32 */
+        len = encode_context_unsigned(
+            apdu, 1, recipient_process->process_identifier);
+        apdu_len += len;
+    }
+
+    return apdu_len;
+}
+
+/**
+ * @brief Encode a BACnetRecipientProcess complex data type
+ * @param apdu - the APDU buffer
+ * @param tag_number - context tag number
+ * @param recipient_process  Pointer to the property data to be encoded.
+ * @return length of the APDU buffer, or 0 if not able to encode
+ */
+int bacnet_recipient_process_context_encode(
+    uint8_t *apdu,
+    uint8_t tag_number,
+    const BACNET_RECIPIENT_PROCESS *recipient_process)
+{
+    int len = 0;
+    int apdu_len = 0;
+
+    if (recipient_process) {
+        len = encode_opening_tag(apdu, tag_number);
+        apdu_len += len;
+        if (apdu) {
+            apdu += len;
+        }
+        len = bacnet_recipient_process_encode(apdu, recipient_process);
+        apdu_len += len;
+        if (apdu) {
+            apdu += len;
+        }
+        len = encode_closing_tag(apdu, tag_number);
+        apdu_len += len;
+    }
+
+    return apdu_len;
+}
+
+/**
+ * @brief Decode the BACnetRecipientProcess complex data
+ *
+ * BACnetRecipientProcess ::= SEQUENCE {
+ *      recipient[0] BACnetRecipient,
+ *      process-identifier[1] Unsigned32
+ * }
+ *
+ * @param apdu  Pointer to the buffer for decoding.
+ * @param apdu_size  Size of the APDU buffer.
+ * @param recipient_process  Pointer to the property data to be decoded.
+ *
+ * @return bytes decoded or #BACNET_STATUS_ERROR on error.
+ */
+int bacnet_recipient_process_decode(
+    const uint8_t *apdu,
+    int apdu_size,
+    BACNET_RECIPIENT_PROCESS *recipient_process)
+{
+    int len = 0, apdu_len = 0;
+    BACNET_RECIPIENT recipient = { 0 };
+    BACNET_UNSIGNED_INTEGER unsigned_value = 0;
+
+    if (!apdu) {
+        return BACNET_STATUS_ERROR;
+    }
+    /* Recipient */
+    len = bacnet_recipient_context_decode(
+        &apdu[apdu_len], apdu_size - apdu_len, 0, &recipient);
+    if (len <= 0) {
+        return BACNET_STATUS_ERROR;
+    }
+    if (recipient_process) {
+        bacnet_recipient_copy(&recipient_process->recipient, &recipient);
+    }
+    apdu_len += len;
+    /* Process Identifier */
+    len = bacnet_unsigned_context_decode(
+        &apdu[apdu_len], apdu_size - apdu_len, 1, &unsigned_value);
+    if (len <= 0) {
+        return BACNET_STATUS_ERROR;
+    }
+    if (recipient_process) {
+        recipient_process->process_identifier = unsigned_value;
+    }
+    apdu_len += len;
+
+    return apdu_len;
+}
+
+/**
+ * @brief Decode a BACnetRecipientProcess complex data type
+ * @param apdu  Pointer to the APDU buffer.
+ * @param apdu_size - the APDU buffer length
+ * @param tag_number  The tag number that shall hold the time stamp.
+ * @param value  Pointer to the variable that shall take the time stamp values.
+ * @return number of bytes decoded, zero on opening tag mismatch,
+ *  or BACNET_STATUS_ERROR if an error occurs
+ */
+int bacnet_recipient_process_context_decode(
+    const uint8_t *apdu,
+    uint32_t apdu_size,
+    uint8_t tag_number,
+    BACNET_RECIPIENT_PROCESS *value)
+{
+    int len = 0;
+    int apdu_len = 0;
+
+    if (!bacnet_is_opening_tag_number(
+            &apdu[apdu_len], apdu_size - apdu_len, tag_number, &len)) {
+        return 0;
+    }
+    apdu_len += len;
+    len = bacnet_recipient_process_decode(
+        &apdu[apdu_len], apdu_size - apdu_len, value);
+    if (len < 0) {
+        return BACNET_STATUS_ERROR;
+    }
+    apdu_len += len;
+    if (!bacnet_is_closing_tag_number(
+            &apdu[apdu_len], apdu_size - apdu_len, tag_number, &len)) {
+        return BACNET_STATUS_ERROR;
+    }
+    apdu_len += len;
+
+    return apdu_len;
+}
+
+/**
+ * @brief Copy the BACnetRecipientProcess complex data from src to dest
+ * @param dest - BACnetRecipientProcess 1 structure
+ * @param src - BACnetRecipientProcess 2 structure
+ */
+void bacnet_recipient_process_copy(
+    BACNET_RECIPIENT_PROCESS *dest, const BACNET_RECIPIENT_PROCESS *src)
+{
+    if (dest && src) {
+        dest->process_identifier = src->process_identifier;
+        bacnet_recipient_copy(&dest->recipient, &src->recipient);
+    }
 }
 
 /**

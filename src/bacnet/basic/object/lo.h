@@ -27,6 +27,10 @@ void Lighting_Output_Property_Lists(
     const int32_t **pOptional,
     const int32_t **pProprietary);
 BACNET_STACK_EXPORT
+void Lighting_Output_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
+
+BACNET_STACK_EXPORT
 bool Lighting_Output_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 unsigned Lighting_Output_Count(void);
@@ -88,6 +92,9 @@ bool Lighting_Output_Trim_Fade_Time_Set(
 
 BACNET_STACK_EXPORT
 bool Lighting_Output_Overridden_Set(uint32_t object_instance, float value);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Overridden_Ramp(
+    uint32_t object_instance, float value, float ramp_rate);
 BACNET_STACK_EXPORT
 bool Lighting_Output_Overridden_Clear(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -198,6 +205,17 @@ bool Lighting_Output_Default_Priority_Set(
     uint32_t object_instance, unsigned priority);
 
 BACNET_STACK_EXPORT
+float Lighting_Output_Min_Actual_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Min_Actual_Value_Set(
+    uint32_t object_instance, float value);
+BACNET_STACK_EXPORT
+float Lighting_Output_Max_Actual_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Lighting_Output_Max_Actual_Value_Set(
+    uint32_t object_instance, float value);
+
+BACNET_STACK_EXPORT
 bool Lighting_Output_Color_Override(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Lighting_Output_Color_Override_Set(uint32_t object_instance, bool value);
@@ -240,9 +258,17 @@ void Lighting_Output_Write_Present_Value_Callback_Set(
     lighting_command_tracking_value_callback cb);
 
 BACNET_STACK_EXPORT
+void Lighting_Output_Write_Lighting_Command_Callback_Set(
+    lighting_command_event_callback cb);
+
+BACNET_STACK_EXPORT
 void *Lighting_Output_Context_Get(uint32_t object_instance);
 BACNET_STACK_EXPORT
 void Lighting_Output_Context_Set(uint32_t object_instance, void *context);
+
+BACNET_STACK_EXPORT
+BACNET_LIGHTING_COMMAND_DATA *
+Lighting_Output_Lighting_Command_Data(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 uint32_t Lighting_Output_Create(uint32_t object_instance);

@@ -17,12 +17,19 @@
 #include "bacnet/proplist.h"
 #include "bacnet/wp.h"
 #include "bacnet/basic/services.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 /* me! */
 #include "access_rights.h"
 
 static bool Access_Rights_Initialized = false;
 
-static ACCESS_RIGHTS_DESCR ar_descr[MAX_ACCESS_RIGHTSS];
+static ACCESS_RIGHTS_DESCR ar_descrs[MAX_NUM_DEVICES][MAX_ACCESS_RIGHTS];
+#ifdef BAC_ROUTING
+#define ar_descr (ar_descrs[Routed_Device_Object_Index()])
+#else
+#define ar_descr (ar_descrs[0])
+#endif
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Properties_Required[] = {
@@ -43,6 +50,15 @@ static const int32_t Properties_Optional[] = { -1 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of writable properties */
+    PROP_GLOBAL_IDENTIFIER, -1
+};
+
 void Access_Rights_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
@@ -61,23 +77,54 @@ void Access_Rights_Property_Lists(
     return;
 }
 
+/**
+ * @brief Get the list of writable properties for an Access Rights object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Access_Rights_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
+
+/**
+ * @brief Initialize the Access Rights Object data
+ */
 void Access_Rights_Init(void)
 {
     unsigned i;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
     if (!Access_Rights_Initialized) {
         Access_Rights_Initialized = true;
 
-        for (i = 0; i < MAX_ACCESS_RIGHTSS; i++) {
-            ar_descr[i].global_identifier =
-                0; /* set to some meaningful value */
-            ar_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
-            ar_descr[i].enable = false;
-            ar_descr[i].negative_access_rules_count = 0;
-            ar_descr[i].positive_access_rules_count = 0;
-            /* fill in the positive and negative access rules with proper ids */
+        for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+            Set_Routed_Device_Object_Index(dev_id);
+#endif
+            for (i = 0; i < MAX_ACCESS_RIGHTS; i++) {
+                ar_descr[i].global_identifier =
+                    0; /* set to some meaningful value */
+                ar_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
+                ar_descr[i].enable = false;
+                ar_descr[i].negative_access_rules_count = 0;
+                ar_descr[i].positive_access_rules_count = 0;
+                /* fill in the positive and negative access rules with proper
+                 * ids */
+            }
         }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 
     return;
 }
@@ -87,7 +134,7 @@ void Access_Rights_Init(void)
 /* given instance exists */
 bool Access_Rights_Valid_Instance(uint32_t object_instance)
 {
-    if (object_instance < MAX_ACCESS_RIGHTSS) {
+    if (object_instance < MAX_ACCESS_RIGHTS) {
         return true;
     }
 
@@ -98,7 +145,7 @@ bool Access_Rights_Valid_Instance(uint32_t object_instance)
 /* more complex, and then count how many you have */
 unsigned Access_Rights_Count(void)
 {
-    return MAX_ACCESS_RIGHTSS;
+    return MAX_ACCESS_RIGHTS;
 }
 
 /* we simply have 0-n object instances.  Yours might be */
@@ -114,9 +161,9 @@ uint32_t Access_Rights_Index_To_Instance(unsigned index)
 /* that correlates to the correct instance number */
 unsigned Access_Rights_Instance_To_Index(uint32_t object_instance)
 {
-    unsigned index = MAX_ACCESS_RIGHTSS;
+    unsigned index = MAX_ACCESS_RIGHTS;
 
-    if (object_instance < MAX_ACCESS_RIGHTSS) {
+    if (object_instance < MAX_ACCESS_RIGHTS) {
         index = object_instance;
     }
 
@@ -130,7 +177,7 @@ bool Access_Rights_Object_Name(
     char text[32] = "";
     bool status = false;
 
-    if (object_instance < MAX_ACCESS_RIGHTSS) {
+    if (object_instance < MAX_ACCESS_RIGHTS) {
         snprintf(
             text, sizeof(text), "ACCESS RIGHTS %lu",
             (unsigned long)object_instance);
@@ -157,7 +204,7 @@ static int Negative_Access_Rules_Encode(
     BACNET_ACCESS_RULE *rule;
     uint32_t count;
 
-    if (object_instance < MAX_ACCESS_RIGHTSS) {
+    if (object_instance < MAX_ACCESS_RIGHTS) {
         count = ar_descr[object_instance].negative_access_rules_count;
         if (index < count) {
             rule = &ar_descr[object_instance].negative_access_rules[index];
@@ -185,7 +232,7 @@ static int Positive_Access_Rules_Encode(
     BACNET_ACCESS_RULE *rule;
     uint32_t count;
 
-    if (object_instance < MAX_ACCESS_RIGHTSS) {
+    if (object_instance < MAX_ACCESS_RIGHTS) {
         count = ar_descr[object_instance].positive_access_rules_count;
         if (index < count) {
             rule = &ar_descr[object_instance].positive_access_rules[index];
@@ -292,6 +339,10 @@ bool Access_Rights_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     unsigned object_index = 0;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);

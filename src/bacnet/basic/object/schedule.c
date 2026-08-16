@@ -15,15 +15,23 @@
 #include "bacnet/proplist.h"
 #include "bacnet/timestamp.h"
 #include "bacnet/basic/services.h"
+#include "bacnet/basic/sys/compare.h"
 #include "bacnet/basic/sys/debug.h"
-#include "bacnet/basic/object/device.h"
+#include "bacnet/basic/object/device.h" /* me */
 #include "bacnet/basic/object/schedule.h"
+
+#define UNUSED(v) (void)(v)
 
 #ifndef MAX_SCHEDULES
 #define MAX_SCHEDULES 4
 #endif
 
-static SCHEDULE_DESCR Schedule_Descr[MAX_SCHEDULES];
+static SCHEDULE_DESCR Schedule_Descrs[MAX_NUM_DEVICES][MAX_SCHEDULES];
+#ifdef BAC_ROUTING
+#define Schedule_Descr (Schedule_Descrs[Routed_Device_Object_Index()])
+#else
+#define Schedule_Descr (Schedule_Descrs[0])
+#endif
 
 static const int32_t Schedule_Properties_Required[] = {
     /* list of required properties */
@@ -52,6 +60,33 @@ static const int32_t Schedule_Properties_Optional[] = {
 
 static const int32_t Schedule_Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_OUT_OF_SERVICE,
+    PROP_WEEKLY_SCHEDULE,
+    PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES,
+    PROP_EFFECTIVE_PERIOD,
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+    PROP_EXCEPTION_SCHEDULE,
+#endif
+    -1
+};
+
+/**
+ * Returns the list of required, optional, and proprietary properties.
+ * Used by ReadPropertyMultiple service.
+ *
+ * @param pRequired - pointer to list of int terminated by -1, of
+ * BACnet required properties for this object.
+ * @param pOptional - pointer to list of int terminated by -1, of
+ * BACnet optional properties for this object.
+ * @param pProprietary - pointer to list of int terminated by -1, of
+ * BACnet proprietary properties for this object.
+ */
 void Schedule_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
@@ -65,6 +100,20 @@ void Schedule_Property_Lists(
     }
     if (pProprietary) {
         *pProprietary = Schedule_Properties_Proprietary;
+    }
+}
+
+/**
+ * @brief Get the list of writable properties for a Schedule object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Schedule_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
     }
 }
 
@@ -91,12 +140,16 @@ SCHEDULE_DESCR *Schedule_Object(uint32_t object_instance)
  */
 void Schedule_Init(void)
 {
+    uint16_t dev_id;
     unsigned i, j;
     BACNET_DATE start_date = { 0 }, end_date = { 0 };
     SCHEDULE_DESCR *psched;
 #if BACNET_EXCEPTION_SCHEDULE_SIZE
     unsigned e;
     BACNET_SPECIAL_EVENT *event;
+#endif
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
 #endif
 
     /* whole year, change as necessary */
@@ -106,38 +159,49 @@ void Schedule_Init(void)
     datetime_set_date(&end_date, 0, 12, 31);
     datetime_wildcard_year_set(&end_date);
     datetime_wildcard_weekday_set(&end_date);
-    for (i = 0; i < MAX_SCHEDULES; i++, psched++) {
-        psched = &Schedule_Descr[i];
-        datetime_copy_date(&psched->Start_Date, &start_date);
-        datetime_copy_date(&psched->End_Date, &end_date);
-        for (j = 0; j < BACNET_WEEKLY_SCHEDULE_SIZE; j++) {
-            psched->Weekly_Schedule[j].TV_Count = 0;
-        }
-        memcpy(
-            &psched->Present_Value, &psched->Schedule_Default,
-            sizeof(psched->Present_Value));
-        psched->Schedule_Default.context_specific = false;
-        psched->Schedule_Default.tag = BACNET_APPLICATION_TAG_REAL;
-        psched->Schedule_Default.type.Real = 21.0f; /* 21 C, room temperature */
-        psched->obj_prop_ref_cnt = 0; /* no references, add as needed */
-        psched->Priority_For_Writing = 16; /* lowest priority */
-        psched->Out_Of_Service = false;
-#if BACNET_EXCEPTION_SCHEDULE_SIZE
-        for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
-            event = &psched->Exception_Schedule[e];
-            event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
-            event->period.calendarEntry.tag = BACNET_CALENDAR_DATE_RANGE;
-            datetime_copy_date(
-                &event->period.calendarEntry.type.DateRange.startdate,
-                &start_date);
-            datetime_copy_date(
-                &event->period.calendarEntry.type.DateRange.enddate, &end_date);
-            event->period.calendarEntry.next = NULL;
-            event->timeValues.TV_Count = 0;
-            event->priority = 16;
-        }
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
 #endif
+        for (i = 0; i < MAX_SCHEDULES; i++) {
+            psched = &Schedule_Descr[i];
+            datetime_copy_date(&psched->Start_Date, &start_date);
+            datetime_copy_date(&psched->End_Date, &end_date);
+            for (j = 0; j < BACNET_WEEKLY_SCHEDULE_SIZE; j++) {
+                psched->Weekly_Schedule[j].TV_Count = 0;
+            }
+            memcpy(
+                &psched->Present_Value, &psched->Schedule_Default,
+                sizeof(psched->Present_Value));
+            psched->Schedule_Default.context_specific = false;
+            psched->Schedule_Default.tag = BACNET_APPLICATION_TAG_REAL;
+            psched->Schedule_Default.type.Real =
+                21.0f; /* 21 C, room temperature */
+            psched->obj_prop_ref_cnt = 0; /* no references, add as needed */
+            psched->Priority_For_Writing = 16; /* lowest priority */
+            psched->Out_Of_Service = false;
+#if BACNET_EXCEPTION_SCHEDULE_SIZE
+            for (e = 0; e < BACNET_EXCEPTION_SCHEDULE_SIZE; e++) {
+                event = &psched->Exception_Schedule[e];
+                event->periodTag = BACNET_SPECIAL_EVENT_PERIOD_CALENDAR_ENTRY;
+                event->period.calendarEntry.tag = BACNET_CALENDAR_DATE_RANGE;
+                datetime_copy_date(
+                    &event->period.calendarEntry.type.DateRange.startdate,
+                    &start_date);
+                datetime_copy_date(
+                    &event->period.calendarEntry.type.DateRange.enddate,
+                    &end_date);
+                event->period.calendarEntry.next = NULL;
+                event->timeValues.TV_Count = 0;
+                event->priority = 16;
+            }
+#endif
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -267,7 +331,7 @@ bool Schedule_Weekly_Schedule_Set(
     if (pObject && (array_index < BACNET_WEEKLY_SCHEDULE_SIZE)) {
         memcpy(
             &pObject->Weekly_Schedule[array_index], value,
-            sizeof(BACNET_WEEKLY_SCHEDULE));
+            sizeof(pObject->Weekly_Schedule[array_index]));
         return true;
     }
 
@@ -592,7 +656,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
                 bacapp_encode_data(&apdu[0], &CurrentSC->Schedule_Default);
             break;
         case PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES:
-            imax = min(
+            imax = BACNET_MIN(
                 CurrentSC->obj_prop_ref_cnt, BACNET_SCHEDULE_OBJ_PROP_REF_SIZE);
             for (i = 0; i < imax; i++) {
                 apdu_len += bacapp_encode_device_obj_property_ref(
@@ -635,6 +699,8 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ *  if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -642,6 +708,7 @@ int Schedule_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata)
 static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -654,15 +721,18 @@ static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
     pObject = Schedule_Object(object_instance);
     if (pObject) {
         if (array_index == 0) {
+            /* This array is not required to be resizable
+                through BACnet write services */
+            (void)array_size;
             error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-        } else if (array_index <= BACNET_WEEKLY_SCHEDULE_SIZE) {
+        } else {
             array_index--;
             len = bacnet_dailyschedule_context_decode(
                 application_data, application_data_len, 0, &daily_schedule);
             if (len > 0) {
-                tv_size =
-                    min(daily_schedule.TV_Count,
-                        BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE);
+                tv_size = BACNET_MIN(
+                    daily_schedule.TV_Count,
+                    BACNET_DAILY_SCHEDULE_TIME_VALUES_SIZE);
                 for (tv = 0; tv < tv_size; tv++) {
                     /* copy the time value */
                     memcpy(
@@ -675,8 +745,6 @@ static BACNET_ERROR_CODE Schedule_Weekly_Schedule_Element_Write(
             } else {
                 error_code = ERROR_CODE_INVALID_DATA_TYPE;
             }
-        } else {
-            error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
         }
     }
 
@@ -712,6 +780,8 @@ static int Schedule_Weekly_Schedule_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ * if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -719,6 +789,7 @@ static int Schedule_Weekly_Schedule_Element_Length(
 static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -730,8 +801,11 @@ static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
     pObject = Schedule_Object(object_instance);
     if (pObject) {
         if (array_index == 0) {
+            /* This array is not required to be resizable
+               through BACnet write services */
+            (void)array_size;
             error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-        } else if (array_index <= BACNET_WEEKLY_SCHEDULE_SIZE) {
+        } else {
             array_index--;
             len = bacnet_special_event_decode(
                 application_data, application_data_len, &special_event);
@@ -742,8 +816,6 @@ static BACNET_ERROR_CODE Schedule_Exception_Schedule_Element_Write(
             } else {
                 error_code = ERROR_CODE_INVALID_DATA_TYPE;
             }
-        } else {
-            error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
         }
     }
 
@@ -779,6 +851,8 @@ static int Schedule_Exception_Schedule_Element_Length(
  * @param object_instance [in] BACnet network port object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ * if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -786,6 +860,7 @@ static int Schedule_Exception_Schedule_Element_Length(
 static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -798,8 +873,11 @@ static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
     pObject = Schedule_Object(object_instance);
     if (pObject) {
         if (array_index == 0) {
-            error_code = ERROR_CODE_PROPERTY_IS_NOT_AN_ARRAY;
-        } else if (array_index <= BACNET_SCHEDULE_OBJ_PROP_REF_SIZE) {
+            /* This array is not required to be resizable
+               through BACnet write services */
+            (void)array_size;
+            error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+        } else {
             len = bacapp_decode_known_property(
                 application_data, application_data_len, &value, OBJECT_SCHEDULE,
                 PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES);
@@ -821,8 +899,6 @@ static BACNET_ERROR_CODE Schedule_List_Of_Object_Property_References_Write(
             } else {
                 error_code = ERROR_CODE_ABORT_OTHER;
             }
-        } else {
-            error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
         }
     }
 
@@ -865,6 +941,10 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -941,8 +1021,8 @@ bool Schedule_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     Schedule_Properties_Required, Schedule_Properties_Optional,
                     Schedule_Properties_Proprietary,
                     wp_data->object_property)) {
-                debug_printf(
-                    "Schedule_Write_Property: %s\n",
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr, "Schedule_Write_Property: %s\n",
                     bactext_property_name(wp_data->object_property));
                 wp_data->error_class = ERROR_CLASS_PROPERTY;
                 wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
@@ -986,30 +1066,64 @@ bool Schedule_In_Effective_Period(
 void Schedule_Recalculate_PV(
     SCHEDULE_DESCR *desc, BACNET_WEEKDAY wday, const BACNET_TIME *time)
 {
-    int i;
+    int i, current, diff;
+    BACNET_TIME *tmptime;
+
+    if (!desc || !time || (wday < 1) || (wday > 7)) {
+        return;
+    }
     desc->Present_Value.tag = BACNET_APPLICATION_TAG_NULL;
 
     /* for future development, here should be the loop for Exception Schedule */
 
     /*  Note to developers: please ping Edward at info@connect-ex.com
         for a more complete schedule object implementation. */
-    for (i = 0; i < desc->Weekly_Schedule[wday - 1].TV_Count &&
-         desc->Present_Value.tag == BACNET_APPLICATION_TAG_NULL;
-         i++) {
-        int diff = datetime_wildcard_compare_time(
+    current = -1;
+    tmptime = NULL;
+    for (i = 0; i < desc->Weekly_Schedule[wday - 1].TV_Count; i++) {
+        diff = datetime_wildcard_compare_time(
             time, &desc->Weekly_Schedule[wday - 1].Time_Values[i].Time);
-        if (diff >= 0 &&
-            desc->Weekly_Schedule[wday - 1].Time_Values[i].Value.tag !=
-                BACNET_APPLICATION_TAG_NULL) {
-            bacnet_primitive_to_application_data_value(
-                &desc->Present_Value,
-                &desc->Weekly_Schedule[wday - 1].Time_Values[i].Value);
+        if (diff >= 0) {
+            if (tmptime == NULL) {
+                tmptime = &desc->Weekly_Schedule[wday - 1].Time_Values[i].Time;
+                current = i;
+            } else {
+                diff = datetime_wildcard_compare_time(
+                    &desc->Weekly_Schedule[wday - 1].Time_Values[i].Time,
+                    tmptime);
+                if (diff >= 0) {
+                    tmptime =
+                        &desc->Weekly_Schedule[wday - 1].Time_Values[i].Time;
+                    current = i;
+                }
+            }
         }
     }
-
-    if (desc->Present_Value.tag == BACNET_APPLICATION_TAG_NULL) {
+    if (current >= 0) {
+        bacnet_primitive_to_application_data_value(
+            &desc->Present_Value,
+            &desc->Weekly_Schedule[wday - 1].Time_Values[current].Value);
+    } else {
         memcpy(
             &desc->Present_Value, &desc->Schedule_Default,
             sizeof(desc->Present_Value));
+    }
+}
+
+/**
+ * @brief Updates the Present Value of the Schedule object
+ * @param  object_instance - object-instance number of the object
+ * @param milliseconds - Unused parameter
+ */
+void Schedule_Timer(uint32_t object_instance, uint16_t milliseconds)
+{
+    SCHEDULE_DESCR *pObject;
+    BACNET_DATE_TIME bdatetime;
+
+    UNUSED(milliseconds);
+    pObject = Schedule_Object(object_instance);
+    if (pObject) {
+        Device_getCurrentDateTime(&bdatetime);
+        Schedule_Recalculate_PV(pObject, bdatetime.date.wday, &bdatetime.time);
     }
 }

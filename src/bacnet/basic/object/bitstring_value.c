@@ -22,6 +22,8 @@
 #include "bacnet/wp.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 /* me! */
 #include "bitstring_value.h"
 
@@ -36,7 +38,12 @@ struct object_data {
     void *Context;
 };
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* callback for present value writes */
 static bitstring_value_write_present_value_callback
     BitString_Value_Write_Present_Value_Callback;
@@ -54,6 +61,17 @@ static const int32_t Properties_Optional[] = {
 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* first property is present-value so it can be skipped if not writable */
+    PROP_PRESENT_VALUE,
+    /* unordered list of always writable properties */
+    PROP_OUT_OF_SERVICE, -1
+};
 
 /**
  * Initialize the pointers for the required, the optional and the properitary
@@ -79,6 +97,28 @@ void BitString_Value_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a BitString Value object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void BitString_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    struct object_data *pObject;
+
+    if (!properties) {
+        return;
+    }
+    pObject = Keylist_Data(Object_List, object_instance);
+    if (pObject && (!pObject->Write_Enabled)) {
+        /* skip present-value property */
+        *properties = &Writable_Properties[1];
+    } else {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -298,44 +338,6 @@ void BitString_Value_Out_Of_Service_Set(uint32_t object_instance, bool value)
     }
 
     return;
-}
-
-/**
- * For a given object instance-number, sets the out of service flag
- * from WriteProperty service
- *
- * @param  object_instance - object-instance number of the object
- * @param  value - new value
- * @param  error_class - BACnet error class
- * @param  error_code - BACnet error code
- *
- * @return  true if value is set, or false if not set or error occurred
- */
-static bool BitString_Value_Out_Of_Service_Write(
-    uint32_t object_instance,
-    bool value,
-    BACNET_ERROR_CLASS *error_class,
-    BACNET_ERROR_CODE *error_code)
-{
-    bool status = false;
-    struct object_data *pObject;
-
-    pObject = BitString_Value_Object(object_instance);
-    if (pObject) {
-        if (pObject->Write_Enabled) {
-            BitString_Value_Out_Of_Service_COV_Detect(pObject, value);
-            pObject->Out_Of_Service = value;
-            status = true;
-        } else {
-            *error_class = ERROR_CLASS_PROPERTY;
-            *error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-        }
-    } else {
-        *error_class = ERROR_CLASS_OBJECT;
-        *error_code = ERROR_CODE_UNKNOWN_OBJECT;
-    }
-
-    return status;
 }
 
 /**
@@ -684,10 +686,8 @@ bool BitString_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
     if (wp_data == NULL) {
-        return false;
-    }
-    if (wp_data->application_data_len == 0) {
         return false;
     }
     /* Decode the some of the request. */
@@ -715,9 +715,8 @@ bool BitString_Value_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
             if (status) {
-                status = BitString_Value_Out_Of_Service_Write(
-                    wp_data->object_instance, value.type.Boolean,
-                    &wp_data->error_class, &wp_data->error_code);
+                BitString_Value_Out_Of_Service_Set(
+                    wp_data->object_instance, value.type.Boolean);
             }
             break;
         default:
@@ -897,17 +896,30 @@ bool BitString_Value_Delete(uint32_t object_instance)
 void BitString_Value_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -915,7 +927,21 @@ void BitString_Value_Cleanup(void)
  */
 void BitString_Value_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }

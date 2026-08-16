@@ -20,17 +20,15 @@
 extern "C" {
 #endif /* __cplusplus */
 
-typedef struct octetstring_value_descr {
-    unsigned Event_State : 3;
-    bool Out_Of_Service;
-    BACNET_OCTET_STRING Present_Value;
-} OCTETSTRING_VALUE_DESCR;
-
 BACNET_STACK_EXPORT
 void OctetString_Value_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void OctetString_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
+
 BACNET_STACK_EXPORT
 bool OctetString_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
@@ -43,6 +41,10 @@ unsigned OctetString_Value_Instance_To_Index(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool OctetString_Value_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
+BACNET_STACK_EXPORT
+bool OctetString_Value_Name_Set(uint32_t object_instance, const char *new_name);
+BACNET_STACK_EXPORT
+const char *OctetString_Value_Name_ASCII(uint32_t object_instance);
 
 BACNET_STACK_EXPORT
 int OctetString_Value_Read_Property(BACNET_READ_PROPERTY_DATA *rpdata);
@@ -56,7 +58,21 @@ bool OctetString_Value_Present_Value_Set(
     const BACNET_OCTET_STRING *value,
     uint8_t priority);
 BACNET_STACK_EXPORT
+bool OctetString_Value_Present_Value_Get(
+    uint32_t object_instance, BACNET_OCTET_STRING *value);
+BACNET_STACK_DEPRECATED("Use OctetString_Value_Present_Value_Get() instead")
+BACNET_STACK_EXPORT
 BACNET_OCTET_STRING *OctetString_Value_Present_Value(uint32_t object_instance);
+
+BACNET_STACK_EXPORT
+bool OctetString_Value_Present_Value_Buffer_Set(
+    uint32_t object_instance, uint8_t *value, size_t length, uint8_t priority);
+BACNET_STACK_EXPORT
+bool OctetString_Value_Present_Value_Buffer_Get(
+    uint32_t object_instance,
+    uint8_t *value,
+    size_t value_size,
+    size_t *length);
 
 BACNET_STACK_EXPORT
 bool OctetString_Value_Change_Of_Value(uint32_t instance);
@@ -67,17 +83,20 @@ bool OctetString_Value_Encode_Value_List(
     uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list);
 
 BACNET_STACK_EXPORT
-char *OctetString_Value_Description(uint32_t instance);
+const char *OctetString_Value_Description(uint32_t instance);
 BACNET_STACK_EXPORT
 bool OctetString_Value_Description_Set(uint32_t instance, const char *new_name);
 
 BACNET_STACK_EXPORT
 bool OctetString_Value_Out_Of_Service(uint32_t instance);
 BACNET_STACK_EXPORT
-void OctetString_Value_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
+bool OctetString_Value_Out_Of_Service_Set(uint32_t instance, bool oos_flag);
 
-/* note: header of Intrinsic_Reporting function is required
-   even when INTRINSIC_REPORTING is not defined */
+BACNET_STACK_EXPORT
+uint32_t OctetString_Value_Create(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool OctetString_Value_Delete(uint32_t object_instance);
+
 BACNET_STACK_EXPORT
 void OctetString_Value_Intrinsic_Reporting(uint32_t object_instance);
 

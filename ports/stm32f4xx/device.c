@@ -31,9 +31,7 @@
 #include "bacnet/basic/object/mso.h"
 #include "bacnet/basic/object/msv.h"
 #include "bacnet/basic/object/program.h"
-#if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h"
-#endif
 #if (BACNET_PROTOCOL_REVISION >= 17)
 #include "bacnet/basic/object/netport.h"
 #endif
@@ -97,11 +95,9 @@ static struct my_object_functions {
         Program_Index_To_Instance, Program_Valid_Instance,
         Program_Object_Name, Program_Read_Property,
         Program_Write_Property, Program_Property_Lists},
-#if defined(BACFILE)
     { OBJECT_FILE, bacfile_init, bacfile_count, bacfile_index_to_instance,
         bacfile_valid_instance, bacfile_object_name, bacfile_read_property,
         bacfile_write_property, BACfile_Property_Lists },
-#endif
 #if (BACNET_PROTOCOL_REVISION >= 17)
     { OBJECT_NETWORK_PORT, Network_Port_Init, Network_Port_Count,
         Network_Port_Index_To_Instance, Network_Port_Valid_Instance,
@@ -1210,7 +1206,7 @@ static bool Device_Write_Property_Object_Name(
 {
     bool status = false; /* return value */
     int len = 0;
-    BACNET_CHARACTER_STRING value;
+    BACNET_CHARACTER_STRING value = { 0 };
     BACNET_OBJECT_TYPE object_type = OBJECT_NONE;
     uint32_t object_instance = 0;
     int apdu_size = 0;
@@ -1273,6 +1269,10 @@ bool Device_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     bool status = false;
     struct my_object_functions *pObject = NULL;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* initialize the default return values */
     wp_data->error_class = ERROR_CLASS_OBJECT;
     wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
@@ -1291,6 +1291,15 @@ bool Device_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                 if (wp_data->object_property == PROP_OBJECT_NAME) {
                     status = Device_Write_Property_Object_Name(
                         wp_data, pObject->Object_Write_Property);
+                } else if (
+                    (wp_data->application_data_len == 0) &&
+                    !property_list_bacnet_list_member(
+                        wp_data->object_type, wp_data->object_property)) {
+                    /* only list properties can be written with
+                        an empty application payload */
+                    wp_data->error_class = ERROR_CLASS_SERVICES;
+                    wp_data->error_code = ERROR_CODE_INVALID_TAG;
+                    status = false;
                 } else {
                     status = pObject->Object_Write_Property(wp_data);
                 }

@@ -35,6 +35,9 @@ void Multistate_Value_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
     const int32_t **pProprietary);
+BACNET_STACK_EXPORT
+void Multistate_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
 
 BACNET_STACK_EXPORT
 bool Multistate_Value_Valid_Instance(uint32_t object_instance);
@@ -108,6 +111,12 @@ bool Multistate_Value_Max_States_Set(
     uint32_t instance, uint32_t max_states_requested);
 BACNET_STACK_EXPORT
 uint32_t Multistate_Value_Max_States(uint32_t instance);
+BACNET_STACK_EXPORT
+uint32_t Multistate_Value_State_From_Text(
+    uint32_t object_instance, const char *state_text);
+BACNET_STACK_EXPORT
+bool Multistate_Value_Present_Value_By_Name_Set(
+    uint32_t object_instance, const char *state_name);
 BACNET_STACK_EXPORT
 const char *
 Multistate_Value_State_Text(uint32_t object_instance, uint32_t state_index);

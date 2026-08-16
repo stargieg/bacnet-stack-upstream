@@ -27,6 +27,7 @@
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/sys/mstimer.h"
 #include "bacnet/basic/sys/filename.h"
+#include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/tsm/tsm.h"
 #include "bacnet/datalink/datalink.h"
@@ -83,7 +84,7 @@ static void Init_Service_Handlers(void)
 
 static void print_usage(const char *filename)
 {
-    printf("Usage: %s [--dnet][--dadr][--mac]\n", filename);
+    printf("Usage: %s [--dnet][--dadr][--mac][--debug]\n", filename);
     printf("       [--date][--time]\n");
     printf("       [--version][--help]\n");
 }
@@ -121,6 +122,13 @@ static void print_help(const char *filename)
            "or an IP string with optional port number like 10.1.2.3:47808\n"
            "or an Ethernet MAC in hex like 00:21:70:7e:32:bb\n");
     printf("\n");
+    printf("--now\n"
+           "Print the current date and time.\n");
+    printf("\n");
+    printf("--debug S\n"
+           "Optional debug severity level 0=emergency, 1=alert, 2=critical,\n"
+           "3=error, 4=warning, 5=notice, 6=info, 7=debug, -1=disable.\n");
+    printf("\n");
     printf(
         "Examples:\n"
         "Send a TimeSynchronization request to DNET 123:\n"
@@ -153,6 +161,7 @@ int main(int argc, char *argv[])
     bool dst_active = 0;
     struct mstimer apdu_timer;
     long dnet = -1;
+    uint32_t severity = 0;
     BACNET_MAC_ADDRESS mac = { 0 };
     BACNET_MAC_ADDRESS adr = { 0 };
     BACNET_ADDRESS dest = { 0 };
@@ -202,6 +211,15 @@ int main(int argc, char *argv[])
                 }
             }
         }
+        if (strcmp(argv[argi], "--debug") == 0) {
+            if (++argi < argc) {
+                if (bactext_debug_severity_strtol(argv[argi], &severity)) {
+                    debug_log_severity_set(severity);
+                } else {
+                    debug_log_severity_set(DEBUG_LOG_DISABLED);
+                }
+            }
+        }
         if (strcmp(argv[argi], "--date") == 0) {
             if (++argi < argc) {
                 if (datetime_date_init_ascii(&bdate, argv[argi])) {
@@ -218,6 +236,30 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[argi], "--utc") == 0) {
             use_utc = true;
+        }
+        if (strcmp(argv[argi], "--now") == 0) {
+            datetime_local(&bdate, &btime, &utc_offset_minutes, &dst_active);
+            if (use_utc) {
+                /* convert to UTC */
+                if (dst_active) {
+                    dst_adjust_minutes = -60;
+                }
+                datetime_set(&local_time, &bdate, &btime);
+                datetime_local_to_utc(
+                    &utc_time, &local_time, utc_offset_minutes,
+                    dst_adjust_minutes);
+                printf(
+                    "%04u/%02u/%02u-%02u:%02u:%02u.%02u\n", utc_time.date.year,
+                    utc_time.date.month, utc_time.date.day, utc_time.time.hour,
+                    utc_time.time.min, utc_time.time.sec,
+                    utc_time.time.hundredths);
+            } else {
+                printf(
+                    "%04u/%02u/%02u-%02u:%02u:%02u.%02u\n", bdate.year,
+                    bdate.month, bdate.day, btime.hour, btime.min, btime.sec,
+                    btime.hundredths);
+            }
+            return 0;
         }
     }
     if (global_broadcast) {

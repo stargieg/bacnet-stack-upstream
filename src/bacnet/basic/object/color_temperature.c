@@ -29,6 +29,8 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/keylist.h"
 #include "bacnet/basic/sys/linear.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 /* me! */
 #include "color_temperature.h"
 
@@ -51,7 +53,12 @@ struct object_data {
     void *Context;
 };
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* callback for present value writes */
 static color_temperature_write_present_value_callback
     Color_Temperature_Write_Present_Value_Callback;
@@ -78,6 +85,21 @@ static const int32_t Color_Temperature_Properties_Optional[] = {
 };
 
 static const int32_t Color_Temperature_Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_PRESENT_VALUE,
+    PROP_DEFAULT_COLOR_TEMPERATURE,
+    PROP_DEFAULT_FADE_TIME,
+    PROP_TRANSITION,
+    PROP_DEFAULT_RAMP_RATE,
+    PROP_DEFAULT_STEP_INCREMENT,
+    -1
+};
 
 /**
  * Returns the list of required, optional, and proprietary properties.
@@ -109,7 +131,21 @@ void Color_Temperature_Property_Lists(
 }
 
 /**
- * Determines if a given Color instance is valid
+ * @brief Get the list of writable properties for an Color Temperature object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Color_Temperature_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
+
+/**
+ * Determines if a given Color Temperature instance is valid
  *
  * @param  object_instance - object-instance number of the object
  *
@@ -128,9 +164,9 @@ bool Color_Temperature_Valid_Instance(uint32_t object_instance)
 }
 
 /**
- * Determines the number of Color objects
+ * Determines the number of Color Temperature objects
  *
- * @return  Number of Color objects
+ * @return  Number of Color Temperature objects
  */
 unsigned Color_Temperature_Count(void)
 {
@@ -139,7 +175,7 @@ unsigned Color_Temperature_Count(void)
 
 /**
  * Determines the object instance-number for a given 0..N index
- * of Color objects where N is Color_Temperature_Count().
+ * of Color Temperature objects where N is Color_Temperature_Count().
  *
  * @param  index - 0..N where N is Color_Temperature_Count()
  *
@@ -156,7 +192,7 @@ uint32_t Color_Temperature_Index_To_Instance(unsigned index)
 
 /**
  * For a given object instance-number, determines a 0..N index
- * of Color objects where N is Color_Temperature_Count().
+ * of Color Temperature objects where N is Color_Temperature_Count().
  *
  * @param  object_instance - object-instance number of the object
  *
@@ -1428,6 +1464,10 @@ bool Color_Temperature_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int apdu_size = 0;
     const uint8_t *apdu = NULL;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     apdu = wp_data->application_data;
     apdu_size = wp_data->application_data_len;
@@ -1696,17 +1736,30 @@ bool Color_Temperature_Delete(uint32_t object_instance)
 void Color_Temperature_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -1714,7 +1767,21 @@ void Color_Temperature_Cleanup(void)
  */
 void Color_Temperature_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }

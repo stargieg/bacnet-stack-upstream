@@ -42,21 +42,37 @@ typedef struct BACnetHostNPort {
 #define BACNET_HOST_ADDRESS_TAG_NONE 0
 #define BACNET_HOST_ADDRESS_TAG_IP_ADDRESS 1
 #define BACNET_HOST_ADDRESS_TAG_NAME 2
+/* RFC 1035 255-octet total limit and 63-octet label limit
+   including dots and null terminator */
+#define BACNET_HOST_NAME_MAX 255
+
+/** Structure to hold the host IP address */
+typedef struct BACnetHostOctetString {
+    uint8_t address[IP6_ADDRESS_MAX];
+    uint8_t length;
+} BACNET_HOST_OCTET_STRING;
+
+/** Structure to hold the host name */
+typedef struct BACnetHostCharacterString {
+    char fqdn[BACNET_HOST_NAME_MAX];
+    uint8_t length;
+} BACNET_HOST_CHARACTER_STRING;
+
 /* BACnetHostNPort with smaller RAM footprint using C datatypes */
 typedef struct BACnetHostNPort_Minimal {
     uint8_t tag;
     union BACnetHostAddress_Minimal {
-        struct BACnetHostOctetString {
-            uint8_t address[IP6_ADDRESS_MAX];
-            uint8_t length;
-        } ip_address;
-        struct BACnetHostCharacterString {
-            char fqdn[256];
-            uint8_t length;
-        } name;
+        struct BACnetHostOctetString ip_address;
+        struct BACnetHostCharacterString name;
     } host;
     uint16_t port;
 } BACNET_HOST_N_PORT_MINIMAL;
+
+/* Structure to hold the host IP address and hostname for lookup */
+typedef struct BACnetHostAddressPair {
+    struct BACnetHostOctetString ip_address;
+    struct BACnetHostCharacterString name;
+} BACNET_HOST_ADDRESS_PAIR;
 
 /**
  *  BACnetBDTEntry ::= SEQUENCE {
@@ -133,11 +149,42 @@ BACNET_STACK_EXPORT
 bool host_n_port_minimal_same(
     const BACNET_HOST_N_PORT_MINIMAL *dst,
     const BACNET_HOST_N_PORT_MINIMAL *src);
+BACNET_STACK_EXPORT
 void host_n_port_minimal_ip_init(
     BACNET_HOST_N_PORT_MINIMAL *host,
     uint16_t port,
     const uint8_t *address,
     size_t address_len);
+BACNET_STACK_EXPORT
+void host_n_port_minimal_hostname_init(
+    BACNET_HOST_N_PORT_MINIMAL *host, uint16_t port, const char *hostname);
+BACNET_STACK_EXPORT
+int host_n_port_minimal_encode(
+    uint8_t *apdu, const BACNET_HOST_N_PORT_MINIMAL *address);
+BACNET_STACK_EXPORT
+int host_n_port_minimal_address_decode(
+    const uint8_t *apdu,
+    uint32_t apdu_size,
+    BACNET_ERROR_CODE *error_code,
+    BACNET_HOST_N_PORT_MINIMAL *address);
+BACNET_STACK_EXPORT
+int host_n_port_minimal_decode(
+    const uint8_t *apdu,
+    uint32_t apdu_size,
+    BACNET_ERROR_CODE *error_code,
+    BACNET_HOST_N_PORT_MINIMAL *address);
+BACNET_STACK_EXPORT
+int host_n_port_minimal_context_encode(
+    uint8_t *apdu,
+    uint8_t tag_number,
+    const BACNET_HOST_N_PORT_MINIMAL *address);
+BACNET_STACK_EXPORT
+int host_n_port_minimal_context_decode(
+    const uint8_t *apdu,
+    uint32_t apdu_size,
+    uint8_t tag_number,
+    BACNET_ERROR_CODE *error_code,
+    BACNET_HOST_N_PORT_MINIMAL *address);
 
 BACNET_STACK_EXPORT
 bool host_n_port_same(

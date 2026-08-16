@@ -593,7 +593,8 @@ int Network_Port_Issuer_Certificate_File_Encode(
     } else {
         file_instance =
             Network_Port_Issuer_Certificate_File(object_instance, index);
-        apdu_len = encode_application_unsigned(apdu, file_instance);
+        apdu_len =
+            encode_application_object_id(apdu, OBJECT_FILE, file_instance);
     }
 
     return apdu_len;
@@ -803,7 +804,7 @@ uint8_t Network_Port_Routing_Table_Count(uint32_t object_instance)
 }
 
 /**
- * @brief Handle a request to encode all the the routing table entries
+ * @brief Handle a request to encode all the routing table entries
  * @param apdu [out] Buffer in which the APDU contents are built.
  * @param max_apdu [in] Max length of the APDU buffer.
  *
@@ -1252,7 +1253,7 @@ int Network_Port_SC_Hub_Function_Connection_Status_Count(
 }
 
 /**
- * @brief Handle a request to encode all the the entries
+ * @brief Handle a request to encode all the entries
  * @param object_instance [in] BACnet network port object instance number
  * @param apdu [out] Buffer in which the APDU contents are built.
  * @param max_apdu [in] Max length of the APDU buffer.
@@ -1542,25 +1543,6 @@ bool Network_Port_SC_Direct_Connect_Accept_URIs_Set(
     return status;
 }
 
-bool Network_Port_SC_Direct_Connect_Accept_URIs_Dirty_Set(
-    uint32_t object_instance, const char *str)
-{
-    bool status = false;
-    BACNET_SC_PARAMS *params = Network_Port_SC_Params(object_instance);
-
-    if (params) {
-        if (str) {
-            snprintf(
-                params->SC_Direct_Connect_Accept_URIs_dirty,
-                sizeof(params->SC_Direct_Connect_Accept_URIs_dirty), "%s", str);
-        } else {
-            params->SC_Direct_Connect_Accept_URIs_dirty[0] = 0;
-        }
-    }
-
-    return status;
-}
-
 bool Network_Port_SC_Direct_Connect_Binding(
     uint32_t object_instance, BACNET_CHARACTER_STRING *str)
 {
@@ -1742,7 +1724,7 @@ int Network_Port_SC_Direct_Connect_Connection_Status_Count(
 }
 
 /**
- * @brief Handle a request to encode all the the entries
+ * @brief Handle a request to encode all the entries
  * @param object_instance [in] BACnet network port object instance number
  * @param apdu [out] Buffer in which the APDU contents are built.
  * @param max_apdu [in] Max length of the APDU buffer.
@@ -1860,7 +1842,7 @@ int Network_Port_SC_Failed_Connection_Requests_Count(uint32_t object_instance)
 }
 
 /**
- * @brief Handle a request to encode all the the entries
+ * @brief Handle a request to encode all the entries
  * @param object_instance [in] BACnet network port object instance number
  * @param apdu [out] Buffer in which the APDU contents are built.
  * @param max_apdu [in] Max length of the APDU buffer.

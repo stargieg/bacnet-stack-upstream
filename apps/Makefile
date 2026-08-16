@@ -43,7 +43,7 @@ ifeq (${BACDL},bip6)
 BACDL_DEFINE=-DBACDL_BIP6=1
 endif
 ifeq (${BACDL},bsc)
-BACDL_DEFINE=-DBACDL_BSC=1 -DBACFILE=1
+BACDL_DEFINE=-DBACDL_BSC=1
 endif
 ifeq (${BACDL},zigbee)
 BACDL_DEFINE=-DBACDL_ZIGBEE=1
@@ -188,14 +188,22 @@ DEBUGGING ?=
 # enable all relevant warnings that find bugs
 WARNING_ALL := -Wall -Wextra -pedantic
 WARNING_ALL += -Wfloat-equal -Wconversion
-WARNING_ALL += -Wredundant-decls -Wswitch-default
+WARNING_ALL += -Wfloat-conversion -Wdouble-promotion
+WARNING_ALL += -Wredundant-decls -Wmissing-declarations
+WARNING_ALL += -Wswitch-default
 WARNING_ALL += -Wunused-variable
+WARNING_ALL += -Wcast-qual
+WARNING_ALL += -Wwrite-strings
 # don't warn about conversion, sign, compares, long long and attributes
 # since they are common in embedded
-WARNING_ALL += -Wno-sign-conversion -Wno-conversion -Wno-sign-compare
-WARNING_ALL += -Wno-long-long -Wno-attributes
+WARNING_ALL += -Wno-sign-conversion -Wno-conversion
+WARNING_ALL += -Wno-sign-compare
 # don't warn about implicit fallthrough since it's common in network protocols
 WARNING_ALL += -Wno-implicit-fallthrough
+WARNING_ALL += -Wno-long-long -Wno-attributes
+# don't warn about discarded qualifiers often used for initializing C strings.
+WARNING_ALL += -Wno-discarded-qualifiers
+# don't treat warnings as errors by default
 #WARNING_ALL += -Werror
 WARNINGS ?= $(WARNING_ALL)
 # dead code removal
@@ -223,6 +231,11 @@ ifeq (${LEGACY},true)
 BACNET_DEFINES += -DBACNET_STACK_DEPRECATED_DISABLE
 endif
 
+ifeq (${SEGMENT},true)
+# enable segmentation support
+BACNET_DEFINES += -DBACNET_SEGMENTATION_ENABLED=1
+endif
+
 ifeq (${NOTIFY},false)
 # disable intrinsic reporting
 else
@@ -232,8 +245,9 @@ endif
 BACNET_DEFINES += -DPRINT_ENABLED=1
 BACNET_DEFINES += -DBACAPP_ALL
 BACNET_DEFINES += -DBACNET_TIME_MASTER
+BACNET_DEFINES += -DBACNET_BACKUP_RESTORE
 BACNET_DEFINES += -DBACNET_PROPERTY_LISTS=1
-BACNET_DEFINES += -DBACNET_PROTOCOL_REVISION=24
+BACNET_DEFINES += -DBACNET_PROTOCOL_REVISION=28
 
 # put all the flags together
 INCLUDES = -I$(BACNET_SRC_DIR) -I$(BACNET_PORT_DIR) -I$(BACNET_POSIX_DIR)
@@ -261,8 +275,9 @@ SUBDIRS = lib readprop writeprop readfile writefile reinit server dcc \
 	whohas whois iam ucov scov timesync epics readpropm readrange \
 	writepropm uptransfer getevent uevent abort error event ack-alarm \
 	server-client add-list-element remove-list-element create-object \
-	who-am-i you-are apdu writegroup \
-	delete-object server-discover server-basic server-mini
+	who-am-i you-are apdu writegroup dmbrcap ptransfer \
+	delete-object server-discover server-basic server-mini \
+	modbus-gateway
 
 ifneq (,$(filter $(BACDL),bip all))
 SUBDIRS += whoisrouter iamrouter initrouter whatisnetnum netnumis
@@ -273,7 +288,7 @@ endif
 
 ifeq (${BACNET_PORT},linux)
 ifneq (${OSTYPE},cygwin)
-SUBDIRS += mstpcap mstpcrc
+SUBDIRS += mstpcap mstpcrc mstpsnap
 endif
 endif
 
@@ -326,6 +341,10 @@ clean:
 
 .PHONY: gateway
 gateway: $(BACNET_LIB_TARGET)
+	$(MAKE) -B -C $@
+
+.PHONY: gateway2
+gateway2: $(BACNET_LIB_TARGET)
 	$(MAKE) -B -C $@
 
 .PHONY: abort
@@ -396,12 +415,20 @@ whatisnetnum: $(BACNET_LIB_TARGET)
 netnumis: $(BACNET_LIB_TARGET)
 	$(MAKE) -B -C $@
 
+.PHONY: dmbrcap
+dmbrcap:
+	$(MAKE) -B -C $@
+
 .PHONY: mstpcap
 mstpcap:
 	$(MAKE) -B -C $@
 
 .PHONY: mstpcrc
 mstpcrc:
+	$(MAKE) -B -C $@
+
+.PHONY: mstpsnap
+mstpsnap:
 	$(MAKE) -B -C $@
 
 .PHONY: piface
@@ -519,6 +546,24 @@ router-mstp: $(BACNET_LIB_TARGET)
 .PHONY: router-mstp-clean
 router-mstp-clean:
 	$(MAKE) -C router-mstp clean
+
+.PHONY: modbus-gateway
+modbus-gateway: $(BACNET_LIB_TARGET)
+	$(MAKE) -B -C modbus-gateway
+
+.PHONY: modbus-gateway-clean
+modbus-gateway-clean:
+	$(MAKE) -C modbus-gateway clean
+	rm -f ../bin/modbusgw
+
+.PHONY: modbus-gateway-mstp
+modbus-gateway-mstp: $(BACNET_LIB_TARGET)
+	$(MAKE) BACDL=mstp -B -C modbus-gateway TARGET=modbusgw-mstp
+
+.PHONY: modbus-gateway-mstp-clean
+modbus-gateway-mstp-clean:
+	$(MAKE) -C modbus-gateway clean
+	rm -f ../bin/modbusgw-mstp
 
 .PHONY: fuzz-libfuzzer
 fuzz-libfuzzer: $(BACNET_LIB_TARGET)

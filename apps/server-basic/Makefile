@@ -9,12 +9,14 @@ SRC = main.c \
 	$(BACNET_SERVER_DIR)/bacnet_basic.c \
 	$(BACNET_SERVER_DIR)/bacnet_device.c \
 	$(BACNET_SERVER_DIR)/bacnet_port.c \
+	$(BACNET_SERVER_DIR)/bacnet_port_bzll.c \
 	$(BACNET_SERVER_DIR)/bacnet_port_ipv4.c \
 	$(BACNET_SERVER_DIR)/bacnet_port_ipv6.c \
 	$(BACNET_SERVER_DIR)/bacnet_port_mstp.c \
 	$(BACNET_OBJECT_DIR)/ai.c \
 	$(BACNET_OBJECT_DIR)/ao.c \
 	$(BACNET_OBJECT_DIR)/av.c \
+	$(BACNET_OBJECT_DIR)/averaging.c \
 	$(BACNET_OBJECT_DIR)/auditlog.c \
 	$(BACNET_OBJECT_DIR)/bacfile.c \
 	$(BACNET_OBJECT_DIR)/bi.c \
@@ -40,6 +42,7 @@ SRC = main.c \
 	$(BACNET_OBJECT_DIR)/nc.c  \
 	$(BACNET_OBJECT_DIR)/netport.c  \
 	$(BACNET_OBJECT_DIR)/osv.c \
+	$(BACNET_OBJECT_DIR)/piv.c \
 	$(BACNET_OBJECT_DIR)/program.c  \
 	$(BACNET_OBJECT_DIR)/structured_view.c \
 	$(BACNET_OBJECT_DIR)/timer.c  \

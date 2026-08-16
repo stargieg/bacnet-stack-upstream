@@ -23,6 +23,8 @@
 #include "bacnet/basic/services.h"
 #include "bacnet/basic/sys/debug.h"
 #include "bacnet/basic/sys/keylist.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 
 /* from Table 12-33. Requested_Shed_Level Default Values and Power Targets */
 #define DEFAULT_VALUE_PERCENT 100
@@ -97,11 +99,16 @@ struct object_data {
     const char *Description;
 };
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 
-/* clang-format off */
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Load_Control_Properties_Required[] = {
+    /* unordered list of required properties */
     PROP_OBJECT_IDENTIFIER,
     PROP_OBJECT_NAME,
     PROP_OBJECT_TYPE,
@@ -121,16 +128,35 @@ static const int32_t Load_Control_Properties_Required[] = {
 };
 
 static const int32_t Load_Control_Properties_Optional[] = {
-    PROP_DESCRIPTION,
-    PROP_FULL_DUTY_BASELINE,
+    /* unordered list of optional properties */
+    PROP_DESCRIPTION, PROP_FULL_DUTY_BASELINE, -1
+};
+
+static const int32_t Load_Control_Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_REQUESTED_SHED_LEVEL,
+    PROP_START_TIME,
+    PROP_SHED_DURATION,
+    PROP_DUTY_WINDOW,
+    PROP_SHED_LEVELS,
+    PROP_ENABLE,
     -1
 };
 
-static const int32_t Load_Control_Properties_Proprietary[] = {
-    -1
-};
-/* clang-format on */
-
+/**
+ * Returns the list of required, optional, and proprietary properties.
+ * Used by ReadPropertyMultiple service.
+ *
+ * @param pRequired - Pointer to the pointer of required values.
+ * @param pOptional - Pointer to the pointer of optional values.
+ * @param pProprietary - Pointer to the pointer of properitary values.
+ */
 void Load_Control_Property_Lists(
     const int32_t **pRequired,
     const int32_t **pOptional,
@@ -147,6 +173,20 @@ void Load_Control_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Load Control object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Load_Control_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -526,7 +566,8 @@ void Load_Control_State_Machine(
                         break;
                 }
                 if (pObject->Present_Value == BACNET_SHED_INACTIVE) {
-                    debug_printf(
+                    debug_log_fprintf(
+                        DEBUG_LOG_DEBUG, stderr,
                         "Load Control[%d]:Requested Shed Level=Default\n",
                         object_index);
                     break;
@@ -538,7 +579,8 @@ void Load_Control_State_Machine(
                 /* request to cancel using wildcards in start time? */
                 if (datetime_wildcard(&pObject->Start_Time)) {
                     pObject->Present_Value = BACNET_SHED_INACTIVE;
-                    debug_printf(
+                    debug_log_fprintf(
+                        DEBUG_LOG_DEBUG, stderr,
                         "Load Control[%d]:Start Time=Wildcard\n", object_index);
                     break;
                 }
@@ -550,7 +592,8 @@ void Load_Control_State_Machine(
             if (diff < 0) {
                 /* CancelShed */
                 /* FIXME: stop shedding! i.e. relinquish */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Current Time"
                     " is after Start Time + Duration\n",
                     object_index);
@@ -569,7 +612,8 @@ void Load_Control_State_Machine(
                     pObject->Requested_Shed_Level.type);
             } else if (diff > 0) {
                 /* current time after to start time */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Current Time"
                     " is after Start Time\n",
                     object_index);
@@ -614,7 +658,8 @@ void Load_Control_State_Machine(
             diff = datetime_compare(&pObject->End_Time, bdatetime);
             if (diff < 0) {
                 /* FinishedUnsuccessfulShed */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Current Time is after Start Time + "
                     "Duration\n",
                     object_index);
@@ -624,7 +669,8 @@ void Load_Control_State_Machine(
             if (pObject->Load_Control_Request_Written ||
                 pObject->Start_Time_Property_Written) {
                 /* UnsuccessfulShedReconfigured */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Control Property written\n",
                     object_index);
                 /* The Written flags will cleared in the next state */
@@ -633,7 +679,8 @@ void Load_Control_State_Machine(
             }
             if (Can_Now_Comply_With_Shed(pObject)) {
                 /* CanNowComplyWithShed */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Able to meet Shed Request\n",
                     object_index);
                 Shed_Level_Copy(
@@ -651,7 +698,8 @@ void Load_Control_State_Machine(
             diff = datetime_compare(&pObject->End_Time, bdatetime);
             if (diff < 0) {
                 /* FinishedSuccessfulShed */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Current Time is after Start Time + "
                     "Duration\n",
                     object_index);
@@ -669,7 +717,8 @@ void Load_Control_State_Machine(
             if (pObject->Load_Control_Request_Written ||
                 pObject->Start_Time_Property_Written) {
                 /* UnsuccessfulShedReconfigured */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Control Property written\n",
                     object_index);
                 /* The Written flags will cleared in the next state */
@@ -678,7 +727,8 @@ void Load_Control_State_Machine(
             }
             if (!Able_To_Meet_Shed_Request(pObject)) {
                 /* CanNoLongerComplyWithShed */
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Not able to meet Shed Request\n",
                     object_index);
                 Shed_Level_Default_Set(
@@ -693,7 +743,8 @@ void Load_Control_State_Machine(
         case BACNET_SHED_INACTIVE:
         default:
             if (pObject->Start_Time_Property_Written) {
-                debug_printf(
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr,
                     "Load Control[%d]:Start Time written\n", object_index);
                 /* The Written flag will cleared in the next state */
                 Shed_Level_Copy(
@@ -770,8 +821,8 @@ void Load_Control_Timer(uint32_t object_instance, uint16_t milliseconds)
             index = Keylist_Index(Object_List, object_instance);
             Load_Control_State_Machine(index, &bdatetime);
             if (pObject->Present_Value != pObject->Previous_Value) {
-                debug_printf(
-                    "Load Control[%d]=%s\n", index,
+                debug_log_fprintf(
+                    DEBUG_LOG_DEBUG, stderr, "Load Control[%d]=%s\n", index,
                     bactext_shed_state_name(pObject->Present_Value));
                 pObject->Previous_Value = pObject->Present_Value;
             }
@@ -1390,6 +1441,8 @@ static int BACnet_Shed_Level_Element_Length(
  * @param object_instance [in] BACnet object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ *  if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -1397,6 +1450,7 @@ static int BACnet_Shed_Level_Element_Length(
 static BACNET_ERROR_CODE BACnet_Shed_Level_Element_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -1414,6 +1468,7 @@ static BACNET_ERROR_CODE BACnet_Shed_Level_Element_Write(
         if (array_index == 0) {
             /* This array is not required to be resizable
                through BACnet write services */
+            (void)array_size;
             error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
         } else if (array_index <= count) {
             len = bacnet_shed_level_decode(
@@ -1490,23 +1545,30 @@ bool Load_Control_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0, count = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
     if (wp_data == NULL) {
-        debug_printf("Load_Control_Write_Property(): invalid data\n");
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Load_Control_Write_Property(): invalid data\n");
         return false;
     }
     if (wp_data->application_data_len < 0) {
-        debug_printf("Load_Control_Write_Property(): invalid data length\n");
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Load_Control_Write_Property(): invalid data length\n");
         /* error while decoding - a smaller larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
         return false;
     }
-    /* decode the the request or the first element in array */
+    /* decode the request or the first element in array */
     len = bacapp_decode_known_property(
         wp_data->application_data, wp_data->application_data_len, &value,
         wp_data->object_type, wp_data->object_property);
     if (len < 0) {
-        debug_printf("Load_Control_Write_Property(): decoding error\n");
+        debug_log_fprintf(
+            DEBUG_LOG_DEBUG, stderr,
+            "Load_Control_Write_Property(): decoding error\n");
         /* error while decoding - a value larger than we can handle */
         wp_data->error_class = ERROR_CLASS_PROPERTY;
         wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
@@ -1579,14 +1641,23 @@ bool Load_Control_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
             }
             break;
         default:
-            debug_printf(
-                "Load_Control_Write_Property() failure detected point Z\n");
-            wp_data->error_class = ERROR_CLASS_PROPERTY;
-            wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            if (property_lists_member(
+                    Load_Control_Properties_Required,
+                    Load_Control_Properties_Optional,
+                    Load_Control_Properties_Proprietary,
+                    wp_data->object_property)) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
+            } else {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_UNKNOWN_PROPERTY;
+            }
             break;
     }
 
-    debug_printf("Load_Control_Write_Property() returning status=%d\n", status);
+    debug_log_fprintf(
+        DEBUG_LOG_DEBUG, stderr,
+        "Load_Control_Write_Property() returning status=%d\n", status);
     return status;
 }
 
@@ -2183,17 +2254,30 @@ bool Load_Control_Delete(uint32_t object_instance)
 void Load_Control_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -2201,7 +2285,21 @@ void Load_Control_Cleanup(void)
  */
 void Load_Control_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }

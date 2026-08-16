@@ -156,7 +156,7 @@
 #define MAX_APDU 480
 #elif defined(BACDL_MSTP) && !defined(BACNET_SECURITY)
 /* note: MS/TP extended frames can be up to 1476 bytes */
-#define MAX_APDU 480
+#define MAX_APDU 1476
 #elif defined(BACDL_ETHERNET) && !defined(BACNET_SECURITY)
 #define MAX_APDU 1476
 #elif defined(BACDL_ETHERNET) && defined(BACNET_SECURITY)
@@ -169,6 +169,11 @@
 #else
 #define MAX_APDU 412
 #endif
+#endif
+
+/* Enable or disable segmentation support in the library */
+#ifndef BACNET_SEGMENTATION_ENABLED
+#define BACNET_SEGMENTATION_ENABLED 0
 #endif
 
 /* for confirmed messages, this is the number of transactions */
@@ -236,6 +241,7 @@
     defined(BACAPP_RECIPIENT) || \
     defined(BACAPP_ADDRESS_BINDING) || \
     defined(BACAPP_NO_VALUE) || \
+    defined(BACAPP_AUTHENTICATION) || \
     defined(BACAPP_LOG_RECORD) || \
     defined(BACAPP_SECURE_CONNECT) || \
     defined(BACAPP_TYPES_EXTRA))
@@ -330,6 +336,8 @@
 #define BACAPP_ADDRESS_BINDING
 #undef BACAPP_NO_VALUE
 #define BACAPP_NO_VALUE
+#undef BACAPP_AUTHENTICATION
+#define BACAPP_AUTHENTICATION
 #undef BACAPP_LOG_RECORD
 #define BACAPP_LOG_RECORD
 #undef BACAPP_SECURE_CONNECT
@@ -363,6 +371,7 @@
     defined(BACAPP_RECIPIENT) || \
     defined(BACAPP_ADDRESS_BINDING) || \
     defined(BACAPP_NO_VALUE) || \
+    defined(BACAPP_AUTHENTICATION) || \
     defined(BACAPP_LOG_RECORD)
 #undef BACAPP_COMPLEX_TYPES
 #define BACAPP_COMPLEX_TYPES

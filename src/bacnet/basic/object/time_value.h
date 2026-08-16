@@ -36,6 +36,10 @@ void Time_Value_Property_Lists(
     const int32_t **pOptional,
     const int32_t **pProprietary);
 BACNET_STACK_EXPORT
+void Time_Value_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties);
+
+BACNET_STACK_EXPORT
 bool Time_Value_Valid_Instance(uint32_t object_instance);
 BACNET_STACK_EXPORT
 unsigned Time_Value_Count(void);
@@ -76,7 +80,7 @@ BACNET_STACK_EXPORT
 bool Time_Value_Out_Of_Service_Set(uint32_t object_instance, bool oos_flag);
 
 BACNET_STACK_EXPORT
-const char *Time_Value_Value_Description(uint32_t object_instance);
+const char *Time_Value_Description(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Time_Value_Description_Set(uint32_t object_instance, const char *new_name);
 

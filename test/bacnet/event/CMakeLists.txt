@@ -21,7 +21,7 @@ string(REGEX REPLACE
 set(ZTST_DIR "${TST_DIR}/ztest/src")
 
 add_compile_definitions(
-    BIG_ENDIAN=0
+    BACNET_BIG_ENDIAN=0
     CONFIG_ZTEST=1
     BACNET_EVENT_EXTENDED_ENABLED=1
     BACNET_EVENT_DOUBLE_OUT_OF_RANGE_ENABLED=1
@@ -60,6 +60,8 @@ add_executable(${PROJECT_NAME}
     ${SRC_DIR}/bacnet/basic/sys/days.c
     # Dependencies of bacapp.c
     ${SRC_DIR}/bacnet/access_rule.c
+    ${SRC_DIR}/bacnet/authentication_factor.c
+    ${SRC_DIR}/bacnet/authentication_factor_format.c
     ${SRC_DIR}/bacnet/bacaction.c
     ${SRC_DIR}/bacnet/bactext.c
     ${SRC_DIR}/bacnet/indtext.c

@@ -16,10 +16,17 @@
 #include "bacnet/wp.h"
 #include "access_door.h"
 #include "bacnet/basic/services.h"
+/* BACnet Stack Objects */
+#include "bacnet/basic/object/device.h"
 
 static bool Access_Door_Initialized = false;
 
-static ACCESS_DOOR_DESCR ad_descr[MAX_ACCESS_DOORS];
+static ACCESS_DOOR_DESCR ad_descrs[MAX_NUM_DEVICES][MAX_ACCESS_DOORS];
+#ifdef BAC_ROUTING
+#define ad_descr (ad_descrs[Routed_Device_Object_Index()])
+#else
+#define ad_descr (ad_descrs[0])
+#endif
 
 /* These three arrays are used by the ReadPropertyMultiple handler */
 static const int32_t Properties_Required[] = {
@@ -41,12 +48,23 @@ static const int32_t Properties_Required[] = {
 };
 
 static const int32_t Properties_Optional[] = {
+    /* unordered list of optional properties */
     PROP_DOOR_STATUS,      PROP_LOCK_STATUS,
     PROP_SECURED_STATUS,   PROP_DOOR_UNLOCK_DELAY_TIME,
     PROP_DOOR_ALARM_STATE, -1
 };
 
 static const int32_t Properties_Proprietary[] = { -1 };
+
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of writable properties */
+    PROP_PRESENT_VALUE, PROP_OUT_OF_SERVICE,   PROP_DOOR_STATUS,
+    PROP_LOCK_STATUS,   PROP_DOOR_ALARM_STATE, -1
+};
 
 void Access_Door_Property_Lists(
     const int32_t **pRequired,
@@ -66,34 +84,61 @@ void Access_Door_Property_Lists(
     return;
 }
 
+/**
+ * @brief Get the list of writable properties for an Access Door object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Access_Door_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
+}
+
 void Access_Door_Init(void)
 {
     unsigned i, j;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
     if (!Access_Door_Initialized) {
         Access_Door_Initialized = true;
 
-        /* initialize all the access door priority arrays to NULL */
-        for (i = 0; i < MAX_ACCESS_DOORS; i++) {
-            ad_descr[i].relinquish_default = DOOR_VALUE_LOCK;
-            ad_descr[i].event_state = EVENT_STATE_NORMAL;
-            ad_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
-            ad_descr[i].out_of_service = false;
-            ad_descr[i].door_status = DOOR_STATUS_CLOSED;
-            ad_descr[i].lock_status = LOCK_STATUS_LOCKED;
-            ad_descr[i].secured_status = DOOR_SECURED_STATUS_SECURED;
-            ad_descr[i].door_pulse_time = 30; /* 3s */
-            ad_descr[i].door_extended_pulse_time = 50; /* 5s */
-            ad_descr[i].door_unlock_delay_time = 0; /* 0s */
-            ad_descr[i].door_open_too_long_time = 300; /* 30s */
-            ad_descr[i].door_alarm_state = DOOR_ALARM_STATE_NORMAL;
-            for (j = 0; j < BACNET_MAX_PRIORITY; j++) {
-                ad_descr[i].value_active[j] = false;
-                /* just to fill in */
-                ad_descr[i].priority_array[j] = DOOR_VALUE_LOCK;
+        for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+            Set_Routed_Device_Object_Index(dev_id);
+#endif
+            /* initialize all the access door priority arrays to NULL */
+            for (i = 0; i < MAX_ACCESS_DOORS; i++) {
+                ad_descr[i].relinquish_default = DOOR_VALUE_LOCK;
+                ad_descr[i].event_state = EVENT_STATE_NORMAL;
+                ad_descr[i].reliability = RELIABILITY_NO_FAULT_DETECTED;
+                ad_descr[i].out_of_service = false;
+                ad_descr[i].door_status = DOOR_STATUS_CLOSED;
+                ad_descr[i].lock_status = LOCK_STATUS_LOCKED;
+                ad_descr[i].secured_status = DOOR_SECURED_STATUS_SECURED;
+                ad_descr[i].door_pulse_time = 30; /* 3s */
+                ad_descr[i].door_extended_pulse_time = 50; /* 5s */
+                ad_descr[i].door_unlock_delay_time = 0; /* 0s */
+                ad_descr[i].door_open_too_long_time = 300; /* 30s */
+                ad_descr[i].door_alarm_state = DOOR_ALARM_STATE_NORMAL;
+                for (j = 0; j < BACNET_MAX_PRIORITY; j++) {
+                    ad_descr[i].value_active[j] = false;
+                    /* just to fill in */
+                    ad_descr[i].priority_array[j] = DOOR_VALUE_LOCK;
+                }
             }
         }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 
     return;
 }
@@ -479,6 +524,10 @@ bool Access_Door_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
     unsigned object_index = 0;
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_application_data(
         wp_data->application_data, wp_data->application_data_len, &value);

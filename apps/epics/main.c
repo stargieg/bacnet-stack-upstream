@@ -112,6 +112,24 @@ static uint32_t Property_List_Length = 0;
 static uint32_t Property_List_Index = 0;
 static int32_t Property_List[MAX_PROPS + 2];
 
+static bool property_list_append(int32_t property_id)
+{
+    uint32_t capacity =
+        (uint32_t)(sizeof(Property_List) / sizeof(Property_List[0]));
+
+    /* Keep one slot free for the list terminator and cap to MAX_PROPS. */
+    if ((Property_List_Index >= (capacity - 1)) ||
+        (Property_List_Index >= MAX_PROPS)) {
+        return false;
+    }
+
+    Property_List[Property_List_Index] = property_id;
+    Property_List_Index++;
+    Property_List_Length++;
+
+    return true;
+}
+
 struct property_value_list_t {
     int32_t property_id;
     BACNET_APPLICATION_DATA_VALUE *value;
@@ -245,7 +263,7 @@ static void MyReadPropertyAckHandler(
             len = rp_ack_fully_decode_service_request(
                 service_request, service_len, rp_data);
         }
-        if (len > 0) {
+        if (len >= 0) {
             memmove(
                 &Read_Property_Multiple_Data.service_data, service_data,
                 sizeof(BACNET_CONFIRMED_SERVICE_ACK_DATA));
@@ -295,14 +313,14 @@ static void MyReadPropertyMultipleAckHandler(
 
 static void Init_Service_Handlers(void)
 {
-#if BAC_ROUTING
+#ifdef BAC_ROUTING
     uint32_t Object_Instance;
     BACNET_CHARACTER_STRING name_string;
 #endif
 
     Device_Init(NULL);
 
-#if BAC_ROUTING
+#ifdef BAC_ROUTING
     /* Put this client Device into the Routing table (first entry) */
     Object_Instance = Device_Object_Instance_Number();
     Device_Object_Name(Object_Instance, &name_string);
@@ -472,7 +490,11 @@ static void PrintReadPropertyArray(
     if (Walked_List_Index == 1) {
         /* If the array is empty, make it VTS3-friendly */
         if (value->tag == BACNET_APPLICATION_TAG_EMPTYLIST) {
-            fprintf(stdout, "?\n        ");
+            if (ShowValues) {
+                fprintf(stdout, "{}\n");
+            } else {
+                fprintf(stdout, "{?}\n");
+            }
             return;
         }
 
@@ -575,7 +597,7 @@ static void PrintReadPropertyData(
          * But are we showing Values?  We (VTS3) want ? instead of {?,?} to show
          * up. */
         switch (rpm_property->propertyIdentifier) {
-                /* Screen the Properties that can be arrays or Sequences */
+            /* Screen the Properties that can be arrays or Sequences */
             case PROP_PRESENT_VALUE:
             case PROP_PRIORITY_ARRAY:
                 if (!ShowValues) {
@@ -822,7 +844,7 @@ ProcessRPMData(BACNET_READ_ACCESS_DATA *rpm_data, EPICS_STATES state)
      * wait and put these object lists at the end */
     bool bHasObjectList = false;
     bool bHasStructuredViewList = false;
-    int i = 0;
+    int slot = 0;
 
     while (rpm_data) {
         rpm_property = rpm_data->listOfProperties;
@@ -838,10 +860,11 @@ ProcessRPMData(BACNET_READ_ACCESS_DATA *rpm_data, EPICS_STATES state)
                         bHasStructuredViewList = true;
                         break;
                     default:
-                        Property_List[Property_List_Index] =
-                            rpm_property->propertyIdentifier;
-                        Property_List_Index++;
-                        Property_List_Length++;
+                        if (!property_list_append(
+                                (int32_t)rpm_property->propertyIdentifier)) {
+                            /* Ignore excess properties once local list is full.
+                             */
+                        }
                         break;
                 }
                 /* Free up the value(s) */
@@ -852,10 +875,29 @@ ProcessRPMData(BACNET_READ_ACCESS_DATA *rpm_data, EPICS_STATES state)
                     free(old_value);
                 }
             } else if (state == GET_HEADING_RESPONSE) {
-                Property_Value_List[i++].value = rpm_property->value;
-                /* copy this pointer.
-                 * On error, the pointer will be null
-                 * We won't free these values; they will free at exit */
+                /* Resolve destination slot by property identifier to avoid
+                 * overflow from unexpected, duplicate, or excess properties */
+                for (slot = 0; Property_Value_List[slot].property_id != -1;
+                     slot++) {
+                    if (Property_Value_List[slot].property_id ==
+                        (int32_t)rpm_property->propertyIdentifier) {
+                        break;
+                    }
+                }
+                if ((Property_Value_List[slot].property_id != -1) &&
+                    (Property_Value_List[slot].value == NULL)) {
+                    /* Store only in the matching, empty slot.
+                     * We won't free these values; they will free at exit */
+                    Property_Value_List[slot].value = rpm_property->value;
+                } else {
+                    /* free unknown, duplicate, or excess property values */
+                    value = rpm_property->value;
+                    while (value) {
+                        old_value = value;
+                        value = value->next;
+                        free(old_value);
+                    }
+                }
             } else {
                 fprintf(stdout, "    ");
                 Print_Property_Identifier(rpm_property->propertyIdentifier);
@@ -882,18 +924,24 @@ ProcessRPMData(BACNET_READ_ACCESS_DATA *rpm_data, EPICS_STATES state)
     } else if (bSuccess) { /* and GET_LIST_OF_ALL_RESPONSE */
         /* Now append the properties we waited on. */
         if (bHasStructuredViewList) {
-            Property_List[Property_List_Index] = PROP_STRUCTURED_OBJECT_LIST;
-            Property_List_Index++;
-            Property_List_Length++;
+            if (!property_list_append(PROP_STRUCTURED_OBJECT_LIST)) {
+                /* Ignore when local list is full. */
+            }
         }
         if (bHasObjectList) {
-            Property_List[Property_List_Index] = PROP_OBJECT_LIST;
-            Property_List_Index++;
-            Property_List_Length++;
+            if (!property_list_append(PROP_OBJECT_LIST)) {
+                /* Ignore when local list is full. */
+            }
         }
         /* Now insert the -1 list terminator, but don't count it. */
-        Property_List[Property_List_Index] = -1;
-        assert(Property_List_Length < MAX_PROPS);
+        if (Property_List_Index <
+            (uint32_t)(sizeof(Property_List) / sizeof(Property_List[0]))) {
+            Property_List[Property_List_Index] = -1;
+        } else {
+            Property_List
+                [(sizeof(Property_List) / sizeof(Property_List[0])) - 1] = -1;
+        }
+        assert(Property_List_Length <= MAX_PROPS);
         Property_List_Index = 0; /* Will start at top of the list */
         nextState = GET_PROPERTY_REQUEST;
     }
@@ -922,11 +970,12 @@ static void print_help(const char *filename)
     printf("-v: show values instead of '?' \n");
     printf("-c: columns break for BACnetARRAY. Default is 0=always\n");
     printf("-d: show only device object properties\n");
-    printf("-p: Use sport for \"my\" port.  0xBAC0 is default.\n");
+    printf("-p: Use sport for \"my\" port. 47808 is default.\n");
     printf("    Allows you to communicate with a localhost target.\n");
-    printf("-t: declare target's MAC instead of using Who-Is to bind to  \n");
-    printf("    device-instance. Format is \"C0:A8:00:18:BA:C0\"\n");
-    printf("    Use \"7F:00:00:01:BA:C0\" for loopback testing \n");
+    printf("-t: declare target's MAC or IP address instead of using Who-Is\n");
+    printf("    to bind to device-instance.\n");
+    printf("    Format is \"192.168.1.42:47808\" or \"C0:A8:01:2A:BA:C0\".\n");
+    printf("    Use \"127.0.0.1:47808\" for loopback testing.\n");
     printf("-n: specify target's DNET if not local BACnet network  \n");
     printf("    or on routed Virtual Network \n");
     printf("\n");
@@ -938,6 +987,7 @@ static int CheckCommandLineArgs(int argc, char *argv[])
 {
     int i;
     bool bFoundTarget = false;
+    BACNET_MAC_ADDRESS mac = { 0 };
     int argi = 0;
     const char *filename = NULL;
 
@@ -1002,22 +1052,8 @@ static int CheckCommandLineArgs(int argc, char *argv[])
                     break;
                 case 't':
                     if (++i < argc) {
-                        /* decoded MAC addresses */
-                        unsigned mac[6];
-                        /* number of successful decodes */
-                        int count;
-                        /* loop counter */
-                        unsigned j;
-                        count = sscanf(
-                            argv[i], "%2x:%2x:%2x:%2x:%2x:%2x", &mac[0],
-                            &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-                        if (count == 6) { /* success */
-                            Target_Address.mac_len = count;
-                            for (j = 0; j < 6; j++) {
-                                Target_Address.mac[j] = (uint8_t)mac[j];
-                            }
-                            Target_Address.net = 0;
-                            Target_Address.len = 0; /* No src address */
+                        if (bacnet_address_mac_from_ascii(&mac, argv[i])) {
+                            bacnet_address_init(&Target_Address, &mac, 0, NULL);
                             Provided_Targ_MAC = true;
                             break;
                         } else {

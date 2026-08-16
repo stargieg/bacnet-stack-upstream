@@ -15,6 +15,12 @@
 #include "bacnet/bacint.h"
 #include "bacnet/npdu.h"
 #include "bacnet/apdu.h"
+/* BACnet routing support */
+#ifdef BAC_ROUTING
+#include "bacnet/basic/sys/debug.h"
+#include "bacnet/basic/object/device.h"
+#include "bacnet/datalink/datalink.h"
+#endif
 
 /** Copy the npdu_data structure information from src to dest.
  * @param dest [out] The 'to' structure
@@ -34,6 +40,41 @@ void npdu_copy_data(BACNET_NPDU_DATA *dest, const BACNET_NPDU_DATA *src)
 
     return;
 }
+
+#ifdef BAC_ROUTING
+/** Encode NPDU source address for routing.
+ *  Sets the source address based on whether this is a virtual device
+ *  or a gateway device.
+ * @param src [out] Pointer to store the source address
+ * @return 0 on success, -1 if device object not found
+ */
+static int npdu_encode_pdu_routing(BACNET_ADDRESS *src)
+{
+    DEVICE_OBJECT_DATA *pDev = NULL;
+    bool is_routed_device = false;
+    /* get the currently active routed device object */
+    pDev = Get_Routed_Device_Object(-1);
+    if (pDev == NULL) {
+        debug_log_fprintf(DEBUG_LOG_ERROR, stderr, "Device object not found\n");
+        return -1;
+    }
+    is_routed_device = (pDev->bacDevAddr.net != 0);
+    if (is_routed_device) {
+        bacnet_address_copy(src, &pDev->bacDevAddr);
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr,
+            "Virtual Device NPDU: SNET=%d, Instance=%u\n", pDev->bacDevAddr.net,
+            pDev->bacObj.Object_Instance_Number);
+    } else {
+        datalink_get_my_address(src);
+        debug_log_fprintf(
+            DEBUG_LOG_INFO, stderr, "Gateway Device NPDU: Instance=%u\n",
+            pDev->bacObj.Object_Instance_Number);
+    }
+
+    return 0;
+}
+#endif
 
 /*
 
@@ -87,10 +128,12 @@ ABORT.indication               Yes         Yes         Yes        No
  * @param dest [in] The routing destination information if the message must
  *  be routed to reach its destination. If dest->net and dest->len are 0,
  *  there is no routing destination information.
- * @param src  [in] The routing source information if the message was routed
+ * @param src  [in,out] The routing source information if the message was routed
  *  from another BACnet network. If src->net and src->len are 0, there is no
  *  routing source information. This src describes the original source of the
  *  message when it had to be routed to reach this BACnet Device.
+ * @note When BAC_ROUTING is defined, src is populated with the active routed
+ *  device or datalink address before encoding.
  * @param npdu_data [in] The structure which describes how the NCPI and other
  *  NPDU bytes should be encoded.
  * @return On success, returns the number of bytes which were encoded into
@@ -104,6 +147,13 @@ int npdu_encode_pdu(
 {
     int len = 0; /* return value - number of octets loaded in this function */
     uint8_t i = 0; /* counter  */
+
+#ifdef BAC_ROUTING
+    /* populate src with the active routed device address or datalink address */
+    if (src) {
+        (void)npdu_encode_pdu_routing(src);
+    }
+#endif
 
     if (npdu_data) {
         /* protocol version */
@@ -839,4 +889,109 @@ bool npdu_is_data_expecting_reply(
     return npdu_is_expected_reply(
         request_pdu, request_pdu_len, &request_address, reply_pdu,
         reply_pdu_len, &reply_address);
+}
+
+/**
+ * @brief Process the NPDU portion of an I-Am-Router-To-Network message, which
+ * contains a list of BACnet network numbers that the router is connected to.
+ * @param snet [in] The source network number of the I-Am-Router-To
+ * Network message, which is the network number of the router sending the
+ * message.
+ * @param src [in] The source address of the I-Am-Router-To-Network message,
+ * which is the address of the router sending the message.
+ * @param npdu [in] The buffer containing the NPDU portion of the
+ * I-Am-Router-To-Network message, which contains the list of BACnet network
+ * numbers that the router is connected to.
+ * @param npdu_size [in] The size of the npdu buffer in bytes.
+ * @param dnet_add [in] A callback function that will be called for each BACnet
+ * network number (DNET)
+ */
+void npdu_i_am_router_to_network_process(
+    uint16_t snet,
+    const BACNET_ADDRESS *src,
+    const uint8_t *npdu,
+    uint16_t npdu_size,
+    npdu_dnet_add_callback_t dnet_add)
+{
+    int len = 2;
+    uint16_t dnet = 0;
+    uint16_t npdu_offset = 0;
+    uint16_t npdu_len = npdu_size;
+
+    while (npdu_len >= len) {
+        len = decode_unsigned16(&npdu[npdu_offset], &dnet);
+        if (dnet_add) {
+            dnet_add(snet, dnet, src);
+        }
+        npdu_len -= len;
+        npdu_offset += len;
+    }
+}
+
+/**
+ * @brief Process the NPDU portion of an Initialize-Routing-Table message, which
+ * contains a list of BACnet network numbers (DNETs) and per-port information.
+ * @param snet [in] The source network number of the Initialize-Routing-Table
+ * message, which is the network number of the router sending the message.
+ * @param src [in] The source address of the I-Have-Router-To-Network message,
+ * which is the address of the router sending the message.
+ * @param npdu [in] The buffer containing the NPDU portion of the
+ * I-Have-Router-To-Network message, which contains the list of BACnet network
+ * numbers that the router is connected to, along with port information.
+ * @param npdu_size [in] The size of the npdu buffer in bytes.
+ * @param dnet_add [in] Optional callback invoked for each decoded DNET value.
+ * The callback receives the source network, decoded DNET, and source address.
+ */
+void npdu_init_routing_table_process(
+    uint16_t snet,
+    const BACNET_ADDRESS *src,
+    const uint8_t *npdu,
+    uint16_t npdu_size,
+    npdu_dnet_add_callback_t dnet_add)
+{
+    int len = 2;
+    uint16_t dnet = 0;
+    uint16_t npdu_offset = 0;
+    uint8_t port_id = 0;
+    uint8_t port_info_len = 0;
+    uint8_t net_count;
+    uint16_t npdu_len = npdu_size;
+
+    if (npdu_len <= 1) {
+        /* malformed message */
+        return;
+    }
+    net_count = npdu[npdu_offset];
+    npdu_offset += 1;
+    npdu_len -= 1;
+    if (net_count == 0) {
+        /* no networks, nothing to do */
+        return;
+    }
+    /* DNET(2) + PortID(1) + PortInfoLen(1) = 4 bytes */
+    while ((npdu_len >= 4) && (net_count--)) {
+        /* DNET */
+        len = decode_unsigned16(&npdu[npdu_offset], &dnet);
+        npdu_offset += len;
+        npdu_len -= len;
+        /* update routing table */
+        if (dnet_add) {
+            dnet_add(snet, dnet, src);
+        }
+        /* skip port_id & port_info */
+        port_id = npdu[npdu_offset];
+        npdu_offset += 1;
+        npdu_len -= 1;
+        port_info_len = npdu[npdu_offset];
+        npdu_offset += 1;
+        npdu_len -= 1;
+        if (npdu_len >= port_info_len) {
+            npdu_offset += port_info_len;
+            npdu_len -= port_info_len;
+        } else {
+            /* malformed message */
+            break;
+        }
+        (void)port_id;
+    }
 }

@@ -21,7 +21,7 @@ string(REGEX REPLACE
 set(ZTST_DIR "${TST_DIR}/ztest/src")
 
 add_compile_definitions(
-    BIG_ENDIAN=0
+    BACNET_BIG_ENDIAN=0
     CONFIG_ZTEST=1
     )
 
@@ -36,6 +36,8 @@ add_executable(${PROJECT_NAME}
     ${SRC_DIR}/bacnet/basic/object/command.c
     # Support files and stubs (pathname alphabetical)
     ${SRC_DIR}/bacnet/access_rule.c
+    ${SRC_DIR}/bacnet/authentication_factor.c
+    ${SRC_DIR}/bacnet/authentication_factor_format.c
     ${SRC_DIR}/bacnet/bacaction.c
     ${SRC_DIR}/bacnet/bacaddr.c
     ${SRC_DIR}/bacnet/bacapp.c
@@ -47,6 +49,7 @@ add_executable(${PROJECT_NAME}
     ${SRC_DIR}/bacnet/bacreal.c
     ${SRC_DIR}/bacnet/bacstr.c
     ${SRC_DIR}/bacnet/bactext.c
+    ${SRC_DIR}/bacnet/basic/sys/keylist.c
     ${SRC_DIR}/bacnet/basic/sys/bigend.c
     ${SRC_DIR}/bacnet/datetime.c
     ${SRC_DIR}/bacnet/basic/sys/days.c

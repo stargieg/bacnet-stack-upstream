@@ -45,6 +45,10 @@ static struct Address_Cache_Entry {
     uint8_t Flags;
     uint32_t device_id;
     unsigned max_apdu;
+#if BACNET_SEGMENTATION_ENABLED
+    uint8_t segmentation;
+    uint16_t maxsegments;
+#endif
     BACNET_ADDRESS address;
     uint32_t TimeToLive;
 } Address_Cache[MAX_ADDRESS_CACHE];
@@ -346,9 +350,16 @@ void address_set_device_TTL(
  * @param device_id  Device-Id
  * @param max_apdu  Pointer to a variable, taking the maximum APDU size.
  * @param src  Pointer to address structure for return.
+ * @param segmentation  Pointer to a variable, taking the BACNET_SEGMENTATION
+ * flag.
+ * @param maxsegments  Pointer to a variable, taking the maximum segments.
  */
-bool address_get_by_device(
-    uint32_t device_id, unsigned *max_apdu, BACNET_ADDRESS *src)
+bool address_segment_get_by_device(
+    uint32_t device_id,
+    unsigned *max_apdu,
+    BACNET_ADDRESS *src,
+    uint8_t *segmentation,
+    uint16_t *maxsegments)
 {
     struct Address_Cache_Entry *pMatch;
     bool found = false; /* return value */
@@ -364,6 +375,20 @@ bool address_get_by_device(
                 if (max_apdu) {
                     *max_apdu = pMatch->max_apdu;
                 }
+                if (segmentation) {
+#if BACNET_SEGMENTATION_ENABLED
+                    *segmentation = pMatch->segmentation;
+#else
+                    *segmentation = SEGMENTATION_NONE;
+#endif
+                }
+                if (maxsegments) {
+#if BACNET_SEGMENTATION_ENABLED
+                    *maxsegments = pMatch->maxsegments;
+#else
+                    *maxsegments = 1;
+#endif
+                }
                 /* Prove we found it */
                 found = true;
             }
@@ -373,6 +398,18 @@ bool address_get_by_device(
     }
 
     return found;
+}
+
+/**
+ * @brief Return the cached address for the given device-id
+ * @param device_id  Device-Id
+ * @param max_apdu  Pointer to a variable, taking the maximum APDU size.
+ * @param src  Pointer to address structure for return.
+ */
+bool address_get_by_device(
+    uint32_t device_id, unsigned *max_apdu, BACNET_ADDRESS *src)
+{
+    return address_segment_get_by_device(device_id, max_apdu, src, NULL, NULL);
 }
 
 /**
@@ -716,59 +753,46 @@ unsigned address_count(void)
  * property. Basically encode the address list to be send out.
  *
  * @param apdu  Pointer to the APDU
- * @param apdu_len  Remaining buffer size.
+ * @param apdu_size  Remaining buffer size.
  *
  * @return Count of encoded bytes.
  */
-int address_list_encode(uint8_t *apdu, unsigned apdu_len)
+int address_list_encode(uint8_t *apdu, unsigned apdu_size)
 {
-    int iLen = 0;
+    int len = 0, apdu_len = 0;
     struct Address_Cache_Entry *pMatch;
-    BACNET_OCTET_STRING MAC_Address;
     unsigned index;
 
-    /* Look for matching address. */
+    /* determine the length of the encoded address list */
     for (index = 0; index < MAX_ADDRESS_CACHE; index++) {
         pMatch = &Address_Cache[index];
         if ((pMatch->Flags & (BAC_ADDR_IN_USE | BAC_ADDR_BIND_REQ)) ==
             BAC_ADDR_IN_USE) {
-            iLen += encode_application_object_id(
-                &apdu[iLen], OBJECT_DEVICE, pMatch->device_id);
-            iLen +=
-                encode_application_unsigned(&apdu[iLen], pMatch->address.net);
-            if ((unsigned)iLen >= apdu_len) {
-                break;
-            }
-
-            /* pick the appropriate type of entry from the cache */
-
-            if (pMatch->address.len != 0) {
-                /* BAC */
-                if ((unsigned)(iLen + pMatch->address.len) >= apdu_len) {
-                    break;
+            /* encode matching addresses */
+            len = bacnet_address_binding_entry_encode(
+                NULL, pMatch->device_id, &pMatch->address);
+            apdu_len += len;
+        }
+    }
+    /* encode the address list if there is enough space */
+    if (apdu) {
+        if (apdu_len > (int)apdu_size) {
+            apdu_len = BACNET_STATUS_ABORT;
+        } else {
+            for (index = 0; index < MAX_ADDRESS_CACHE; index++) {
+                pMatch = &Address_Cache[index];
+                if ((pMatch->Flags & (BAC_ADDR_IN_USE | BAC_ADDR_BIND_REQ)) ==
+                    BAC_ADDR_IN_USE) {
+                    /* encode matching addresses */
+                    len = bacnet_address_binding_entry_encode(
+                        apdu, pMatch->device_id, &pMatch->address);
+                    apdu += len;
                 }
-                octetstring_init(
-                    &MAC_Address, pMatch->address.adr, pMatch->address.len);
-                iLen +=
-                    encode_application_octet_string(&apdu[iLen], &MAC_Address);
-            } else {
-                /* MAC*/
-                if ((unsigned)(iLen + pMatch->address.mac_len) >= apdu_len) {
-                    break;
-                }
-                octetstring_init(
-                    &MAC_Address, pMatch->address.mac, pMatch->address.mac_len);
-                iLen +=
-                    encode_application_octet_string(&apdu[iLen], &MAC_Address);
-            }
-            /* Any space left? */
-            if ((unsigned)iLen >= apdu_len) {
-                break;
             }
         }
     }
 
-    return (iLen);
+    return apdu_len;
 }
 
 /**
@@ -805,7 +829,6 @@ int rr_address_list_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
     int iLen = 0;
     int32_t iTemp = 0;
     struct Address_Cache_Entry *pMatch = NULL;
-    BACNET_OCTET_STRING MAC_Address;
     uint32_t uiTotal = 0; /* Number of bound entries in the cache */
     uint32_t uiIndex = 0; /* Current entry number */
     uint32_t uiFirst = 0; /* Entry number we started encoding from */
@@ -921,23 +944,8 @@ int rr_address_list_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
                 &pRequest->ResultFlags, RESULT_FLAG_MORE_ITEMS, true);
             break;
         }
-        iTemp = (int32_t)encode_application_object_id(
-            &apdu[iLen], OBJECT_DEVICE, pMatch->device_id);
-        iTemp += encode_application_unsigned(
-            &apdu[iLen + iTemp], pMatch->address.net);
-
-        /* pick the appropriate type of entry from the cache */
-        if (pMatch->address.len != 0) {
-            octetstring_init(
-                &MAC_Address, pMatch->address.adr, pMatch->address.len);
-            iTemp += encode_application_octet_string(
-                &apdu[iLen + iTemp], &MAC_Address);
-        } else {
-            octetstring_init(
-                &MAC_Address, pMatch->address.mac, pMatch->address.mac_len);
-            iTemp += encode_application_octet_string(
-                &apdu[iLen + iTemp], &MAC_Address);
-        }
+        iTemp = bacnet_address_binding_entry_encode(
+            &apdu[iLen], pMatch->device_id, &pMatch->address);
         /* Reduce the remaining space */
         uiRemaining -= iTemp;
         /* and increase the length consumed */
@@ -950,15 +958,25 @@ int rr_address_list_encode(uint8_t *apdu, BACNET_READ_RANGE_DATA *pRequest)
         /* Chalk up another one for the response count */
         pRequest->ItemCount++;
 
+        if (pMatch > &Address_Cache[MAX_ADDRESS_CACHE - 1]) {
+            /* valid entry at the end of the table */
+            uiLast = uiTotal;
+            break;
+        }
         while ((pMatch->Flags & (BAC_ADDR_IN_USE | BAC_ADDR_BIND_REQ)) !=
                BAC_ADDR_IN_USE) {
             /* Find next bound entry */
             pMatch++;
-            /* Can normally not happen. */
             if (pMatch > &Address_Cache[MAX_ADDRESS_CACHE - 1]) {
-                /* Issue with the table. */
-                return (0);
+                /* valid entry at the end of the table */
+                uiLast = uiTotal;
+                break;
             }
+        }
+        if (pMatch > &Address_Cache[MAX_ADDRESS_CACHE - 1]) {
+            /* valid entry at the end of the table */
+            uiLast = uiTotal;
+            break;
         }
     }
     /* Set remaining result flags if necessary */

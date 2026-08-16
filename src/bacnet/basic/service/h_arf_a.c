@@ -14,9 +14,7 @@
 #include "bacnet/npdu.h"
 #include "bacnet/apdu.h"
 #include "bacnet/arf.h"
-#if defined(BACFILE)
 #include "bacnet/basic/object/bacfile.h"
-#endif
 /* basic objects, services, TSM, and datalink */
 #include "bacnet/basic/object/device.h"
 #include "bacnet/basic/tsm/tsm.h"
@@ -27,7 +25,6 @@
 /* Note: it does not have to be the same file=instance */
 /* that someone can read from us.  It is common to */
 /* use the description as the file name. */
-#if defined(BACFILE)
 void handler_atomic_read_file_ack(
     uint8_t *service_request,
     uint16_t service_len,
@@ -35,7 +32,7 @@ void handler_atomic_read_file_ack(
     BACNET_CONFIRMED_SERVICE_ACK_DATA *service_data)
 {
     int len = 0;
-    BACNET_ATOMIC_READ_FILE_DATA data;
+    BACNET_ATOMIC_READ_FILE_DATA data = { 0 };
     uint32_t instance = 0;
 
     (void)src;
@@ -54,4 +51,3 @@ void handler_atomic_read_file_ack(
         }
     }
 }
-#endif

@@ -35,10 +35,18 @@
 #endif
 
 /* Key List for storing the object data sorted by instance number  */
-static OS_Keylist Object_List = NULL;
+static OS_Keylist Object_Lists[MAX_NUM_DEVICES];
+#ifdef BAC_ROUTING
+#define Object_List (Object_Lists[Routed_Device_Object_Index()])
+#else
+#define Object_List (Object_Lists[0])
+#endif
 /* common object type */
 static const BACNET_OBJECT_TYPE Object_Type = OBJECT_TIMER;
 static write_property_function Write_Property_Internal_Callback;
+/* Write Property notification callbacks for logging or other purposes */
+static struct timer_write_property_notification
+    Write_Property_Notification_Head;
 
 struct object_data {
     uint32_t Present_Value;
@@ -61,6 +69,7 @@ struct object_data {
     BACNET_RELIABILITY Reliability;
     bool Out_Of_Service : 1;
     bool Changed : 1;
+    bool Writeback_Active : 1;
     void *Context;
 };
 
@@ -94,6 +103,25 @@ static const int32_t Properties_Optional[] = {
 
 static const int32_t Properties_Proprietary[] = { -1 };
 
+/* Every object shall have a Writable Property_List property
+   which is a BACnetARRAY of property identifiers,
+   one property identifier for each property within this object
+   that is always writable.  */
+static const int32_t Writable_Properties[] = {
+    /* unordered list of always writable properties */
+    PROP_PRESENT_VALUE,
+    PROP_TIMER_RUNNING,
+    PROP_OUT_OF_SERVICE,
+    PROP_DEFAULT_TIMEOUT,
+    PROP_MIN_PRES_VALUE,
+    PROP_MAX_PRES_VALUE,
+    PROP_RESOLUTION,
+    PROP_PRIORITY_FOR_WRITING,
+    PROP_STATE_CHANGE_VALUES,
+    PROP_LIST_OF_OBJECT_PROPERTY_REFERENCES,
+    -1
+};
+
 /**
  * Returns the list of required, optional, and proprietary properties.
  * Used by ReadPropertyMultiple service.
@@ -121,6 +149,20 @@ void Timer_Property_Lists(
     }
 
     return;
+}
+
+/**
+ * @brief Get the list of writable properties for a Timer object
+ * @param  object_instance - object-instance number of the object
+ * @param  properties - Pointer to the pointer of writable properties.
+ */
+void Timer_Writable_Property_List(
+    uint32_t object_instance, const int32_t **properties)
+{
+    (void)object_instance;
+    if (properties) {
+        *properties = Writable_Properties;
+    }
 }
 
 /**
@@ -206,6 +248,34 @@ static bool Timer_Reference_List_Member_Empty(
     if (pMember) {
         if ((pMember->objectIdentifier.instance == BACNET_MAX_INSTANCE) ||
             (pMember->deviceIdentifier.instance == BACNET_MAX_INSTANCE)) {
+            status = true;
+        }
+    }
+
+    return status;
+}
+
+/**
+ * For a given object instance-number, determines if the member is a
+ * self-reference with properties that can re-enter Timer transition logic
+ *
+ * @param  object_instance - object-instance number of the object
+ * @param  pMember - object property reference element
+ * @return true if the member is self
+ */
+static bool Timer_Reference_List_Member_Self(
+    uint32_t object_instance,
+    const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember)
+{
+    bool status = false;
+
+    if (pMember) {
+        if ((pMember->objectIdentifier.type == OBJECT_TIMER) &&
+            (pMember->objectIdentifier.instance == object_instance) &&
+            (pMember->deviceIdentifier.type == OBJECT_DEVICE) &&
+            (pMember->deviceIdentifier.instance != BACNET_MAX_INSTANCE) &&
+            (((pMember->propertyIdentifier == PROP_PRESENT_VALUE) ||
+              (pMember->propertyIdentifier == PROP_TIMER_RUNNING)))) {
             status = true;
         }
     }
@@ -459,7 +529,7 @@ unsigned Timer_Reference_List_Member_Element_Count(uint32_t object_instance)
 /**
  * For a given object instance-number, sets the present-value at a given
  * priority 1..16.
- *
+ * @param object_instance - object-instance number of the object
  * @param pObject - object instance data
  * @param value - application value
  * @param priority - BACnet priority 0=none,1..16
@@ -467,6 +537,7 @@ unsigned Timer_Reference_List_Member_Element_Count(uint32_t object_instance)
  * @return  true if values are within range and present-value is sent.
  */
 static bool Timer_Write_Members(
+    uint32_t object_instance,
     struct object_data *pObject,
     const BACNET_TIMER_STATE_CHANGE_VALUE *value,
     uint8_t priority)
@@ -477,6 +548,11 @@ static bool Timer_Write_Members(
     const BACNET_DEVICE_OBJECT_PROPERTY_REFERENCE *pMember = NULL;
 
     if (pObject && value) {
+        if (pObject->Writeback_Active) {
+            /* Prevent recursive writeback */
+            return false;
+        }
+        pObject->Writeback_Active = true;
         for (i = 0; i < BACNET_TIMER_MANIPULATED_PROPERTIES_MAX; i++) {
             pMember = &pObject->Manipulated_Properties[i];
             if (Timer_Reference_List_Member_Empty(pMember)) {
@@ -496,13 +572,18 @@ static bool Timer_Write_Members(
                     wp_data.application_data, sizeof(wp_data.application_data),
                     value);
                 if (Write_Property_Internal_Callback) {
-                    status = Write_Property_Internal_Callback(&wp_data);
+                    status = write_property_bacnet_array_valid(&wp_data);
                     if (status) {
-                        wp_data.error_code = ERROR_CODE_SUCCESS;
+                        status = Write_Property_Internal_Callback(&wp_data);
+                        if (status) {
+                            wp_data.error_code = ERROR_CODE_SUCCESS;
+                        }
                     }
                 }
+                Timer_Write_Property_Notify(object_instance, status, &wp_data);
             }
         }
+        pObject->Writeback_Active = false;
     }
 
     return status;
@@ -511,9 +592,11 @@ static bool Timer_Write_Members(
 /**
  * @brief initiate the write requests for the current transition
  * @param  object_instance - object-instance number of the object
+ * @param  pObject - object instance data
  * @return true if the write occurred
  */
-static bool Timer_Write_Request_Initiate(struct object_data *pObject)
+static bool Timer_Write_Request_Initiate(
+    uint32_t object_instance, struct object_data *pObject)
 {
     bool status = false;
     unsigned index = 0;
@@ -529,7 +612,7 @@ static bool Timer_Write_Request_Initiate(struct object_data *pObject)
         }
         if (value) {
             status = Timer_Write_Members(
-                pObject, value, pObject->Priority_For_Writing);
+                object_instance, pObject, value, pObject->Priority_For_Writing);
         }
     }
 
@@ -597,7 +680,7 @@ bool Timer_State_Set(uint32_t object_instance, BACNET_TIMER_STATE value)
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
                 pObject->Last_State_Change = TIMER_TRANSITION_RUNNING_TO_IDLE;
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             } else if (pObject->Timer_State == TIMER_STATE_EXPIRED) {
                 pObject->Last_State_Change = TIMER_TRANSITION_EXPIRED_TO_IDLE;
                 /*  then set Timer_State to IDLE;
@@ -611,7 +694,7 @@ bool Timer_State_Set(uint32_t object_instance, BACNET_TIMER_STATE value)
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
                 pObject->Last_State_Change = TIMER_TRANSITION_EXPIRED_TO_IDLE;
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             } else if (pObject->Timer_State == TIMER_STATE_IDLE) {
                 /* then no properties shall be changed;
                    no write requests shall be initiated;
@@ -692,7 +775,7 @@ bool Timer_Running_Set(uint32_t object_instance, bool start)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             } else if (pObject->Timer_State == TIMER_STATE_RUNNING) {
                 /* If a value of TRUE is written to the Timer_Running property,
                    then set Last_State_Change to RUNNING_TO_RUNNING;
@@ -709,7 +792,7 @@ bool Timer_Running_Set(uint32_t object_instance, bool start)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             } else if (pObject->Timer_State == TIMER_STATE_EXPIRED) {
                 /* If a value of TRUE is written to the Timer_Running property,
                    set Timer_State to RUNNING;
@@ -727,7 +810,7 @@ bool Timer_Running_Set(uint32_t object_instance, bool start)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             }
         } else {
             if (pObject->Timer_State == TIMER_STATE_RUNNING) {
@@ -746,7 +829,7 @@ bool Timer_Running_Set(uint32_t object_instance, bool start)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             }
         }
         status = true;
@@ -1076,7 +1159,7 @@ bool Timer_Present_Value_Set(uint32_t object_instance, uint32_t value)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
             }
             status = true;
         } else {
@@ -1109,7 +1192,7 @@ bool Timer_Present_Value_Set(uint32_t object_instance, uint32_t value)
                 datetime_local(
                     &pObject->Update_Time.date, &pObject->Update_Time.time,
                     NULL, NULL);
-                Timer_Write_Request_Initiate(pObject);
+                Timer_Write_Request_Initiate(object_instance, pObject);
                 status = true;
             } else {
                 status = false;
@@ -1725,6 +1808,8 @@ static int Timer_State_Change_Value_Length(
  * @param object_instance [in] BACnet object instance number
  * @param array_index [in] array index to write:
  *    0=array size, 1 to N for individual array members
+ * @param array_size [in] The total number of elements in the array,
+ *    if writing array size
  * @param application_data [in] encoded element value
  * @param application_data_len [in] The size of the encoded element value
  * @return BACNET_ERROR_CODE value
@@ -1732,6 +1817,7 @@ static int Timer_State_Change_Value_Length(
 static BACNET_ERROR_CODE Timer_State_Change_Value_Write(
     uint32_t object_instance,
     BACNET_ARRAY_INDEX array_index,
+    BACNET_UNSIGNED_INTEGER array_size,
     uint8_t *application_data,
     size_t application_data_len)
 {
@@ -1741,9 +1827,11 @@ static BACNET_ERROR_CODE Timer_State_Change_Value_Write(
     bool status;
 
     if (array_index == 0) {
-        /* fixed size array */
+        /* This array is not required to be resizable
+            through BACnet write services */
+        (void)array_size;
         error_code = ERROR_CODE_WRITE_ACCESS_DENIED;
-    } else if (array_index < TIMER_TRANSITION_MAX) {
+    } else {
         len = bacnet_timer_value_decode(
             application_data, application_data_len, &new_value);
         if (len > 0) {
@@ -1758,8 +1846,6 @@ static BACNET_ERROR_CODE Timer_State_Change_Value_Write(
         } else {
             error_code = ERROR_CODE_INVALID_DATA_TYPE;
         }
-    } else {
-        error_code = ERROR_CODE_INVALID_ARRAY_INDEX;
     }
 
     return error_code;
@@ -1805,7 +1891,7 @@ static BACNET_ERROR_CODE Timer_List_Of_Object_Property_References_Add(
     bool status = false;
 
     if ((!application_data) && (application_data_len == 0)) {
-        /* empty the BACnetLIST - remove all before adding */
+        /* empty the BACnetLIST - remove all */
         (void)Timer_Reference_List_Member_Element_Remove(object_instance, NULL);
         error_code = ERROR_CODE_SUCCESS;
     } else {
@@ -1814,6 +1900,11 @@ static BACNET_ERROR_CODE Timer_List_Of_Object_Property_References_Add(
         if (len > 0) {
             if (Timer_Reference_List_Member_Empty(&new_value)) {
                 /* The element value is out of range for the property. */
+                error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+            } else if (Timer_Reference_List_Member_Self(
+                           object_instance, &new_value)) {
+                /* The element value is a self-reference with
+                   properties that can re-enter Timer transition logic */
                 error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
             } else {
                 status = Timer_Reference_List_Member_Element_Add(
@@ -1890,6 +1981,10 @@ bool Timer_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
     int len = 0;
     BACNET_APPLICATION_DATA_VALUE value = { 0 };
 
+    /* Valid data? */
+    if (wp_data == NULL) {
+        return false;
+    }
     /* decode the some of the request */
     len = bacapp_decode_known_array_property(
         wp_data->application_data, wp_data->application_data_len, &value,
@@ -1911,6 +2006,13 @@ bool Timer_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
                     wp_data->error_class = ERROR_CLASS_PROPERTY;
                     wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
                 }
+            }
+            break;
+        case PROP_TIMER_RUNNING:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_BOOLEAN);
+            if (status) {
+                Timer_Running_Set(wp_data->object_instance, value.type.Boolean);
             }
             break;
         case PROP_OUT_OF_SERVICE:
@@ -2080,6 +2182,49 @@ void Timer_Write_Property_Internal_Callback_Set(write_property_function cb)
 }
 
 /**
+ * @brief Add a Timer write property notification callback
+ * @param notification - pointer to the notification structure
+ */
+void Timer_Write_Property_Notification_Add(
+    struct timer_write_property_notification *notification)
+{
+    struct timer_write_property_notification *head;
+
+    head = &Write_Property_Notification_Head;
+    do {
+        if (head->next == notification) {
+            /* already here! */
+            break;
+        } else if (!head->next) {
+            /* first available node */
+            head->next = notification;
+            break;
+        }
+        head = head->next;
+    } while (head);
+}
+
+/**
+ * @brief Calls all registered Timer write property notification callbacks
+ * @param instance - object instance number
+ * @param status - write property status
+ * @param wp_data - write property data
+ */
+void Timer_Write_Property_Notify(
+    uint32_t instance, bool status, BACNET_WRITE_PROPERTY_DATA *wp_data)
+{
+    struct timer_write_property_notification *head;
+
+    head = &Write_Property_Notification_Head;
+    do {
+        if (head->callback) {
+            head->callback(instance, status, wp_data);
+        }
+        head = head->next;
+    } while (head);
+}
+
+/**
  * @brief Updates the object program operation
  * @details In the RUNNING state, the timer is active
  *  and is counting down the remaining time.
@@ -2105,6 +2250,10 @@ void Timer_Task(uint32_t object_instance, uint16_t milliseconds)
                     pObject->Timer_State = TIMER_STATE_EXPIRED;
                     pObject->Last_State_Change =
                         TIMER_TRANSITION_RUNNING_TO_EXPIRED;
+                    datetime_local(
+                        &pObject->Update_Time.date, &pObject->Update_Time.time,
+                        NULL, NULL);
+                    Timer_Write_Request_Initiate(object_instance, pObject);
                 }
                 break;
             case TIMER_STATE_EXPIRED:
@@ -2286,18 +2435,30 @@ bool Timer_Delete(uint32_t object_instance)
 void Timer_Cleanup(void)
 {
     struct object_data *pObject;
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
 
-    if (Object_List) {
-        do {
-            pObject = Keylist_Data_Pop(Object_List);
-            if (pObject) {
-                free(pObject);
-            }
-        } while (pObject);
-
-        Keylist_Delete(Object_List);
-        Object_List = NULL;
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (Object_List) {
+            do {
+                pObject = Keylist_Data_Pop(Object_List);
+                if (pObject) {
+                    free(pObject);
+                }
+            } while (pObject);
+            Keylist_Delete(Object_List);
+            Object_List = NULL;
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
 
 /**
@@ -2305,7 +2466,21 @@ void Timer_Cleanup(void)
  */
 void Timer_Init(void)
 {
-    if (!Object_List) {
-        Object_List = Keylist_Create();
+    uint16_t dev_id;
+#ifdef BAC_ROUTING
+    uint16_t current_dev_id = Routed_Device_Object_Index();
+#endif
+
+    for (dev_id = 0; dev_id < MAX_NUM_DEVICES; dev_id++) {
+#ifdef BAC_ROUTING
+        Set_Routed_Device_Object_Index(dev_id);
+#endif
+        if (!Object_List) {
+            Object_List = Keylist_Create();
+        }
     }
+
+#ifdef BAC_ROUTING
+    Set_Routed_Device_Object_Index(current_dev_id);
+#endif
 }
