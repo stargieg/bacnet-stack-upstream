@@ -86,6 +86,34 @@ static void testMultistateInputByName(void)
     status = Multistate_Input_Delete(object_instance);
     zassert_true(status, NULL);
 }
+
+/**
+ * @brief Regression test for create/delete cleanup of the state-name list.
+ * The object must be fully torn down when removed from the object list, and the
+ * key list should be empty after cleanup.
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(ms_input_tests, testMultistateInput_CreateCleanup)
+#else
+static void testMultistateInput_CreateCleanup(void)
+#endif
+{
+    const uint32_t instance = 789;
+    bool status = false;
+
+    Multistate_Input_Init();
+    zassert_not_equal(
+        Multistate_Input_Create(instance), BACNET_MAX_INSTANCE, NULL);
+    zassert_equal(Multistate_Input_Count(), 1, NULL);
+    zassert_true(Multistate_Input_Valid_Instance(instance), NULL);
+
+    status = Multistate_Input_Delete(instance);
+    zassert_true(status, NULL);
+    zassert_equal(Multistate_Input_Count(), 0, NULL);
+
+    Multistate_Input_Cleanup();
+    zassert_equal(Multistate_Input_Count(), 0, NULL);
+}
 /**
  * @}
  */
@@ -114,20 +142,20 @@ static void testMultistateInput_Writable_Properties(void)
     zassert_not_null(properties, NULL);
     count = property_list_count(properties);
     zassert_true(count > 0, NULL);
-    zassert_not_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_false(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* write-enabled: list starts with PROP_PRESENT_VALUE */
     Multistate_Input_Write_Enable(instance);
     zassert_true(Multistate_Input_Write_Enabled(instance), NULL);
     Multistate_Input_Writable_Property_List(instance, &properties);
     zassert_not_null(properties, NULL);
-    zassert_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_true(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* write-disabled again: list skips PROP_PRESENT_VALUE */
     Multistate_Input_Write_Disable(instance);
     zassert_false(Multistate_Input_Write_Enabled(instance), NULL);
     Multistate_Input_Writable_Property_List(instance, &properties);
-    zassert_not_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_false(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* unknown instance: must return a valid list, not NULL/garbage */
     properties = NULL;
@@ -154,7 +182,8 @@ void test_main(void)
     ztest_test_suite(
         ms_input_tests, ztest_unit_test(testMultistateInput),
         ztest_unit_test(testMultistateInputByName),
-        ztest_unit_test(testMultistateInput_Writable_Properties));
+        ztest_unit_test(testMultistateInput_Writable_Properties),
+        ztest_unit_test(testMultistateInput_CreateCleanup));
 
     ztest_run_test_suite(ms_input_tests);
 }

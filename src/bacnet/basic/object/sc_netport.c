@@ -593,7 +593,8 @@ int Network_Port_Issuer_Certificate_File_Encode(
     } else {
         file_instance =
             Network_Port_Issuer_Certificate_File(object_instance, index);
-        apdu_len = encode_application_unsigned(apdu, file_instance);
+        apdu_len =
+            encode_application_object_id(apdu, OBJECT_FILE, file_instance);
     }
 
     return apdu_len;
@@ -783,7 +784,10 @@ bool Network_Port_Routing_Table_Delete_All(uint32_t object_instance)
         return false;
     }
 
-    Keylist_Delete(params->Routing_Table);
+    if (params->Routing_Table) {
+        Keylist_Data_Free(params->Routing_Table);
+        Keylist_Delete(params->Routing_Table);
+    }
     params->Routing_Table = Keylist_Create();
 
     return true;
@@ -1536,25 +1540,6 @@ bool Network_Port_SC_Direct_Connect_Accept_URIs_Set(
                 sizeof(params->SC_Direct_Connect_Accept_URIs), "%s", str);
         } else {
             params->SC_Direct_Connect_Accept_URIs[0] = 0;
-        }
-    }
-
-    return status;
-}
-
-bool Network_Port_SC_Direct_Connect_Accept_URIs_Dirty_Set(
-    uint32_t object_instance, const char *str)
-{
-    bool status = false;
-    BACNET_SC_PARAMS *params = Network_Port_SC_Params(object_instance);
-
-    if (params) {
-        if (str) {
-            snprintf(
-                params->SC_Direct_Connect_Accept_URIs_dirty,
-                sizeof(params->SC_Direct_Connect_Accept_URIs_dirty), "%s", str);
-        } else {
-            params->SC_Direct_Connect_Accept_URIs_dirty[0] = 0;
         }
     }
 

@@ -15,6 +15,7 @@
 /* BACnet Stack API */
 #include "bacnet/bacapp.h"
 #include "bacnet/bacdcode.h"
+#include "bacnet/bacstr.h"
 #include "bacnet/bactext.h"
 #include "bacnet/datetime.h"
 #include "bacnet/proplist.h"
@@ -80,6 +81,8 @@ static const int32_t Writable_Properties[] = {
     /* unordered list of always writable properties */
     PROP_OUT_OF_SERVICE,
     PROP_UNITS,
+    PROP_OBJECT_NAME,
+    PROP_DESCRIPTION,
     PROP_COV_INCREMENT,
 #if defined(INTRINSIC_REPORTING)
     PROP_TIME_DELAY,
@@ -290,20 +293,21 @@ void Analog_Input_Present_Value_Set(uint32_t object_instance, float value)
 bool Analog_Input_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name)
 {
-    char text_string[32] = "";
     bool status = false;
     struct analog_input_descr *pObject;
+    int length = 0;
 
     pObject = Analog_Input_Object(object_instance);
     if (pObject) {
-        if (pObject->Object_Name) {
-            status =
-                characterstring_init_ansi(object_name, pObject->Object_Name);
-        } else {
-            snprintf(
-                text_string, sizeof(text_string), "ANALOG INPUT %lu",
+        status = bacnet_character_cstring_to_characterstring(
+            object_name, &pObject->Object_Name);
+        if (!status) {
+            length = characterstring_utf8_snprintf(
+                object_name, "ANALOG-INPUT-%lu",
                 (unsigned long)object_instance);
-            status = characterstring_init_ansi(object_name, text_string);
+            if (length > 0) {
+                status = true;
+            }
         }
     }
 
@@ -311,12 +315,12 @@ bool Analog_Input_Object_Name(
 }
 
 /**
- * For a given object instance-number, sets the object-name
- *
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the object-name to be set
- *
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance - object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if object-name was set
  */
 bool Analog_Input_Name_Set(uint32_t object_instance, const char *new_name)
 {
@@ -325,8 +329,7 @@ bool Analog_Input_Name_Set(uint32_t object_instance, const char *new_name)
 
     pObject = Analog_Input_Object(object_instance);
     if (pObject) {
-        status = true;
-        pObject->Object_Name = new_name;
+        status = bacnet_character_cstring_set(&pObject->Object_Name, new_name);
     }
 
     return status;
@@ -344,7 +347,7 @@ const char *Analog_Input_Name_ASCII(uint32_t object_instance)
 
     pObject = Analog_Input_Object(object_instance);
     if (pObject) {
-        name = pObject->Object_Name;
+        name = bacnet_character_cstring_value_const(&pObject->Object_Name);
     }
 
     return name;
@@ -376,6 +379,45 @@ unsigned Analog_Input_Event_State(uint32_t object_instance)
 }
 
 #if defined(INTRINSIC_REPORTING)
+/**
+ * @brief For a given object instance-number, returns the time-delay property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return time-delay property value
+ */
+uint32_t Analog_Input_Time_Delay(uint32_t object_instance)
+{
+    uint32_t time_delay = 0;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        time_delay = pObject->Time_Delay;
+    }
+
+    return time_delay;
+}
+
+/**
+ * @brief For a given object instance-number, sets the time-delay property
+ * value, and restarts the remaining time delay
+ * @param object_instance - object-instance number of the object
+ * @param time_delay - time-delay property value
+ * @return true if the time-delay property value was set
+ */
+bool Analog_Input_Time_Delay_Set(uint32_t object_instance, uint32_t time_delay)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Time_Delay = time_delay;
+        pObject->Remaining_Time_Delay = time_delay;
+        status = true;
+    }
+
+    return status;
+}
+
 /**
  * For a given object instance-number, returns the notification_class property
  * value
@@ -414,6 +456,161 @@ bool Analog_Input_Notification_Class_Set(
     if (pObject) {
         pObject->Notification_Class = notification_class;
         status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the high-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return high-limit property value
+ */
+float Analog_Input_High_Limit(uint32_t object_instance)
+{
+    float high_limit = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        high_limit = pObject->High_Limit;
+    }
+
+    return high_limit;
+}
+
+/**
+ * @brief For a given object instance-number, sets the high-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @param high_limit - high-limit property value
+ * @return true if the high-limit property value was set
+ */
+bool Analog_Input_High_Limit_Set(uint32_t object_instance, float high_limit)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->High_Limit = high_limit;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the low-limit property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return low-limit property value
+ */
+float Analog_Input_Low_Limit(uint32_t object_instance)
+{
+    float low_limit = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        low_limit = pObject->Low_Limit;
+    }
+
+    return low_limit;
+}
+
+/**
+ * @brief For a given object instance-number, sets the low-limit property value
+ * @param object_instance - object-instance number of the object
+ * @param low_limit - low-limit property value
+ * @return true if the low-limit property value was set
+ */
+bool Analog_Input_Low_Limit_Set(uint32_t object_instance, float low_limit)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Low_Limit = low_limit;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the deadband property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return deadband property value
+ */
+float Analog_Input_Deadband(uint32_t object_instance)
+{
+    float deadband = 0.0f;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        deadband = pObject->Deadband;
+    }
+
+    return deadband;
+}
+
+/**
+ * @brief For a given object instance-number, sets the deadband property value
+ * @param object_instance - object-instance number of the object
+ * @param deadband - deadband property value
+ * @return true if the deadband property value was set
+ */
+bool Analog_Input_Deadband_Set(uint32_t object_instance, float deadband)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        pObject->Deadband = deadband;
+        status = true;
+    }
+
+    return status;
+}
+
+/**
+ * @brief For a given object instance-number, returns the limit_enable property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @return limit_enable property value
+ */
+BACNET_LIMIT_ENABLE Analog_Input_Limit_Enable(uint32_t object_instance)
+{
+    uint32_t limit_enable = 0;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        limit_enable = pObject->Limit_Enable;
+    }
+
+    return limit_enable;
+}
+
+/**
+ * @brief For a given object instance-number, sets the limit_enable property
+ * value
+ * @param object_instance - object-instance number of the object
+ * @param limit_enable - limit_enable property value - the combination of bits:
+ *                       EVENT_LOW_LIMIT_ENABLE, EVENT_HIGH_LIMIT_ENABLE
+ * @return true if the limit_enable property value was set
+ */
+bool Analog_Input_Limit_Enable_Set(
+    uint32_t object_instance, BACNET_LIMIT_ENABLE limit_enable)
+{
+    bool status = false;
+    struct analog_input_descr *pObject = Analog_Input_Object(object_instance);
+
+    if (pObject) {
+        if (!(limit_enable &
+              ~(EVENT_LOW_LIMIT_ENABLE | EVENT_HIGH_LIMIT_ENABLE))) {
+            pObject->Limit_Enable = limit_enable;
+            status = true;
+        }
     }
 
     return status;
@@ -588,17 +785,20 @@ const char *Analog_Input_Description(uint32_t object_instance)
 
     pObject = Analog_Input_Object(object_instance);
     if (pObject) {
-        name = pObject->Description;
+        name =
+            bacnet_character_cstring_value_default(&pObject->Description, "");
     }
 
     return name;
 }
 
 /**
- * @brief For a given object instance-number, sets the description
- * @param  object_instance - object-instance number of the object
- * @param  new_name - holds the description to be set
- * @return  true if object-name was set
+ * @brief For a given object instance-number, sets a BACnet character string
+ *  by referencing an ANSI C string.
+ * @param object_instance object-instance number of the object
+ * @param new_name Holds a pointer to a static constant ANSI C string for
+ *  zero copy, or NULL to clear it.
+ * @return true if description was set
  */
 bool Analog_Input_Description_Set(
     uint32_t object_instance, const char *new_name)
@@ -608,8 +808,73 @@ bool Analog_Input_Description_Set(
 
     pObject = Analog_Input_Object(object_instance);
     if (pObject) {
-        pObject->Description = new_name;
-        status = true;
+        status = bacnet_character_cstring_set(&pObject->Description, new_name);
+    }
+
+    return status;
+}
+
+/**
+ * @brief Set the object-name property value using write-property context.
+ * @param wp_data [in,out] Write property request/response context.
+ * @param cstring [in] New object-name value.
+ * @return true if object-name was set.
+ */
+static bool Analog_Input_Object_Name_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct analog_input_descr *pObject;
+
+    pObject = Analog_Input_Object(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Object_Name, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
+    }
+
+    return status;
+}
+
+/**
+ * @brief Set the description property value using write-property context.
+ * @param wp_data [in,out] Write property request/response context.
+ * @param cstring [in] New description value.
+ * @return true if description was set.
+ */
+static bool Analog_Input_Description_Write(
+    BACNET_WRITE_PROPERTY_DATA *wp_data, BACNET_CHARACTER_STRING *cstring)
+{
+    bool status = false;
+    struct analog_input_descr *pObject;
+
+    pObject = Analog_Input_Object(wp_data->object_instance);
+    if (pObject) {
+        if (characterstring_utf8_valid(cstring)) {
+            status = bacnet_character_cstring_from_characterstring_strdup(
+                &pObject->Description, cstring);
+            if (!status) {
+                wp_data->error_class = ERROR_CLASS_PROPERTY;
+                wp_data->error_code = ERROR_CODE_NO_SPACE_TO_WRITE_PROPERTY;
+            }
+        } else {
+            wp_data->error_class = ERROR_CLASS_PROPERTY;
+            wp_data->error_code = ERROR_CODE_VALUE_OUT_OF_RANGE;
+        }
+    } else {
+        wp_data->error_class = ERROR_CLASS_PROPERTY;
+        wp_data->error_code = ERROR_CODE_UNKNOWN_OBJECT;
     }
 
     return status;
@@ -1226,6 +1491,22 @@ bool Analog_Input_Write_Property(BACNET_WRITE_PROPERTY_DATA *wp_data)
         return false;
     }
     switch (wp_data->object_property) {
+        case PROP_OBJECT_NAME:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Analog_Input_Object_Name_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
+        case PROP_DESCRIPTION:
+            status = write_property_type_valid(
+                wp_data, &value, BACNET_APPLICATION_TAG_CHARACTER_STRING);
+            if (status) {
+                status = Analog_Input_Description_Write(
+                    wp_data, &value.type.Character_String);
+            }
+            break;
         case PROP_PRESENT_VALUE:
             status = write_property_type_valid(
                 wp_data, &value, BACNET_APPLICATION_TAG_REAL);
@@ -2107,8 +2388,6 @@ uint32_t Analog_Input_Create(uint32_t object_instance)
     if (!pObject) {
         pObject = calloc(1, sizeof(struct analog_input_descr));
         if (pObject) {
-            pObject->Object_Name = NULL;
-            pObject->Description = NULL;
             pObject->Reliability = RELIABILITY_NO_FAULT_DETECTED;
             pObject->COV_Increment = 1.0f;
             pObject->Present_Value = 0.0f;
@@ -2150,6 +2429,8 @@ bool Analog_Input_Delete(uint32_t object_instance)
 
     pObject = Keylist_Data_Delete(Object_List, object_instance);
     if (pObject) {
+        bacnet_character_cstring_free(&pObject->Description);
+        bacnet_character_cstring_free(&pObject->Object_Name);
         free(pObject);
         status = true;
     }
@@ -2176,6 +2457,8 @@ void Analog_Input_Cleanup(void)
             do {
                 pObject = Keylist_Data_Pop(Object_List);
                 if (pObject) {
+                    bacnet_character_cstring_free(&pObject->Description);
+                    bacnet_character_cstring_free(&pObject->Object_Name);
                     free(pObject);
                 }
             } while (pObject);

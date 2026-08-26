@@ -50,9 +50,9 @@ BACNET_STACK_EXPORT
 bool Accumulator_Object_Instance_Add(uint32_t instance);
 
 BACNET_STACK_EXPORT
-char *Accumulator_Name(uint32_t object_instance);
+const char *Accumulator_Name(uint32_t object_instance);
 BACNET_STACK_EXPORT
-bool Accumulator_Name_Set(uint32_t object_instance, char *new_name);
+bool Accumulator_Name_Set(uint32_t object_instance, const char *new_name);
 BACNET_STACK_EXPORT
 bool Accumulator_Object_Name(
     uint32_t object_instance, BACNET_CHARACTER_STRING *object_name);
@@ -85,6 +85,14 @@ BACNET_UNSIGNED_INTEGER Accumulator_Max_Pres_Value(uint32_t object_instance);
 BACNET_STACK_EXPORT
 bool Accumulator_Max_Pres_Value_Set(
     uint32_t object_instance, BACNET_UNSIGNED_INTEGER value);
+
+BACNET_STACK_EXPORT
+bool Accumulator_Change_Of_Value(uint32_t object_instance);
+BACNET_STACK_EXPORT
+void Accumulator_Change_Of_Value_Clear(uint32_t object_instance);
+BACNET_STACK_EXPORT
+bool Accumulator_Encode_Value_List(
+    uint32_t object_instance, BACNET_PROPERTY_VALUE *value_list);
 
 BACNET_STACK_EXPORT
 int32_t Accumulator_Scale_Integer(uint32_t object_instance);

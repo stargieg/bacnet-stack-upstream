@@ -114,20 +114,20 @@ static void testMultistateValue_Writable_Properties(void)
     zassert_not_null(properties, NULL);
     count = property_list_count(properties);
     zassert_true(count > 0, NULL);
-    zassert_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_true(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* write-disabled: list skips PROP_PRESENT_VALUE */
     Multistate_Value_Write_Disable(instance);
     zassert_false(Multistate_Value_Write_Enabled(instance), NULL);
     Multistate_Value_Writable_Property_List(instance, &properties);
     zassert_not_null(properties, NULL);
-    zassert_not_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_false(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* write re-enabled: PROP_PRESENT_VALUE back at head */
     Multistate_Value_Write_Enable(instance);
     zassert_true(Multistate_Value_Write_Enabled(instance), NULL);
     Multistate_Value_Writable_Property_List(instance, &properties);
-    zassert_equal(properties[0], PROP_PRESENT_VALUE, NULL);
+    zassert_true(property_list_member(properties, PROP_PRESENT_VALUE), NULL);
 
     /* unknown instance: must return a valid list, not NULL/garbage */
     properties = NULL;
@@ -142,6 +142,34 @@ static void testMultistateValue_Writable_Properties(void)
     Multistate_Value_Delete(instance);
     Multistate_Value_Cleanup();
 }
+
+/**
+ * @brief Regression test for create/delete cleanup of the state-name list.
+ * The object must be fully torn down when removed from the object list, and the
+ * key list should be empty after cleanup.
+ */
+#if defined(CONFIG_ZTEST_NEW_API)
+ZTEST(msv_tests, testMultistateValue_CreateCleanup)
+#else
+static void testMultistateValue_CreateCleanup(void)
+#endif
+{
+    const uint32_t instance = 789;
+    bool status = false;
+
+    Multistate_Value_Init();
+    zassert_not_equal(
+        Multistate_Value_Create(instance), BACNET_MAX_INSTANCE, NULL);
+    zassert_equal(Multistate_Value_Count(), 1, NULL);
+    zassert_true(Multistate_Value_Valid_Instance(instance), NULL);
+
+    status = Multistate_Value_Delete(instance);
+    zassert_true(status, NULL);
+    zassert_equal(Multistate_Value_Count(), 0, NULL);
+
+    Multistate_Value_Cleanup();
+    zassert_equal(Multistate_Value_Count(), 0, NULL);
+}
 /**
  * @}
  */
@@ -154,7 +182,8 @@ void test_main(void)
     ztest_test_suite(
         msv_tests, ztest_unit_test(testMultistateValue),
         ztest_unit_test(testMultistateValueByName),
-        ztest_unit_test(testMultistateValue_Writable_Properties));
+        ztest_unit_test(testMultistateValue_Writable_Properties),
+        ztest_unit_test(testMultistateValue_CreateCleanup));
 
     ztest_run_test_suite(msv_tests);
 }

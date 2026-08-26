@@ -13,15 +13,87 @@ The git repositories are hosted at the following sites:
 * <https://bacnet.sourceforge.net/>
 * <https://github.com/bacnet-stack/bacnet-stack/>
 
-## [unreleased] - 2026-07-16
+## [unreleased] - 2026-08-12
 
 ### Security
 
+* Secured the apps/ptransfer demo by moving ConfirmedPrivateTransfer
+  send/handler logic into the core stack’s basic service layer,
+  wiring the server demo to handle confirmed private transfers,
+  updated the command line arguments to be similar to apps/uptransfer while
+  adding addressing and debug options, and updating build targets. (#1470)
+* Secured bacnet_enclosed_data_length() against signed integer overflow while
+  accumulating tag lengths: the guards bounded each length value against
+  INT_MAX but not the running sums, so a tag claiming a length near INT_MAX
+  overflowed len, total_len and apdu_len. (#1468)
+* Secured bvlc_encode_header() by increasing minimum PDU size to prevent
+  buffer overflow. (#1467)
+* Secured bacnet_enclosed_data_length() function to prevent integer overflow
+  resulting in too small length which results in heap overflow. (#1466)
+* Secured the Command Object to prevent WriteProperty to the Action property
+  while in-progress. Fixed the Action property to be an Array of Lists. (#1461)
+* Secured the apps/router by validating BVLC framing and improving error
+  handling in dl_ip_recv function. (#1451)
+* Secured cJSON local library by applying fixes to known vulnerabilities.
+  Added global error pointer string function for use in printing.
+  Enhanced JSON parser to prevent stack exhaustion and handle numeric overflows.
+  Improved JSON error handling and prevented buffer over-read in cJSON parser.
+  Added unit tests for cJSON parser functionality and error handling. (#1444)
+* Secured bacnet_octet_string_decode and bacnet_character_string_decode
+  to handle NULL store and return error when exeeding store capacity.
+  Fixed atomic file service request decoding to return appropriate error
+  for buffer overflow. (#1440)
+* Secured apps/modbus-gateway by fixing use-after-free on JSON parse
+  errors. (#1441)
+* Secured AtomicReadFile and AtomicWriteFile service by forcing errors when
+  file access methods supported are mismatched from requested. (#1439)
+* Secured apps/router by preventing buffer overflow in I-Am-Router-To-Network
+  message handling. (#1438)
+* Secured Command, Life-Safety Zone, and Structured View object resizable
+  arrays and lists to prevent unbounded expansion, adding size limits for
+  remotely writable BACnet array or list elements. (#1437)
+* Secured BACnet/SC websocket to require valid OpenSSL client certificate
+  for websocket server connections. (#1436)
+* Secured BACnet/SC when'More Options Follow' flag is set to handle incomplete
+  option list. (#1435)
+* Secured BACnet/SC by adding optional support for self-signed server
+  certificates in BACnet/SC clients by using a single runtime setter,
+  disabled by default. Added BACNET_SC_SELFSIGNED_ENABLED environment
+  variable for example apps, disabled by default. (#1434)
+* Secured BACnet/SC by adding fragment length validation for websocket. (#1433)
 * Secured an MS/TP implementation COBS frame decoding buffer overflow,
   and added unit test for tight buffer handling. (#1425)
 
 ### Added
 
+* Added callback handlers for confirmed and unconfirmed private
+  transfer services. (#1471)
+* Added Analog Input object limit API functions including:
+  Analog_Input_High_Limit, Analog_Input_High_Limit_Set,
+  Analog_Input_Low_Limit, Analog_Input_Low_Limit_Set,
+  Analog_Input_Deadband, Analog_Input_Deadband_Set,
+  Analog_Input_Limit_Enable, Analog_Input_Limit_Enable_Set,
+  Analog_Input_Time_Delay, and Analog_Input_Time_Delay_Set. (#1473)
+* Added COV support to basic accumulator object without COV increment support
+  since standard does not list COV_Increment property for accumulators. (#1452)
+* Added support for configurable MAX_APDU in Makefile for extended frames in
+  the ports/stm32f4xx example. Changed MCU_FLAGS and SDK_FLAGS for STM32F4xx
+  configuration. Cleaned up generated files in the Makefile and remove unused
+  flags. Update Makefile to use 'build' folder to match CMake and enable
+  debugging with the same CMake setup. Added LED test functionality and set
+  BACnet ISR based timed task to 2ms in main loop for the state machine. (#1459)
+* Added option to set handler for Network Number Is. (#1455)
+* Added apps/timesync target and --now option for current date and time display
+  and fix Makefile build order to enable ports to have precedence. (#1454)
+* Added basic Alert Enrollment object in the BACnet stack. (#1426)
+* Added PCAP to backup file conversion apps/bacdmbr functionality. (#1446)
+* Added a basic Averaging object in the BACnet stack with a comprehensive
+  API for managing averaging functionality. Updated the basic device object
+  to include the Averaging object in the default object table. Added unit
+  tests for the Averaging object, covering read/write operations,
+  sliding window functionality, and reset behavior. (#1429)
+* Added Notification_Class_I_Am_Router_To_Network_Handler API so it can
+  be called from  custom handler (#1428)
 * Added definitions for the Accumulator_Name and Accumulator_Name_Set functions
   that are declared in acc.h and referenced by ACCUMULATOR_OBJ_FUNCTIONS.
   Covered the public C string name API in the accumulator object test. (#1419)
@@ -36,6 +108,9 @@ The git repositories are hosted at the following sites:
 
 ### Changed
 
+* Changed location of datetime_mstimer module for time management to
+  src/bacnet/basic/datetime instead of sys so it isn't included by default
+  in core library.(#1463)
 * Changed the basic Analog Value object by encapsulating structure into the
   C module and added get/set for the members. Added `Min_Pres_Value` and
   `Max_Pres_Value` properties to Analog Value object. Implemented write
@@ -58,6 +133,30 @@ The git repositories are hosted at the following sites:
 
 ### Fixed
 
+* Fixed compiler warnings by using appropriate types and qualifiers. (#1476)
+* Fixed circular dependency in bacnet_stack_exports.h file.
+* Fixed win32 datetime management with cross-compiler support and
+  time offset calculations supporting soft BACnet TimeSync. (#1463)
+* Fixed wire data length for COBS extended frames in apps/mstpcap and
+  apps/mstpsnap by skipping CRC in-place modifications in the MSTP receive
+  state machine for raw captures. Changed MSTP forced reply-postponed handling
+  logic in MSTP master state machine. Changed ports/stm32f4xx MS/TP example
+  to have strict timing and use extended frames by default. Updated COBS
+  decode tests to ensure guard bytes are preserved and handle tight buffer
+  scenarios. Changed MSTP default MAX_APDU 1476 to ensure apps/mstpcap and
+  other tools built for MS/TP can send or review extended frames. (#1453)
+* Fixed BBMD handler to send Delete-Foreign-Device to the BBMD, not a
+  zeroed address. (#1457)
+* Fixed update cov_value_list_encode_unsigned to use BACNET_UNSIGNED_INTEGER
+  data type to avoid truncation. (#1458)
+* Fixed BACnet/SC build under MSVC by skipping GCC-only -Wno-variadic-macros
+  option when building with MSVC to silence a libwebsockets warning. MSVC
+  has no such warning and rejects the option outright. (#1450)
+* Fixed BACnet/SC network port object by updating certificate file property
+  handling to use object ID encoding. (#1447)
+* Fixed missing bounds check when parsing Weekly_Schedule day entries
+  from ASCII (#1432)
+* Fixed build warnings in BACnet/SC. (#1427)
 * Fixed bacnet_action_command_decode() that truncated Post_Delay to
   8 bits (#1423)
 * Fixed typos in comments and docs. (#1418)
@@ -67,6 +166,8 @@ The git repositories are hosted at the following sites:
   local code to use the new names. (#1415)
 
 ### Removed
+
+* Removed unused Network_Port_SC_Direct_Connect_Accept_URIs_Dirty_Set function.
 
 ## [1.6.0] - 2026-07-04
 

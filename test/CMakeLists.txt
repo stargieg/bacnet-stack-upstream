@@ -154,6 +154,7 @@ list(APPEND testdirs
   bacnet/basic/bbmd
   bacnet/basic/bbmd6
   bacnet/basic/bzll
+  bacnet/basic/npdu/h_npdu
   # basic/object
   bacnet/basic/object/acc
   bacnet/basic/object/access_credential
@@ -163,6 +164,7 @@ list(APPEND testdirs
   bacnet/basic/object/access_user
   bacnet/basic/object/access_zone
   bacnet/basic/object/ai
+  bacnet/basic/object/alert_enrollment
   bacnet/basic/object/ao
   bacnet/basic/object/av
   bacnet/basic/object/averaging
@@ -207,6 +209,7 @@ list(APPEND testdirs
   bacnet/basic/service/h_arf
   bacnet/basic/service/h_awf
   bacnet/basic/service/h_cov
+  bacnet/basic/service/h_pt
   bacnet/basic/service/h_rpm_a
   bacnet/basic/service/h_rr
   # basic/server
@@ -214,6 +217,7 @@ list(APPEND testdirs
   # basic/sys
   bacnet/basic/sys/bramfs
   bacnet/basic/sys/bsramfs
+  bacnet/basic/sys/cJSON
   bacnet/basic/sys/color_rgb
   bacnet/basic/sys/days
   bacnet/basic/sys/dst
