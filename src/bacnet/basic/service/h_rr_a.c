@@ -61,9 +61,8 @@ static void PrintReadRangeDataTrendlog(BACNET_READ_RANGE_DATA *data)
             value.tag = BACNET_APPLICATION_TAG_TIMESTAMP;
             value.type.Time_Stamp.tag = TIME_STAMP_DATETIME;
             value.type.Time_Stamp.value.dateTime = p->timestamp;
-            fprintf(stdout, "\"");
             bacapp_print_value(stdout, &object_value);
-            fprintf(stdout, "\",");
+            fprintf(stdout, ",");
 
             //print log value or status bits [log-disabled, buffer-purged, log-interrupted]
             object_value.value = &p->value;
